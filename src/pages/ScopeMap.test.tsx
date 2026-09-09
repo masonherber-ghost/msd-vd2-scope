@@ -253,3 +253,114 @@ describe('ScopeMap zero-result state (R-8.10)', () => {
     expect(screen.getByRole('button', { name: /clear all filters/i })).toBeInTheDocument()
   })
 })
+
+describe('ScopeMap selection and detail panel', () => {
+  it('opens the panel beside the map, keeping the map visible', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'F-001 Invite employer' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
+    )
+    // The map is still there — the panel opened beside it, not over it.
+    expect(screen.getAllByRole('cell')).toHaveLength(4)
+  })
+
+  it('keeps the active filters when the panel opens', async () => {
+    const user = userEvent.setup()
+    renderPage('/?actor=staff')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'F-001 Invite employer' }))
+
+    await waitFor(() => expect(url()).toContain('selected=F-001'))
+    expect(url()).toContain('actor=staff')
+    expect(screen.queryByLabelText('F-002 Verify employer')).not.toBeInTheDocument()
+  })
+
+  it('puts the selection in the URL', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
+    await waitFor(() => expect(url()).toContain('selected=F-002'))
+  })
+
+  it('reopens the panel from the URL alone', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+  })
+
+  it('marks the selected card as pressed', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('closes on Escape and clears the URL', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(url()).not.toContain('selected'))
+    expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
+  })
+
+  it('clicking the open card again closes the panel', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
+    await waitFor(() => expect(url()).not.toContain('selected'))
+  })
+
+  it('an MVP chip pivots the map without closing the panel (R-8.16)', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /948/ }))
+
+    await waitFor(() => expect(url()).toContain('mvp=948'))
+    // Still open, and still on the same feature.
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+    expect(url()).toContain('selected=F-002')
+  })
+
+  it('a connected feature switches the panel to it', async () => {
+    const user = userEvent.setup()
+    state.graph = makeScopeGraph({
+      featureMvpLinks: [
+        { pwc_feature_id: 'F-001', mvp_feature_id: 1, source: 'mapping' },
+        { pwc_feature_id: 'F-002', mvp_feature_id: 2, source: 'mapping' },
+      ],
+    })
+    renderPage('/?selected=F-001')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
+    )
+
+    // Scoped to the panel: the map card for F-002 matches the same name.
+    const panel = screen.getByRole('region', { name: 'Invite employer' })
+    await user.click(within(panel).getByRole('button', { name: /F-002/ }))
+
+    await waitFor(() => expect(url()).toContain('selected=F-002'))
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+})

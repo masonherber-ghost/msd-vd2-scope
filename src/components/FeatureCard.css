@@ -3,6 +3,7 @@
    ======================================== */
 
 .feature-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
@@ -38,6 +39,35 @@
   margin: 0;
   /* Long feature names must not widen the column. */
   overflow-wrap: anywhere;
+}
+
+/* Stretches over the whole card, so the card is clickable while the button
+   itself contains only phrasing content. */
+.feature-card__select {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.feature-card__select::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+.feature-card__select:focus-visible::after {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.feature-card--selected {
+  border-color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 /* ========================================

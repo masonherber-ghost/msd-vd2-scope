@@ -11,18 +11,49 @@ export type FeatureCardProps = {
   feature: FeatureCardModel
   /** Hides the secondary detail when the map is zoomed out (R-8.7). */
   compact?: boolean
+  selected?: boolean
+  onSelect?: (featureId: string) => void
 }
 
-export function FeatureCard({ feature, compact = false }: FeatureCardProps) {
+export function FeatureCard({
+  feature,
+  compact = false,
+  selected = false,
+  onSelect,
+}: FeatureCardProps) {
   const conflicts = feature.conflicts.release + feature.conflicts.phase
 
   return (
     <article
-      className={`feature-card${compact ? ' feature-card--compact' : ''}`}
-      aria-label={`${feature.id} ${feature.name}`}
+      className={[
+        'feature-card',
+        compact ? 'feature-card--compact' : '',
+        selected ? 'feature-card--selected' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      // Labelled here only when there is no select button, so the card and
+      // its button never carry the same name twice.
+      aria-label={onSelect ? undefined : `${feature.id} ${feature.name}`}
     >
       <div className="feature-card__header">
-        <span className="feature-card__id">{feature.id}</span>
+        {onSelect ? (
+          // Only phrasing content inside the button, so the markup stays
+          // valid while the whole card remains clickable via ::after. The
+          // name is set explicitly: JSX strips the newline between child
+          // spans, which would otherwise announce as "F-001Invite employer".
+          <button
+            type="button"
+            className="feature-card__select"
+            aria-label={`${feature.id} ${feature.name}`}
+            aria-pressed={selected}
+            onClick={() => onSelect(feature.id)}
+          >
+            <span className="feature-card__id">{feature.id}</span>
+          </button>
+        ) : (
+          <span className="feature-card__id">{feature.id}</span>
+        )}
         {feature.capabilityCount > 0 ? (
           <span className="feature-card__id">
             {feature.capabilityCount} cap{feature.capabilityCount === 1 ? '' : 's'}

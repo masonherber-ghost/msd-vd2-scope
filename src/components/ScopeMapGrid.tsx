@@ -9,6 +9,8 @@ export type ScopeMapGridProps = {
   compactBelow?: number
   scrollRef?: React.Ref<HTMLDivElement>
   contentRef?: React.Ref<HTMLDivElement>
+  selectedId?: string | null
+  onSelect?: (featureId: string) => void
 }
 
 export function ScopeMapGrid({
@@ -17,6 +19,8 @@ export function ScopeMapGrid({
   compactBelow = 0.7,
   scrollRef,
   contentRef,
+  selectedId = null,
+  onSelect,
 }: ScopeMapGridProps) {
   const compact = zoom < compactBelow
 
@@ -58,7 +62,14 @@ export function ScopeMapGrid({
           })}
 
           {model.phases.map((phase) => (
-            <ScopeMapRow key={phase.id} model={model} phase={phase} compact={compact} />
+            <ScopeMapRow
+              key={phase.id}
+              model={model}
+              phase={phase}
+              compact={compact}
+              selectedId={selectedId}
+              onSelect={onSelect}
+            />
           ))}
         </div>
       </div>
@@ -70,10 +81,14 @@ function ScopeMapRow({
   model,
   phase,
   compact,
+  selectedId,
+  onSelect,
 }: {
   model: ScopeMapModel
   phase: ScopeMapModel['phases'][number]
   compact: boolean
+  selectedId: string | null
+  onSelect?: (featureId: string) => void
 }) {
   return (
     <>
@@ -111,7 +126,13 @@ function ScopeMapRow({
             ) : (
               <>
                 {features.map((feature) => (
-                  <FeatureCard key={feature.id} feature={feature} compact={compact} />
+                  <FeatureCard
+                    key={feature.id}
+                    feature={feature}
+                    compact={compact}
+                    selected={feature.id === selectedId}
+                    onSelect={onSelect}
+                  />
                 ))}
                 {capabilityCount > 0 ? (
                   <span className="scope-map-grid__capability-note">

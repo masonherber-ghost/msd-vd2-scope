@@ -13,6 +13,7 @@
 @import "./components/ScopeMapGrid.css";
 @import "./components/FeatureCard.css";
 @import "./components/FilterRail.css";
+@import "./components/FeatureDetailPanel.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values

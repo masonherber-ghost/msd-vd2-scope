@@ -1,9 +1,11 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { useScope } from '@/hooks/useScope'
+import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
 import {
   GROUP_LABEL,
@@ -40,6 +42,45 @@ export default function ScopeMap() {
     [setSearchParams],
   )
 
+  // Selection lives in the URL too, so a link reproduces the open panel and
+  // the panel survives a reload (R-10.2).
+  const selectedId = searchParams.get('selected')
+
+  const setSelected = useCallback(
+    (featureId: string | null) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        if (featureId) next.set('selected', featureId)
+        else next.delete('selected')
+        return next
+      })
+    },
+    [setSearchParams],
+  )
+
+  /** Toggles selection, so clicking the open card closes the panel. */
+  const toggleSelected = useCallback(
+    (featureId: string) => setSelected(featureId === selectedId ? null : featureId),
+    [selectedId, setSelected],
+  )
+
+  /** Pivots the map to an MVP ref, leaving the panel open (R-8.16). */
+  const pivotToMvp = useCallback(
+    (ref: number) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        const already = parseFilters(current).mvp
+        const mvp = already.includes(ref)
+          ? already.filter((r) => r !== ref)
+          : [...already, ref]
+        if (mvp.length === 0) next.delete('mvp')
+        else next.set('mvp', mvp.join(','))
+        return next
+      })
+    },
+    [setSearchParams],
+  )
+
   const model = useMemo(
     () => (scope.data ? buildScopeMap(scope.data) : null),
     [scope.data],
@@ -60,6 +101,11 @@ export default function ScopeMap() {
   const blame = useMemo(
     () => (model ? blameGroups(model.features, filters) : []),
     [model, filters],
+  )
+
+  const detail = useMemo(
+    () => (scope.data && selectedId ? buildFeatureDetail(scope.data, selectedId) : null),
+    [scope.data, selectedId],
   )
 
   /** Scales the grid so its full width fits the viewport (R-8.7). */
@@ -136,7 +182,13 @@ export default function ScopeMap() {
           </Button>
         </div>
       ) : model && projected ? (
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start">
+        <div
+          className={`flex flex-col gap-4 lg:grid lg:items-start ${
+            detail
+              ? 'lg:grid-cols-[14rem_minmax(0,1fr)_22rem]'
+              : 'lg:grid-cols-[16rem_minmax(0,1fr)]'
+          }`}
+        >
           <FilterRail
             model={model}
             state={filters}
@@ -167,6 +219,8 @@ export default function ScopeMap() {
                 zoom={zoom}
                 scrollRef={scrollRef}
                 contentRef={contentRef}
+                selectedId={selectedId}
+                onSelect={toggleSelected}
               />
             )}
 
@@ -199,6 +253,16 @@ export default function ScopeMap() {
               </div>
             </dl>
           </div>
+
+          {detail ? (
+            <FeatureDetailPanel
+              detail={detail}
+              onClose={() => setSelected(null)}
+              onPivotToMvp={pivotToMvp}
+              onSelectFeature={setSelected}
+              activeMvpRefs={filters.mvp}
+            />
+          ) : null}
         </div>
       ) : null}
     </div>
