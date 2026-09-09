@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MSD VD2 Scope</title>
+    <!-- Must be inline and in <head>: an external or deferred script paints
+         the light theme first, causing a visible flash. -->
+    <script>
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('theme')
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+          if (stored === 'dark' || (!stored && prefersDark)) {
+            document.documentElement.classList.add('dark')
+          }
+        } catch (e) {
+          /* private mode / storage blocked — fall back to light */
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>
