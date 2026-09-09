@@ -1,0 +1,119 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.manage-table {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+}
+
+.manage-table__scroll {
+  /* Wide rows scroll inside their own box, never the page. */
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.manage-table__grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.manage-table__grid th,
+.manage-table__grid td {
+  text-align: left;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.manage-table__grid th {
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+  background-color: var(--color-card);
+  position: sticky;
+  top: 0;
+}
+
+.manage-table__grid tr:last-child td {
+  border-bottom: 0;
+}
+
+.manage-table__mono {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.manage-table__muted {
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   CONTROLS
+   ======================================== */
+
+.manage-table__actions {
+  display: flex;
+  gap: var(--spacing-1);
+  flex-wrap: wrap;
+}
+
+.manage-table__input {
+  width: 100%;
+  min-height: var(--spacing-8);
+  padding: 0 var(--spacing-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.manage-table__input:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.manage-table__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-destructive);
+}
+
+/* ========================================
+   CREATE ROW
+   ======================================== */
+
+.manage-table__create {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-card);
+}
+
+.manage-table__create-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+/* 640px is --breakpoint-sm from globals.css. CSS custom properties cannot be
+   used inside a media query, so the raw value is copied here. */
+@media (min-width: 640px) {
+  .manage-table__create-fields {
+    flex-direction: row;
+  }
+
+  .manage-table__create-fields > * {
+    flex: 1;
+    min-width: 0;
+  }
+}

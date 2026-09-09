@@ -14,6 +14,12 @@ import {
   useSetMvpLinks,
   useUpdateFeature,
 } from '@/hooks/useFeatureMutations'
+import {
+  useCreateAssumption,
+  useDeleteAssumption,
+  useMoveAssumption,
+  useUpdateAssumption,
+} from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
@@ -136,6 +142,10 @@ export default function ScopeMap() {
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
   const deleteFeature = useDeleteFeature()
+  const addAssumption = useCreateAssumption()
+  const editAssumption = useUpdateAssumption()
+  const moveAssumption = useMoveAssumption()
+  const removeAssumption = useDeleteAssumption()
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
   const nextId = useNextFeatureId(creatingIn !== null)
@@ -491,6 +501,14 @@ export default function ScopeMap() {
               onSetCapabilityLinks={(capabilityIds) =>
                 setCapabilityLinks.mutateAsync({ id: detail.id, capabilityIds })
               }
+              onAddAssumption={(text) =>
+                addAssumption.mutateAsync({ featureId: detail.id, text })
+              }
+              onEditAssumption={(id, text) => editAssumption.mutateAsync({ id, text })}
+              onMoveAssumption={(id, direction) =>
+                moveAssumption.mutateAsync({ id, direction })
+              }
+              onDeleteAssumption={(id) => removeAssumption.mutateAsync(id)}
             />
           ) : null}
         </div>

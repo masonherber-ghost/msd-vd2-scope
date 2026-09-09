@@ -17,6 +17,9 @@ let selectAll: Statement | undefined
 let selectByRefOption: Statement | undefined
 let upsert: Statement | undefined
 let selectDependents: Statement | undefined
+let selectById: Statement | undefined
+let insertOne: Statement | undefined
+let deleteOne: Statement | undefined
 
 export function getAllMvpFeatures(): MvpFeatureRow[] {
   selectAll ??= db.prepare(
@@ -69,4 +72,42 @@ export function countMvpFeatureDependents(id: number): {
       (SELECT COUNT(*) FROM capabilities WHERE mvp_feature_id = ?) AS capabilities
   `)
   return selectDependents.get(id, id) as { features: number; capabilities: number }
+}
+
+export function getMvpFeatureById(id: number): MvpFeatureRow | undefined {
+  selectById ??= db.prepare(`SELECT ${COLUMNS} FROM mvp_features WHERE id = ?`)
+  return selectById.get(id) as MvpFeatureRow | undefined
+}
+
+export function createMvpFeature(row: {
+  ref: number
+  scope_option: string | null
+  title: string
+}): MvpFeatureRow {
+  insertOne ??= db.prepare(`
+    INSERT INTO mvp_features (ref, scope_option, title, source)
+    VALUES (@ref, @scope_option, @title, 'manual')
+    RETURNING ${COLUMNS}
+  `)
+  return insertOne.get(row) as MvpFeatureRow
+}
+
+export function updateMvpFeature(
+  id: number,
+  patch: { title?: string; scope_option?: string | null },
+): MvpFeatureRow | undefined {
+  const fields = Object.keys(patch) as (keyof typeof patch)[]
+  if (fields.length === 0) return getMvpFeatureById(id)
+  const assignments = fields.map((field) => `${field} = @${field}`).join(', ')
+  return db
+    .prepare(
+      `UPDATE mvp_features SET ${assignments}, source = 'manual', updated_at = datetime('now')
+        WHERE id = @id RETURNING ${COLUMNS}`,
+    )
+    .get({ ...patch, id }) as MvpFeatureRow | undefined
+}
+
+export function deleteMvpFeature(id: number): number {
+  deleteOne ??= db.prepare('DELETE FROM mvp_features WHERE id = ?')
+  return deleteOne.run(id).changes
 }

@@ -1,0 +1,127 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.assumption-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: assumption;
+}
+
+/* ========================================
+   ITEM
+   ======================================== */
+
+.assumption-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-2);
+  /* A scrolling ancestor would otherwise squash these rows together. */
+  flex-shrink: 0;
+}
+
+.assumption-list__position {
+  counter-increment: assumption;
+  flex-shrink: 0;
+  min-width: var(--spacing-5);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  padding-top: 0.125rem;
+}
+
+.assumption-list__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.assumption-list__text {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.assumption-list__manual {
+  font-size: 0.6875rem;
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   CONTROLS
+   ======================================== */
+
+/* Explicit move controls, never drag-only (R-9.8). */
+.assumption-list__controls {
+  display: flex;
+  gap: 0.125rem;
+  flex-shrink: 0;
+}
+
+.assumption-list__control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--spacing-6);
+  min-height: var(--spacing-6);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.assumption-list__control:hover:not(:disabled) {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.assumption-list__control:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.assumption-list__control:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+/* ========================================
+   ADD
+   ======================================== */
+
+.assumption-list__add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.assumption-list__input {
+  width: 100%;
+  min-height: var(--spacing-8);
+  padding: var(--spacing-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.assumption-list__input:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.assumption-list__error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-destructive);
+}

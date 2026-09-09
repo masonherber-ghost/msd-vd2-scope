@@ -18,6 +18,10 @@ let selectByFeature: Statement | undefined
 let insertOne: Statement | undefined
 let deleteImportedForFeature: Statement | undefined
 let renumber: Statement | undefined
+let selectOne: Statement | undefined
+let updateText: Statement | undefined
+let deleteOne: Statement | undefined
+let maxPosition: Statement | undefined
 
 export function getAllAssumptions(): AssumptionRow[] {
   selectAll ??= db.prepare(
@@ -87,4 +91,82 @@ export function renumberAssumptions(featureId: string): void {
      WHERE pwc_feature_id = ?
   `)
   renumber.run(featureId, featureId)
+}
+
+export function getAssumption(id: number): AssumptionRow | undefined {
+  selectOne ??= db.prepare(`SELECT ${COLUMNS} FROM assumptions WHERE id = ?`)
+  return selectOne.get(id) as AssumptionRow | undefined
+}
+
+/** Appends a manual assumption to the end of its feature's list. */
+export function appendAssumption(featureId: string, text: string): AssumptionRow {
+  maxPosition ??= db.prepare(
+    'SELECT IFNULL(MAX(position), 0) AS n FROM assumptions WHERE pwc_feature_id = ?',
+  )
+  const position = (maxPosition.get(featureId) as { n: number }).n + 1
+  return createAssumption({
+    pwc_feature_id: featureId,
+    position,
+    text,
+    source: 'manual',
+  })
+}
+
+export function updateAssumptionText(id: number, text: string): AssumptionRow | undefined {
+  updateText ??= db.prepare(`
+    UPDATE assumptions
+       SET text = ?, source = 'manual', updated_at = datetime('now')
+     WHERE id = ?
+    RETURNING ${COLUMNS}
+  `)
+  return updateText.get(text, id) as AssumptionRow | undefined
+}
+
+/** Deletes and closes the gap, so positions stay contiguous (R-9.3). */
+export function deleteAssumption(id: number): boolean {
+  return db.transaction(() => {
+    const row = getAssumption(id)
+    if (!row) return false
+    deleteOne ??= db.prepare('DELETE FROM assumptions WHERE id = ?')
+    deleteOne.run(id)
+    renumberAssumptions(row.pwc_feature_id)
+    return true
+  })()
+}
+
+/**
+ * Moves an assumption one step within its feature. Renumbering first means
+ * the swap cannot be thrown off by a pre-existing gap, and the whole thing is
+ * one transaction so a half-applied reorder cannot survive.
+ */
+export function moveAssumption(id: number, direction: 'up' | 'down'): boolean {
+  return db.transaction(() => {
+    const row = getAssumption(id)
+    if (!row) return false
+    renumberAssumptions(row.pwc_feature_id)
+
+    const current = getAssumption(id)
+    if (!current) return false
+
+    const neighbour = db
+      .prepare(
+        direction === 'up'
+          ? `SELECT ${COLUMNS} FROM assumptions
+              WHERE pwc_feature_id = ? AND position < ?
+              ORDER BY position DESC LIMIT 1`
+          : `SELECT ${COLUMNS} FROM assumptions
+              WHERE pwc_feature_id = ? AND position > ?
+              ORDER BY position ASC LIMIT 1`,
+      )
+      .get(current.pwc_feature_id, current.position) as AssumptionRow | undefined
+    if (!neighbour) return false
+
+    const swap = db.prepare(
+      "UPDATE assumptions SET position = ?, updated_at = datetime('now') WHERE id = ?",
+    )
+    swap.run(neighbour.position, current.id)
+    swap.run(current.position, neighbour.id)
+    renumberAssumptions(current.pwc_feature_id)
+    return true
+  })()
 }

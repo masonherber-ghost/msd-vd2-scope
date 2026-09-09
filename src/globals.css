@@ -17,6 +17,8 @@
 @import "./components/InlineEditField.css";
 @import "./components/FeatureForm.css";
 @import "./components/LinkPicker.css";
+@import "./components/AssumptionList.css";
+@import "./components/ManageTable.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values

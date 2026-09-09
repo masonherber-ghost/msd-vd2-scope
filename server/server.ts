@@ -18,6 +18,13 @@ const { runMigrations } = await import('./migrate.js')
 const { scopeRouter } = await import('./routes/scope.js')
 const { importRouter } = await import('./routes/import.js')
 const { featuresRouter } = await import('./routes/features.js')
+const {
+  assumptionsRouter,
+  capabilitiesRouter,
+  mvpFeaturesRouter,
+  phasesRouter,
+  releasesRouter,
+} = await import('./routes/entities.js')
 const { errorHandler, notFoundHandler } = await import('./middleware/error-handler.js')
 const { isScopeEmpty } = await import('./repositories/scope-repository.js')
 const { importScopeFromSources } = await import('./services/importer.js')
@@ -90,6 +97,11 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/scope', scopeRouter)
 app.use('/api/import', importRouter)
 app.use('/api/features', featuresRouter)
+app.use('/api/releases', releasesRouter)
+app.use('/api/phases', phasesRouter)
+app.use('/api/assumptions', assumptionsRouter)
+app.use('/api/mvp-features', mvpFeaturesRouter)
+app.use('/api/capabilities', capabilitiesRouter)
 
 app.use('/api', notFoundHandler)
 

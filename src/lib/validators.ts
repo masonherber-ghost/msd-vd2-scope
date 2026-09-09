@@ -95,3 +95,120 @@ export const setCapabilityLinksSchema = z.object({
 
 export type SetMvpLinksInput = z.infer<typeof setMvpLinksSchema>
 export type SetCapabilityLinksInput = z.infer<typeof setCapabilityLinksSchema>
+
+// ---------------------------------------------------------------------------
+// Releases
+// ---------------------------------------------------------------------------
+
+/** `1.1`, `1.9`, `2` — a major with an optional minor, as both sources write them. */
+export const RELEASE_ID_PATTERN = /^\d+(\.\d+)?$/
+
+export const createReleaseSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .regex(RELEASE_ID_PATTERN, 'A release id looks like 1.1, 1.9 or 2.'),
+  label: z.string().trim().min(1, 'Give the release a label.').max(80),
+  name: z.string().trim().max(200).default(''),
+  description: z.string().trim().max(2000).default(''),
+})
+
+export const updateReleaseSchema = createReleaseSchema
+  .omit({ id: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
+
+// ---------------------------------------------------------------------------
+// Phases
+// ---------------------------------------------------------------------------
+
+export const createPhaseSchema = z.object({
+  id: z
+    .string()
+    .trim()
+    .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'A phase id is lower-case words joined by hyphens.')
+    .max(80),
+  name: z.string().trim().min(1, 'Give the phase a name.').max(120),
+  // Free text and deliberately not unique — epic 186 sits on two phases (D-2).
+  epic_ref: z.string().trim().max(40).default(''),
+  epic_description: z.string().trim().max(500).default(''),
+})
+
+export const updatePhaseSchema = createPhaseSchema
+  .omit({ id: true })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
+
+// ---------------------------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------------------------
+
+export const createAssumptionSchema = z.object({
+  pwc_feature_id: featureIdSchema,
+  text: z.string().trim().min(1, 'An assumption needs some text.').max(2000),
+})
+
+export const updateAssumptionSchema = z.object({
+  text: z.string().trim().min(1, 'An assumption needs some text.').max(2000),
+})
+
+/** Reordering moves one row one step; positions are renumbered afterwards. */
+export const moveSchema = z.object({
+  direction: z.enum(['up', 'down']),
+})
+
+// ---------------------------------------------------------------------------
+// MVP features
+// ---------------------------------------------------------------------------
+
+export const scopeOptionSchema = z
+  .union([z.literal('1A'), z.literal('1B'), z.null()])
+  .default(null)
+
+export const createMvpFeatureSchema = z.object({
+  ref: z
+    .number()
+    .int('An MVP ref is a whole number.')
+    .positive('An MVP ref is a positive number.'),
+  scope_option: scopeOptionSchema,
+  title: z.string().trim().min(1, 'Give the MVP feature a title.').max(300),
+})
+
+export const updateMvpFeatureSchema = z
+  .object({
+    title: z.string().trim().min(1, 'Give the MVP feature a title.').max(300),
+    scope_option: z.union([z.literal('1A'), z.literal('1B'), z.null()]),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
+
+// ---------------------------------------------------------------------------
+// Capabilities
+// ---------------------------------------------------------------------------
+
+export const ACTORS = ['employer', 'staff', 'jobseeker', 'system'] as const
+
+/** A new actor is a schema change, not free text (R-9.3). */
+export const actorSchema = z.enum(ACTORS, {
+  message: `An actor must be one of ${ACTORS.join(', ')}.`,
+})
+
+export const createCapabilitySchema = z.object({
+  mvp_ref: z.number().int().positive('A capability needs an MVP ref.'),
+  text: z.string().trim().min(1, 'A capability needs some text.').max(500),
+  actor: actorSchema,
+  // R-9.3: a capability requires a release and a phase. The importer's one
+  // unmatched row predates this and is left as it is.
+  release_id: z.string().trim().min(1, 'Choose a release.'),
+  phase_id: z.string().trim().min(1, 'Choose a phase.'),
+})
+
+export const updateCapabilitySchema = z
+  .object({
+    text: z.string().trim().min(1, 'A capability needs some text.').max(500),
+    actor: actorSchema,
+    release_id: z.string().trim().min(1, 'Choose a release.'),
+    phase_id: z.string().trim().min(1, 'Choose a phase.'),
+  })
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })

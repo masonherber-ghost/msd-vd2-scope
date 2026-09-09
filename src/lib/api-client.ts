@@ -195,6 +195,8 @@ export type DeleteFeatureResult = {
   cascaded: { assumptions: number; mvpLinks: number; capabilityLinks: number }
 }
 
+export type MoveDirection = 'up' | 'down'
+
 export const apiClient = {
   health: () => request<{ status: string; uptime: number }>('/api/health'),
 
@@ -239,5 +241,115 @@ export const apiClient = {
         `/api/features/${encodeURIComponent(id)}?cascade=${cascade ? 'true' : 'false'}`,
         { method: 'DELETE' },
       ),
+  },
+
+  releases: {
+    create: (body: { id: string; label: string; name: string; description: string }) =>
+      request<ReleaseRow>('/api/releases', { method: 'POST', body: JSON.stringify(body) }),
+    update: (id: string, body: Partial<{ label: string; name: string; description: string }>) =>
+      request<ReleaseRow>(`/api/releases/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    remove: (id: string) =>
+      request<{ deleted: number }>(`/api/releases/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  phases: {
+    create: (body: {
+      id: string
+      name: string
+      epic_ref: string
+      epic_description: string
+    }) => request<PhaseRow>('/api/phases', { method: 'POST', body: JSON.stringify(body) }),
+    update: (
+      id: string,
+      body: Partial<{ name: string; epic_ref: string; epic_description: string }>,
+    ) =>
+      request<PhaseRow>(`/api/phases/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    move: (id: string, direction: MoveDirection) =>
+      request<{ moved: boolean; phases: PhaseRow[] }>(
+        `/api/phases/${encodeURIComponent(id)}/move`,
+        { method: 'POST', body: JSON.stringify({ direction }) },
+      ),
+    remove: (id: string) =>
+      request<{ deleted: number; phases: PhaseRow[] }>(
+        `/api/phases/${encodeURIComponent(id)}`,
+        { method: 'DELETE' },
+      ),
+  },
+
+  assumptions: {
+    create: (pwcFeatureId: string, text: string) =>
+      request<{ assumption: AssumptionRow; assumptions: AssumptionRow[] }>(
+        '/api/assumptions',
+        { method: 'POST', body: JSON.stringify({ pwc_feature_id: pwcFeatureId, text }) },
+      ),
+    update: (id: number, text: string) =>
+      request<AssumptionRow>(`/api/assumptions/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ text }),
+      }),
+    move: (id: number, direction: MoveDirection) =>
+      request<{ moved: boolean; assumptions: AssumptionRow[] }>(
+        `/api/assumptions/${id}/move`,
+        { method: 'POST', body: JSON.stringify({ direction }) },
+      ),
+    remove: (id: number) =>
+      request<{ deleted: number; assumptions: AssumptionRow[] }>(`/api/assumptions/${id}`, {
+        method: 'DELETE',
+      }),
+  },
+
+  mvpFeatures: {
+    create: (body: { ref: number; scope_option: '1A' | '1B' | null; title: string }) =>
+      request<MvpFeatureRow>('/api/mvp-features', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (
+      id: number,
+      body: Partial<{ title: string; scope_option: '1A' | '1B' | null }>,
+    ) =>
+      request<MvpFeatureRow>(`/api/mvp-features/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    remove: (id: number) =>
+      request<{ deleted: number }>(`/api/mvp-features/${id}`, { method: 'DELETE' }),
+  },
+
+  capabilities: {
+    create: (body: {
+      mvp_ref: number
+      text: string
+      actor: CapabilityRow['actor']
+      release_id: string
+      phase_id: string
+    }) =>
+      request<CapabilityRow>('/api/capabilities', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    update: (
+      id: number,
+      body: Partial<{
+        text: string
+        actor: CapabilityRow['actor']
+        release_id: string
+        phase_id: string
+      }>,
+    ) =>
+      request<CapabilityRow>(`/api/capabilities/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+    remove: (id: number) =>
+      request<{ deleted: number }>(`/api/capabilities/${id}`, { method: 'DELETE' }),
   },
 }

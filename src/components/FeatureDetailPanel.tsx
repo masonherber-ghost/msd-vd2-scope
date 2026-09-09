@@ -1,5 +1,6 @@
 import { Filter } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { AssumptionList } from '@/components/AssumptionList'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,11 @@ export type FeatureDetailPanelProps = {
   /** The feature's current link ids. */
   linkedMvpIds?: number[]
   linkedCapabilityIds?: number[]
+  /** Assumption editing, including explicit reordering (R-9.8). */
+  onAddAssumption?: (text: string) => Promise<unknown>
+  onEditAssumption?: (id: number, text: string) => Promise<unknown>
+  onMoveAssumption?: (id: number, direction: 'up' | 'down') => Promise<unknown>
+  onDeleteAssumption?: (id: number) => Promise<unknown>
 }
 
 export function FeatureDetailPanel({
@@ -59,6 +65,10 @@ export function FeatureDetailPanel({
   onSetCapabilityLinks,
   linkedMvpIds = [],
   linkedCapabilityIds = [],
+  onAddAssumption,
+  onEditAssumption,
+  onMoveAssumption,
+  onDeleteAssumption,
 }: FeatureDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -204,7 +214,15 @@ export function FeatureDetailPanel({
         <h3 className="feature-detail__section-title">
           Assumptions ({detail.assumptions.length})
         </h3>
-        {detail.assumptions.length === 0 ? (
+        {onAddAssumption && onEditAssumption && onMoveAssumption && onDeleteAssumption ? (
+          <AssumptionList
+            assumptions={detail.assumptions}
+            onAdd={onAddAssumption}
+            onEdit={onEditAssumption}
+            onMove={onMoveAssumption}
+            onDelete={onDeleteAssumption}
+          />
+        ) : detail.assumptions.length === 0 ? (
           <p className="feature-detail__note">None recorded.</p>
         ) : (
           <ol className="feature-detail__list">
