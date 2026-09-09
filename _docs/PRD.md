@@ -621,3 +621,97 @@ currently instruct future sessions to apply neurodivergent-child accessibility c
 and an "AI never writes the story" rule that have no bearing here. It should be rewritten
 for this app before implementation begins. The stack and styling rules in `.claude/rules/`
 are sound and should be kept as-is.
+
+---
+
+## 16. Scope principles
+
+Added after the Phase 2 build, from a programme decision. These govern how the
+model is read and override anything in §6 or §7 that contradicts them.
+
+### P-1 — A PwC feature exists in exactly one place
+
+A `pwc_feature` belongs to exactly one release and one canonical phase. There
+is no multi-placement and no "primary" placement — the map has one cell per
+feature.
+
+Already enforced: `pwc_features.release_id` and `phase_id` are single-valued
+and `NOT NULL`.
+
+**Consequence.** A feature whose capabilities span two phases is a candidate
+for *splitting*, not for multi-placement. F-085 is the live example: it cites
+`Extend vacancy` (Manage Vacancies) alongside `Shortlist / progress candidates`
+and `Manage Applicant Progression and Outcomes` (Employer Recruitment).
+
+### P-2 — A capability may belong to many PwC features
+
+Capabilities are shared. The same capability can be cited by any number of
+features, in any number of phases and releases.
+
+Already supported: `pwc_feature_capabilities` is many-to-many. In the current
+data **26 of 91 cited capabilities are referenced by more than one feature**.
+
+**Consequence, and the reason this matters.** A capability's `release_id` and
+`phase_id` are currently single values taken from the sequencing table. Under
+P-2 that single value is *one opinion about placement*, not the truth: a shared
+capability's real phase is a **span** derived from the features citing it.
+
+This reclassifies phase disagreements into two different things:
+
+| | Meaning | Treatment |
+|---|---|---|
+| Capability is cited from features in more than one phase | Legitimately cross-cutting | **Information**, not a conflict |
+| Capability is cited from one phase but the table places it elsewhere | The feature or the table is wrong | **A finding** for review |
+
+Cross-phase citation is rarer than it looks — **5 capabilities of 91**, and
+three of those five are F-085's:
+
+| Capability | Cited from |
+|---|---|
+| View authenticated landing page / dashboard (941) | F-006 [Access & Onboarding], F-019 [Employer Profile & Portal] |
+| View authenticated landing page (941) | F-006, F-019 |
+| Extend vacancy (972) | F-086 [Manage Vacancies], F-085 |
+| Shortlist / progress candidates (990) | F-077, F-078 [Employer Recruitment], F-085 |
+| Manage Applicant Progression and Outcomes (990) | F-077, F-078, F-085 |
+
+Note that `Employer Operational Notifications` (970) is **not** among them.
+It is cross-cutting in concept, but in this dataset it is cited only from
+Manage Vacancies (F-039, F-046) while the table places it in Outcomes &
+Support — so it is a finding under the table above, not a span.
+
+**Implementation is deferred to Phase 9** (reconciliation view). The schema is
+unchanged; `EXPECTED_COUNTS` still enforces today's conflict figures. Phase 9
+presents the split and re-baselines the counts with sign-off.
+
+### P-3 — Source documents are never edited
+
+The markdown files are inputs. A correction is declared in
+`server/services/scope-overrides.ts` and re-applied on every import, so it
+survives a rebuilt database, is visible in version control, and is reversed by
+deleting one entry. Overrides are applied **before** reconciliation, so
+conflicts are derived from the corrected placement rather than left stale.
+
+#### Recorded overrides
+
+| ID | Target | Change | Effect on conflicts |
+|---|---|---|---|
+| OV-001 | F-085 | Outcomes & Support / 1.3 → Manage Vacancies / 1.1 | release 35 → 37, phase 21 → 20 |
+
+OV-001 raises the release conflict count because two of F-085's three
+capabilities are sequenced at 1.3 in Employer Recruitment; at its old 1.3
+placement those agreed. The correction surfaces them rather than hiding them,
+which is the intended behaviour — and P-1 suggests the durable fix is a split.
+
+### Release 1.9 is a bucket, not a sequenced release
+
+Recorded here because it answers the framing question behind [D-1](#15-open-decisions).
+
+1.9 appears only in the mapping file; the sequencing table has no 1.9 column
+at all. Of the **32 capability links from its 15 features, all 32 conflict** —
+the table schedules every one of them in 1.1 (11), 1.4 (5) or 2 (16). Nothing
+anywhere in the table is sequenced as 1.9.
+
+So `1.9 → 2` means: a feature the mapping file files under 1.9 cites a
+capability the table delivers in Release 2. 1.9 has no independent sequencing
+identity; it is a label meaning "later" that decomposes into three real
+releases. F-029 is the clearest case — it has no capability links at all.

@@ -89,7 +89,17 @@ export type FeatureCapabilityLinkRow = {
   source: string
 }
 
+export type ScopeOverride = {
+  id: string
+  featureId: string
+  releaseId?: string
+  phaseLabel?: string
+  rationale: string
+  decidedOn: string
+}
+
 export type ScopeGraph = {
+  overrides: ScopeOverride[]
   releases: ReleaseRow[]
   phases: PhaseRow[]
   pwcFeatures: PwcFeatureRow[]

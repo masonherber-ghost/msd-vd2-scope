@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { parseMappingDocument } from './mapping-parser.js'
 import { parseSequencingTable } from './sequencing-parser.js'
 import { reconcile, type ReconcileResult } from './reconcile.js'
+import { applyScopeOverrides, type AppliedOverride } from './scope-overrides.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DOCS_DIR = path.join(here, '..', '..', '_docs')
@@ -15,10 +16,11 @@ export const SEQUENCING_PATH = path.join(
 )
 
 /**
- * The expected reconciliation counts from PRD §6. Drift from these is a bug,
- * not a tolerance — it fails the boot check on import (R-11.3).
+ * The counts for the documents as written, with no overrides — the PRD §6 and
+ * §7 figures. Asserted in tests so a declared override can never mask a real
+ * change to a source document.
  */
-export const EXPECTED_COUNTS = {
+export const EXPECTED_SOURCE_COUNTS = {
   releases: 6,
   phases: 7,
   pwcFeatures: 48,
@@ -34,8 +36,26 @@ export const EXPECTED_COUNTS = {
   unmatchedLinks: 2,
 } as const
 
-/** Release conflict breakdown from PRD §7. */
-export const EXPECTED_RELEASE_CONFLICTS = [
+/**
+ * The expected counts *after* the declared overrides in scope-overrides.ts.
+ * Drift from these is a bug, not a tolerance — it fails the boot check on
+ * import (R-11.3).
+ *
+ * These differ from EXPECTED_SOURCE_COUNTS only in the conflict rows, and only
+ * because of OV-001 (F-085 → Manage Vacancies / 1.1):
+ *   releaseConflicts         35 → 37  (its two 1.3 capabilities now conflict at 1.1)
+ *   phaseConflicts           21 → 20  (its Manage Vacancies capability now agrees)
+ *   phaseConflictsAfterMerge 10 → 9
+ */
+export const EXPECTED_COUNTS = {
+  ...EXPECTED_SOURCE_COUNTS,
+  releaseConflicts: 37,
+  phaseConflicts: 20,
+  phaseConflictsAfterMerge: 9,
+} as const
+
+/** Release conflict breakdown from PRD §7, before overrides. */
+export const EXPECTED_SOURCE_RELEASE_CONFLICTS = [
   { from: '1.9', to: '2', links: 16 },
   { from: '1.9', to: '1.1', links: 11 },
   { from: '1.9', to: '1.4', links: 5 },
@@ -43,8 +63,33 @@ export const EXPECTED_RELEASE_CONFLICTS = [
   { from: '1.1', to: '1.4', links: 1 },
 ] as const
 
-/** Parses and reconciles both real source documents from disk. */
-export function loadScopeFromSources(): ReconcileResult {
+/** Release conflict breakdown after the declared overrides. */
+export const EXPECTED_RELEASE_CONFLICTS = [
+  { from: '1.9', to: '2', links: 16 },
+  { from: '1.9', to: '1.1', links: 11 },
+  { from: '1.9', to: '1.4', links: 5 },
+  { from: '1.1', to: '1.3', links: 2 },
+  { from: '1.1', to: '1.4', links: 1 },
+  { from: '1.1', to: '1.2', links: 1 },
+  { from: '1.3', to: '1.2', links: 1 },
+] as const
+
+/**
+ * Parses both real source documents, applies the declared overrides, and
+ * reconciles. Overrides land before reconciliation so conflicts are derived
+ * from the corrected placement.
+ */
+export function loadScopeFromSources(): ReconcileResult & {
+  appliedOverrides: AppliedOverride[]
+} {
+  const parsed = parseMappingDocument(fs.readFileSync(MAPPING_PATH, 'utf8'))
+  const { mapping, applied } = applyScopeOverrides(parsed)
+  const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
+  return { ...reconcile(mapping, sequencing), appliedOverrides: applied }
+}
+
+/** Parses and reconciles the sources with NO overrides applied. */
+export function loadScopeFromSourcesRaw(): ReconcileResult {
   const mapping = parseMappingDocument(fs.readFileSync(MAPPING_PATH, 'utf8'))
   const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
   return reconcile(mapping, sequencing)
@@ -57,9 +102,12 @@ export type CountDrift = {
 }
 
 /** Returns every count that differs from PRD §6. Empty means no drift. */
-export function findCountDrift(result: ReconcileResult): CountDrift[] {
+export function findCountDrift(
+  result: ReconcileResult,
+  expectedCounts: Record<string, number> = EXPECTED_COUNTS,
+): CountDrift[] {
   const drift: CountDrift[] = []
-  for (const [key, expected] of Object.entries(EXPECTED_COUNTS)) {
+  for (const [key, expected] of Object.entries(expectedCounts)) {
     const typedKey = key as keyof typeof EXPECTED_COUNTS
     const actual = result.summary[typedKey]
     if (actual !== expected) drift.push({ key: typedKey, expected, actual })

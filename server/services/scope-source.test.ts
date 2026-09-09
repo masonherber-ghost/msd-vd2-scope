@@ -7,13 +7,37 @@ import { ParseError } from './scope-types.js'
 import {
   EXPECTED_COUNTS,
   EXPECTED_RELEASE_CONFLICTS,
+  EXPECTED_SOURCE_COUNTS,
+  EXPECTED_SOURCE_RELEASE_CONFLICTS,
   MAPPING_PATH,
   SEQUENCING_PATH,
   findCountDrift,
   loadScopeFromSources,
+  loadScopeFromSourcesRaw,
 } from './scope-source.js'
 
 const result = loadScopeFromSources()
+const raw = loadScopeFromSourcesRaw()
+
+/**
+ * The raw figures are asserted separately from the post-override ones so a
+ * declared override can never mask a real change to a source document.
+ */
+describe('the documents as written still reconcile to the PRD figures', () => {
+  it('has no drift from PRD §6 with no overrides applied', () => {
+    expect(findCountDrift(raw, EXPECTED_SOURCE_COUNTS)).toEqual([])
+  })
+
+  it.each(Object.entries(EXPECTED_SOURCE_COUNTS))('raw %s is %i', (key, expected) => {
+    expect(raw.summary[key as keyof typeof EXPECTED_SOURCE_COUNTS]).toBe(expected)
+  })
+
+  it('breaks raw release conflicts down exactly as PRD §7 does', () => {
+    expect(raw.summary.releaseConflictBreakdown).toEqual([
+      ...EXPECTED_SOURCE_RELEASE_CONFLICTS,
+    ])
+  })
+})
 
 describe('the real source documents reconcile to the PRD counts', () => {
   it('has no count drift from PRD §6', () => {
@@ -53,6 +77,37 @@ describe('the real source documents reconcile to the PRD counts', () => {
       (c) => c.ref === 947 && c.text === 'Review & publish vacancies',
     )
     expect(exact?.releaseId).toBeNull()
+  })
+
+  it('applies OV-001, moving F-085 to Manage Vacancies at 1.1', () => {
+    expect(result.appliedOverrides).toHaveLength(1)
+    const [applied] = result.appliedOverrides
+    expect(applied.override.id).toBe('OV-001')
+    expect(applied.from).toEqual({
+      releaseId: '1.3',
+      phaseId: 'outcomes-and-support',
+      sourcePhaseLabel: 'Outcomes & Support',
+    })
+    expect(applied.to).toEqual({
+      releaseId: '1.1',
+      phaseId: 'manage-vacancies',
+      sourcePhaseLabel: 'Manage Vacancies',
+    })
+
+    const feature = result.features.find((f) => f.id === 'F-085')
+    expect(feature).toMatchObject({ releaseId: '1.1', phaseId: 'manage-vacancies' })
+  })
+
+  it('recomputes F-085 conflicts from the corrected placement, not the source', () => {
+    const release = result.conflicts.release.filter((c) => c.pwcFeatureId === 'F-085')
+    const phase = result.conflicts.phase.filter((c) => c.pwcFeatureId === 'F-085')
+
+    // The correction resolves the Manage Vacancies phase disagreement and
+    // exposes two release disagreements that its old 1.3 placement hid.
+    expect(release).toHaveLength(3)
+    expect(phase).toHaveLength(2)
+    expect(release.every((c) => c.featureReleaseId === '1.1')).toBe(true)
+    expect(phase.every((c) => c.capabilityPhaseLabel === 'Employer Recruitment')).toBe(true)
   })
 
   it('sees the single 1.1 → 1.4 conflict on F-014 electronic T&Cs', () => {

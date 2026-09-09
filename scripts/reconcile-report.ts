@@ -13,6 +13,19 @@ const pad = (v: string | number, n: number) => String(v).padStart(n)
 console.log('Reconciliation summary — PwC scope mapping × R1 sequencing table')
 console.log('='.repeat(64))
 console.log()
+
+if (result.appliedOverrides.length > 0) {
+  console.log('Declared overrides applied before reconciliation')
+  console.log('  ' + '-'.repeat(52))
+  for (const applied of result.appliedOverrides) {
+    console.log(`  ${applied.override.id}  ${applied.override.featureId}`)
+    console.log(
+      `     release ${applied.from.releaseId} → ${applied.to.releaseId}` +
+        `   phase ${applied.from.sourcePhaseLabel} → ${applied.to.sourcePhaseLabel}`,
+    )
+  }
+  console.log()
+}
 console.log('  metric                       actual   expected   ')
 console.log('  ' + '-'.repeat(52))
 for (const [key, expected] of Object.entries(EXPECTED_COUNTS)) {

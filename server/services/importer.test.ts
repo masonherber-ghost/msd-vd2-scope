@@ -77,8 +77,9 @@ describe('importScope writes the whole graph', () => {
       mvpFeatures: 51,
       capabilities: 107,
       featureMvpLinks: 60,
-      releaseConflicts: 35,
-      phaseConflicts: 21,
+      // Post-override figures: OV-001 moves F-085 to Manage Vacancies / 1.1.
+      releaseConflicts: 37,
+      phaseConflicts: 20,
       unmatchedLinks: 2,
     })
   })
@@ -139,6 +140,18 @@ describe('importScope writes the whole graph', () => {
       { pwc_feature_id: 'F-050', text: 'Review & publish vacancies', release_id: null },
       { pwc_feature_id: 'F-051', text: 'Review & publish vacancies', release_id: null },
     ])
+  })
+
+  it('records F-085 at its overridden placement', () => {
+    importScope(reconciled)
+    const row = db
+      .prepare("SELECT release_id, phase_id, source_phase_label FROM pwc_features WHERE id='F-085'")
+      .get()
+    expect(row).toEqual({
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+      source_phase_label: 'Manage Vacancies',
+    })
   })
 
   it('flags the 11 phase conflicts the canonical merge resolves', () => {
