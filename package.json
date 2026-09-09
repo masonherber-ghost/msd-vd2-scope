@@ -15,10 +15,13 @@
     "test:ui": "vitest --ui"
   },
   "dependencies": {
+    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.2.6",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "helmet": "^8.3.0",
     "lucide-react": "^1.43.0",
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
@@ -26,6 +29,8 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.5.0",
     "@types/react": "^19.2.18",

@@ -1,375 +1,623 @@
 # PRD — MSD VD2 Scope Map
 
-An interactive scope and journey map for the PwC VD2 Phase 1 scope, built over
-[`_docs/pwc-scope-to-mvp-mapping.md`](pwc-scope-to-mvp-mapping.md).
+An interactive, editable scope and journey map for the PwC VD2 Phase 1 scope, built over
+two source documents:
+
+- [`_docs/pwc-scope-to-mvp-mapping.md`](pwc-scope-to-mvp-mapping.md) — 48 PwC features with
+  assumptions, mapped to MVP features
+- [`_docs/R1-sequenced-release-capabilities-table.md`](R1-sequenced-release-capabilities-table.md) —
+  107 sequenced capabilities positioned in a release × phase grid
 
 > **Note for future sessions:** the root `CLAUDE.md` currently describes a "Story Creator"
-> app for 8–12 year-olds with dyslexia. That is a stale template carried in from another
-> project and does **not** describe this repo. The stack rules in `.claude/rules/` still
-> apply; the product sections of `CLAUDE.md` do not. See [Open decisions](#12-open-decisions).
+> app for 8–12 year-olds with dyslexia. That is a stale template from another project and
+> does **not** describe this repo. The stack rules in `.claude/rules/` still apply; the
+> product sections of `CLAUDE.md` do not. See [D-6](#15-open-decisions).
 
 ---
 
 ## 1. Problem
 
-The VD2 Phase 1 scope currently lives as a 704-line markdown document. It is accurate but
-effectively unreadable as a working tool:
+The VD2 Phase 1 scope lives across two markdown documents that are individually accurate,
+collectively contradictory, and jointly unusable as a working tool.
 
-- **You cannot see the shape of the release.** Finding what is in MVP 1.2 means scrolling
-  and holding four release boundaries in your head.
-- **The connections are invisible.** The document is organised as a strict hierarchy
-  (release → phase → feature), but the real structure is a graph. `947 - Staff Can Review
-  and Publish Vacancies` is referenced by four separate PwC features; `938` and `951` each
-  span two different releases. Nothing in the document surfaces that — you only find it by
-  noticing the same number twice, hundreds of lines apart.
-- **Answering a routine question takes minutes.** "Which features does MVP feature 990
-  underpin?" "What does the employer actually get in 1.1?" "Which features have no mapped
-  capabilities?" are all `grep`-and-reconcile exercises today.
-- **Gaps hide.** Two features (F-008, F-029) have no capabilities mapped in the Release 1.1–1.3
-  table. That is a real signal, buried in an italic aside.
+- **You cannot see the shape of the programme.** Finding what is in MVP 1.2 means scrolling
+  704 lines and holding four release boundaries in your head.
+- **The connections are invisible.** Both documents are organised as hierarchies, but the
+  real structure is a graph. `947 - Staff Can Review and Publish Vacancies` is referenced by
+  four separate PwC features; `938`, `951` and `972` each span more than one release.
+  Nothing surfaces that — you find it only by noticing the same number twice, hundreds of
+  lines apart.
+- **The two sources disagree, silently.** 35 of the 123 capability links in the mapping file
+  (28%) place a capability in a different release than the sequencing table does. 21 place
+  it in a different phase. Nobody can see this today. See [§7](#7-the-two-sources-disagree).
+- **Release 1.9 does not exist in the sequencing table at all.** Its capabilities decompose
+  across table releases 1.1, 1.4 and 2 — so the mapping file's headline release structure
+  is not the delivery sequence.
+- **The scope has no owner-editable home.** Corrections happen in email and in comments on
+  a document, then get hand-merged. There is no way to record that a conflict was
+  investigated and resolved.
 
 ## 2. Goals
 
-1. **One screen that shows the whole scope** — all 4 releases, 8 phases and 48 features
-   legible at a glance, with detail on demand.
+1. **One screen that shows the whole scope** — every release, all 7 canonical phases and
+   48 features legible at a glance, detail on demand.
 2. **Find any feature in under five seconds** — by ID, name, phase, release, MVP feature,
    capability text or actor.
 3. **Make the connections first-class** — show which features share an MVP feature, and
    therefore share delivery, risk and dependency.
-4. **Filter without losing your place** — narrowing by release or phase reshapes the map
-   in place; it never navigates away.
-5. **Stay faithful to the source** — the markdown document remains the single source of
-   truth. The app renders it; it never becomes a second, diverging copy.
+4. **Surface and resolve the source conflicts** — the app is the place where the two
+   documents get reconciled, with the decision recorded.
+5. **Full CRUD on every entity** — the app becomes the maintained home of the scope, not a
+   read-only render of documents that are already drifting.
 
 ### Non-goals
 
-- Editing scope. The app is read-only (see [§7](#7-data-ingestion--source-of-truth)).
-- Project management — no estimates, dates, assignees, burndown, or status tracking.
-- Replacing the source document, Jira, or Confluence.
-- Multi-user accounts, auth, or comments in v1.
+- Project management — no estimates, dates, assignees, burndown, or delivery status.
+- Replacing Jira or Confluence.
+- Multi-user auth, roles, or comment threads in v1.
+- Modelling dependencies beyond shared MVP features.
 
 ## 3. Users
 
 | User | What they need |
 |---|---|
-| **Delivery lead / PM** | Release composition, cross-release couplings, coverage gaps |
-| **BA / product owner** | Trace one PwC feature to its MVP features, capabilities and assumptions |
+| **Delivery lead / PM** | Release composition, cross-release couplings, conflict resolution |
+| **BA / product owner** | Trace a PwC feature to its MVP features, capabilities and assumptions; edit scope as decisions land |
 | **Architect / tech lead** | Which MVP features are load-bearing across many PwC features |
 | **Client / stakeholder in a walkthrough** | A journey-shaped picture of what arrives when |
 
-The stakeholder-walkthrough case is the one that sets the visual bar: the map has to be
-presentable on a screen share without narration.
+The walkthrough case sets the visual bar: the map must be presentable on a screen share
+without narration. The BA case sets the editing bar: correcting a feature must take seconds,
+not a migration.
 
 ### Core use cases
 
-- **UC-1** — "Show me everything in MVP 1.1." → Filter to release 1.1; map reduces to
-  4 phases, 20 features.
-- **UC-2** — "What is `947` used by?" → Select MVP feature 947; the four PwC features that
-  reference it highlight, with connecting edges drawn.
-- **UC-3** — "What does the employer do across the whole programme?" → Filter capabilities
-  by actor `employer`; features with no employer-facing capability dim out.
-- **UC-4** — "What's coupled across releases?" → Coverage view lists the 3 MVP features
-  spanning more than one release and the 15 shared by more than one PwC feature.
-- **UC-5** — "Where are the holes?" → Coverage view lists features with zero mapped
-  capabilities and MVP features whose capabilities sit outside Release 1.
+- **UC-1** — "Show me everything in MVP 1.1." → Filter to 1.1; map reduces to its populated cells.
+- **UC-2** — "What is `947` used by?" → Select MVP feature 947; its four PwC features
+  highlight with connecting edges drawn.
+- **UC-3** — "What does the employer do across the programme?" → Filter capabilities by
+  actor `employer`; non-matching features dim.
+- **UC-4** — "What's coupled across releases?" → Coverage view lists MVP features spanning
+  more than one release.
+- **UC-5** — "Where do the two documents disagree?" → Reconciliation view lists all 35
+  release conflicts and 21 phase conflicts as a work queue.
+- **UC-6** — "Option 1A or 1B — what changes?" → Filter by scope option; the map shows only
+  the features and MVP records belonging to that option.
+- **UC-7** — "Legal changed the T&Cs assumption on F-014." → Open F-014, edit the
+  assumption inline, save.
 
 ---
 
-## 4. Data model
+## 4. Canonical phases
 
-Derived directly from the source document. Counts are measured, not estimated.
+**The 7 phases in the journey diagram are canonical** — their names, their order, and their
+epic references. This overrides the phase ordering and naming in both source documents.
+
+| # | Phase | Epic ref | Epic description |
+|---|---|---|---|
+| 1 | Access & Onboarding | 179 | Employer Registration & Employer portal onboarding |
+| 2 | Employer Profile & Portal | 176 | Manage employer profile — internal/external portal |
+| 3 | Manage Vacancies | 177 | Employer can create and manage vacancies |
+| 4 | Document Management | 178 | Clients and employers can manage documents to support applications, shortlisting and vacancies |
+| 5 | Applications & Referrals | 186 | Staff and clients can create and manage applications |
+| 6 | Employer Recruitment | 186 | Employers can Manage Recruitment Against Vacancies |
+| 7 | Outcomes & Support | 192 | Employers can communicate with MSD and access support |
+
+Two things to note:
+
+- **`186` appears twice** — on both Applications & Referrals and Employer Recruitment. Epic
+  refs are otherwise unique, so this is very likely a typo in the diagram. The app stores
+  `epic_ref` as free text and does **not** enforce uniqueness, so it renders faithfully;
+  flagged as [D-2](#15-open-decisions).
+- **Epic refs (176–192) are a different ID series from MVP feature refs (937–1052).** Do not
+  join them.
+
+### "Onboarding via invite" is not a canonical phase
+
+Both source documents carry an 8th grouping, *Onboarding via invite*, which the canonical
+diagram does not have. It **folds into Access & Onboarding** (epic 179, "Employer
+Registration & Employer portal onboarding").
+
+The sources already support this: 11 capability links sit in mapping-file phase
+*Access & onboarding* while the sequencing table places the same capabilities in
+*Onboarding via invite*. The two are used interchangeably, and merging them resolves 11 of
+the 21 phase conflicts outright.
+
+The import records the original phase label on each row as `source_phase_label`, so the
+merge is auditable and reversible.
+
+### Feature distribution after the merge
+
+48 features across 7 phases, 13 of 28 release × phase cells populated:
+
+| Phase | 1.1 | 1.2 | 1.3 | 1.9 | Total |
+|---|---|---|---|---|---|
+| Access & Onboarding | 6 | · | · | 6 | 12 |
+| Employer Profile & Portal | 4 | · | · | 6 | 10 |
+| Manage Vacancies | 10 | 1 | · | · | 11 |
+| Document Management | · | 2 | · | · | 2 |
+| Applications & Referrals | · | 2 | · | · | 2 |
+| Employer Recruitment | · | 2 | 3 | · | 5 |
+| Outcomes & Support | · | 1 | 2 | 3 | 6 |
+
+---
+
+## 5. Releases
+
+The union of both sources is **six releases**, and they do not agree on which exist:
+
+| Release | In mapping file | In sequencing table | Note |
+|---|---|---|---|
+| 1.1 Controlled Pilot | ✅ 20 features | ✅ 45 capabilities | |
+| 1.2 Client Applications & Referral Pipeline | ✅ 8 features | ✅ 36 capabilities | |
+| 1.3 Interactive Recruitment & Progression | ✅ 5 features | ✅ 7 capabilities | |
+| 1.4 | ❌ | ✅ 3 capabilities | Table only |
+| 1.9 GA & Scale-Up | ✅ 15 features | ❌ | **Mapping only** |
+| 2 | ❌ | ✅ 16 capabilities | Table only |
+
+**Release 1.9 is the headline problem.** Its 15 features cite 32 capabilities that the
+sequencing table places in release 1.1 (11 links), 1.4 (5 links) and 2 (16 links). So
+"1.9 / GA & Scale-Up" is a mapping-file construct, not a sequenced release. The app must
+hold both framings and show the decomposition rather than pick a winner — see
+[§7](#7-the-two-sources-disagree) and [D-1](#15-open-decisions).
+
+---
+
+## 6. Data model
 
 ```
-Release (4)
-  └── Phase (8 distinct; 15 release×phase groupings)
-        └── PwCFeature (48, F-001…F-092, each in exactly one release + phase)
-              ├── Assumption (92 total, ordered, free text)
-              └── ─┬─ MvpFeature (39 distinct, 937…1052; 60 link rows)
-                   └── Capability (92 distinct texts, 123 link rows)
-                         └── actor: employer | staff | jobseeker | system
+Release (6)
+Phase (7 canonical, ordered, with epic_ref)
+  └── PwCFeature (48 — each in exactly one release + phase)
+        ├── Assumption (92, ordered, free text)
+        └── ─┬─ MvpFeature (51 records / 48 refs — Option 1A & 1B are separate records)
+             └── Capability (107 distinct — each positioned in its own release × phase cell)
+                   └── actor: employer | staff | jobseeker | system
 ```
 
-**`MvpFeature` is the join that makes this a graph rather than a tree.** Every
-cross-cutting relationship in the app is derived from two PwC features referencing the
-same MVP feature ID.
+**`MvpFeature` is the join that makes this a graph rather than a tree.** Every cross-cutting
+relationship in the app derives from two PwC features referencing the same MVP feature.
 
 ### Entities
 
-**`releases`** — `id` (`1.1`), `label` (`MVP1.1`), `name`, `description`, `display_order`.
-Four rows: 1.1 Controlled Pilot · 1.2 Client Applications & Referral Pipeline ·
-1.3 Interactive Recruitment & Progression · 1.9 GA & Scale-Up.
+**`releases`** — `id` (`1.1`), `label`, `name`, `description`, `display_order`,
+`in_mapping_source`, `in_sequencing_source`. Six rows.
 
-**`phases`** — `id` (slug), `name`, `display_order`. Eight rows. **The source document has
-no canonical phase order** — phases appear in a different sequence in each release. The
-app must impose one explicit journey order (see [Open decisions](#12-open-decisions)):
+**`phases`** — `id` (slug), `name`, `epic_ref`, `epic_description`, `display_order`. Seven
+rows, seeded from [§4](#4-canonical-phases) and ordered 1–7. `epic_ref` is free text and
+not unique (see the `186` collision).
 
-`Onboarding via invite → Access & onboarding → Employer Profile & Portal → Manage
-Vacancies → Document Management → Applications & Referrals → Employer Recruitment →
-Outcomes & Support`
-
-**`pwc_features`** — `id` (`F-035`), `name`, `foundational_build` (the "Included in
-foundational build" line), `release_id`, `phase_id`, `display_order`. 48 rows, no duplicate
-IDs. Feature IDs are sparse (F-004, F-012, F-015 etc. are absent) — the app must not assume
-a contiguous range or infer meaning from the gaps.
+**`pwc_features`** — `id` (`F-035`), `name`, `foundational_build`, `release_id`, `phase_id`,
+`source_phase_label`, `display_order`. 48 rows, no duplicate IDs. Feature IDs are sparse
+(F-004, F-012, F-015 and others are absent) — never assume a contiguous range, and never
+infer meaning from the gaps. New features created in the app get the next free `F-` number,
+offered as a default the user can override.
 
 **`assumptions`** — `id`, `pwc_feature_id`, `position`, `text`. 92 rows. Order is meaningful
-and must be preserved.
+and must survive reordering, insertion and deletion.
 
-**`mvp_features`** — `id` (integer, `947`), `title`. 39 rows. **Key on the integer ID only.**
-Three IDs carry inconsistent titles in the source:
+**`mvp_features`** — `id` (surrogate), `ref` (integer, `951`), `scope_option`
+(`1A` | `1B` | `null`), `title`, plus `source` (`mapping` | `sequencing` | `both` | `manual`).
 
-| ID | Variants in source |
-|---|---|
-| 938 | `…Additional Employer Portal Users (Option 1A)` / `…Additional Employer Portal Users` |
-| 946 | `…User Access and Permissions (Option 1A)` / `…User Access and Permissions` |
-| 951 | `…New organisation (Option 1A)` / `…New organisation (Option 1B)` |
+**Option 1A and 1B are separate feature records**, keyed on `(ref, scope_option)` with a
+uniqueness constraint on that pair. That yields **51 records across 48 refs**:
 
-The `(Option 1A)` / `(Option 1B)` suffix is a **scope-option attribute, not part of the
-title**. It must be stripped into `pwc_feature_mvp_features.scope_option` (`1A` | `1B` |
-`null`) so that Option 1A and Option 1B scope can be filtered independently. Treating the
-suffix as title text would produce 42 phantom MVP features instead of 39.
+- 42 records from 39 refs in the mapping file, because three refs split:
 
-**`pwc_feature_mvp_features`** — join table, 60 rows, plus `scope_option`.
+  | Ref | Splits into | Cited by |
+  |---|---|---|
+  | 938 | `1A` + *(no option)* | `1A` ← F-001, F-002 · *(none)* ← F-003 |
+  | 946 | `1A` + *(no option)* | `1A` ← F-007 · *(none)* ← F-006 |
+  | 951 | `1A` + `1B` | `1A` ← F-014 · `1B` ← F-009, F-010 |
 
-**`capabilities`** — `id`, `mvp_feature_id`, `text`, `actor`. 92 distinct texts across 123
-link rows. Actor distribution by link: employer 58, staff 27, system 26, jobseeker 12.
+- plus 9 refs that exist **only** in the sequencing table: `950`, `957`, `959`, `973`,
+  `976`, `986`, `989`, `992`, `993`.
+- `937` and `953` exist only in the mapping file and have no capabilities at all.
 
-**`pwc_feature_capabilities`** — join table, 123 rows.
+Only `951` is a genuine either/or (1A = staff-invited registration, 1B = open self-service).
+For `938` and `946` one variant is bare, which is most likely loose authoring rather than a
+real second option — see [D-3](#15-open-decisions). The uniqueness constraint is on
+`(ref, scope_option)`, so resolving a bare record into `1A` later is an edit, not a migration.
+
+**`capabilities`** — `id`, `mvp_feature_id`, `text`, `actor`, `release_id`, `phase_id`,
+`source_phase_label`. **107 distinct rows.** The sequencing table is authoritative for a
+capability's release and phase, because that is what the table is for. Actor distribution:
+employer 46, staff 24, system 22, jobseeker 15.
+
+**`pwc_feature_mvp_features`** — join, 60 rows from import.
+
+**`pwc_feature_capabilities`** — join, 123 rows from import.
+
+### Import reconciliation counts
+
+A drift from these on import is a bug and must fail the boot check:
+
+| | Mapping file | Sequencing table | Merged |
+|---|---|---|---|
+| Releases | 4 | 5 | **6** |
+| Phases | 8 raw | 8 raw | **7 canonical** |
+| PwC features | 48 | — | **48** |
+| Assumptions | 92 | — | **92** |
+| MVP feature refs | 39 | 46 | **48** |
+| MVP feature records | 42 | 46 | **51** |
+| Distinct capabilities | 91 | 106 | **107** |
+| Feature→MVP links | 60 | — | **60** |
+| Feature→capability links | 123 | — | **123** |
 
 ---
 
-## 5. Views
+## 7. The two sources disagree
 
-### 5.1 Scope Map — the primary view (`/`)
+This is the highest-value thing the app can expose, and it is invisible in both documents.
 
-A single grid. **Releases on the X axis** (1.1 → 1.2 → 1.3 → 1.9, left to right, the
-sequence dimension). **Phases on the Y axis** in journey order. Each of the 15 populated
-cells holds the feature cards for that release×phase pair; empty cells stay visible as
-faint placeholders, because an empty cell is information — it says *nothing in this phase
-lands in this release*.
+### Release conflicts — 35 of 123 capability links (28%)
 
-- **R-1.1** Feature card shows: ID, name, MVP feature ID chips, and a small actor summary.
-  Cards are the primary click target and open the detail panel.
-- **R-1.2** **Connection edges.** On hovering or selecting a card, draw edges to every
-  other card sharing an MVP feature ID, labelled with the shared ID. Edges are off by
-  default — 60 link rows drawn at once is noise, not insight.
-- **R-1.3** **Connection density.** Each card carries a passive indicator of how many other
-  features it connects to, so the load-bearing features (F-039, F-045, F-046, F-050, F-051
-  via `947`) read as important before you interact with anything.
-- **R-1.4** Cross-release edges (via `938`, `951`, `972`) render distinctly from
-  within-release edges. These are the couplings that matter most to a delivery plan.
-- **R-1.5** Selecting a card sets a URL param, so any view can be linked or shared.
-- **R-1.6** Pan and zoom, or a zoom-to-fit control. The full map must fit a 1440px screen
-  at default zoom in a legible form, even if cards collapse to ID-only chips to do it.
+| Feature's release | Capability's release in table | Links |
+|---|---|---|
+| 1.9 | 2 | 16 |
+| 1.9 | 1.1 | 11 |
+| 1.9 | 1.4 | 5 |
+| 1.3 | 1.2 | 2 |
+| 1.1 | 1.4 | 1 |
 
-### 5.2 Filter rail
+The single 1.1 → 1.4 conflict is worth calling out on its own: F-014 (*Registration and
+login page content*, release 1.1) depends on `Electronic T&Cs acceptance`, which the
+sequencing table does not deliver until release 1.4. If both documents are right, the pilot
+ships a registration page whose T&Cs acceptance is not built. That is either a genuine
+sequencing defect or a documentation error, and it is exactly the class of finding this app
+exists to surface.
 
-Persistent, always visible, never a modal. Filters compose (AND across categories, OR
-within a category) and reshape the map in place.
+### Phase conflicts — 21 links
 
-- **R-2.1** Release — multi-select, 4 options, with feature counts.
-- **R-2.2** Phase — multi-select, 8 options, with counts.
-- **R-2.3** Actor — multi-select, 4 options. Filters on the capabilities beneath a feature;
-  a feature matches if any of its capabilities has a selected actor.
-- **R-2.4** MVP feature — multi-select, 39 options, searchable. Selecting one is the
-  fastest path to UC-2.
-- **R-2.5** Scope option — 1A / 1B / unspecified. Relevant to 3 MVP features but decisive
-  for the Option 1A vs 1B scope conversation.
-- **R-2.6** Every filter control shows a live result count, and a single visible
-  "clear all" resets state. Active filters are reflected in the URL.
-- **R-2.7** A zero-result filter combination shows which filter caused it and offers to
-  drop that one — never a bare empty panel.
+| Feature's phase | Capability's phase in table | Links | Features |
+|---|---|---|---|
+| Access & onboarding | Onboarding via invite | 11 | F-009, F-010, F-011, F-014 |
+| Manage Vacancies | Outcomes & Support | 4 | F-039, F-046 |
+| Outcomes & Support | Employer Recruitment | 2 | F-085 |
+| Employer Profile & Portal | Access & Onboarding | 2 | F-019 |
+| Outcomes & Support | Applications & Referrals | 1 | F-090 |
+| Outcomes & Support | Manage Vacancies | 1 | F-085 |
 
-### 5.3 Search
+The first row resolves automatically via the canonical phase merge ([§4](#4-canonical-phases)),
+leaving 10 for human review.
 
-- **R-3.1** One search field, always reachable, matching across feature ID, feature name,
-  foundational-build text, MVP feature ID and title, capability text, and assumption text.
-- **R-3.2** Results grouped by what matched (feature name vs. assumption text), because
-  matching inside an assumption means something different from matching a title.
-- **R-3.3** Results are keyboard-navigable; Enter selects and reveals the feature on the map.
-- **R-3.4** Match term highlighted in the detail panel when arriving from search.
+### Unmatched links — 2
 
-### 5.4 Feature detail panel
+F-050 and F-051 both cite `Review & publish vacancies (staff, 947)`, which has no exact
+match in the table. The table's nearest row is `Review & publish vacancies. Staff can also
+request specific corrections to vacancies (staff, 947)`. Almost certainly a truncation, but
+the importer must not merge on a prefix match — it records these as unmatched and lets a
+human confirm.
 
-Opens beside the map — never over it, and never as a route change that loses map state.
+### How the app treats a conflict
 
-- **R-4.1** Shows: ID, name, release, phase, foundational-build statement, all assumptions
-  in source order, mapped MVP features, and capabilities grouped by actor.
-- **R-4.2** Every MVP feature chip is clickable and pivots the map to that MVP feature
-  (UC-2) without closing the panel.
-- **R-4.3** A "connected features" list — other PwC features sharing an MVP feature —
-  showing the shared ID and whether the connection crosses a release boundary.
-- **R-4.4** Where a feature has no mapped capabilities (F-008, F-029), say so explicitly
-  with the source's own qualifier, e.g. *"No direct individual capabilities mapped in the
-  Release 1.1–1.3 table."* Do not render an empty section.
-- **R-4.5** A link to the exact line in the source document.
+- **R-7.1** A conflict is **data, not an error.** Import records both placements and marks
+  the link `conflicted`. Nothing is silently overwritten and neither source is discarded.
+- **R-7.2** Every conflict gets a resolution state: `unreviewed` | `mapping_wins` |
+  `table_wins` | `both_correct` | `defect_raised`, with an optional note and a timestamp.
+- **R-7.3** Resolving a conflict is a normal CRUD action from the reconciliation view.
+- **R-7.4** Features and capabilities carrying an unreviewed conflict are badged on the map,
+  so a conflict is visible without opening the reconciliation view.
 
-### 5.5 Coverage view (`/coverage`)
+---
 
-The view that answers UC-4 and UC-5 — the questions the source document actively hides.
+## 8. Views
 
-- **R-5.1** MVP features ranked by how many PwC features reference them (947 = 4;
-  938, 951, 969, 990 = 3; then 10 at 2).
-- **R-5.2** The 3 MVP features spanning more than one release, called out separately:
-  `938` (1.1, 1.9) · `951` (1.1, 1.9) · `972` (1.2, 1.3).
-- **R-5.3** Features with zero mapped capabilities, with the source's stated reason.
-- **R-5.4** Feature counts per release and per release×phase cell.
-- **R-5.5** Capability actor breakdown per release — showing, for instance, that jobseeker
+### 8.1 Scope Map — primary view (`/`)
+
+A single grid. **Releases on the X axis** (1.1 → 1.2 → 1.3 → 1.4 → 1.9 → 2, the sequence
+dimension). **Canonical phases on the Y axis**, rows 1–7. Cells hold the feature cards for
+that release × phase pair. Empty cells stay visible as faint placeholders — an empty cell is
+information: nothing in that phase lands in that release.
+
+- **R-8.1** Feature card shows ID, name, MVP feature chips (with the `1A`/`1B` option where
+  set), an actor summary, and a conflict badge if applicable.
+- **R-8.2** **Connection edges.** On hover or select, draw edges to every other card sharing
+  an MVP feature, labelled with the shared ref. Off by default — 60 links drawn at once is
+  noise, not insight.
+- **R-8.3** **Connection density** shown passively per card, so load-bearing features
+  (F-039, F-045, F-046, F-050, F-051 via `947`) read as important before any interaction.
+- **R-8.4** Cross-release edges (`938`, `951`, `972`) render distinctly from within-release
+  edges — these are the couplings that matter most to a delivery plan.
+- **R-8.5** A capability layer toggle overlays each cell's capability count, so the map can
+  be read feature-first or capability-first. Release 1.4 and 2 columns have capabilities but
+  no features; the map must not render them as empty.
+- **R-8.6** Selecting anything sets a URL param, so any view can be linked or shared.
+- **R-8.7** Pan and zoom, plus zoom-to-fit. The full map must fit a 1440px screen legibly at
+  default zoom, even if cards collapse to ID-only chips to do it.
+
+### 8.2 Filter rail
+
+Persistent, always visible, never a modal. Filters compose — AND across categories, OR
+within a category — and reshape the map in place.
+
+- **R-8.8** Release (6), Phase (7), Actor (4), MVP feature (48 refs, searchable), Scope
+  option (1A / 1B / unspecified), Conflict state, Source (mapping / table / both / manual).
+- **R-8.9** Every control shows a live result count. A single visible "clear all" resets.
+  Active filters reflect in the URL.
+- **R-8.10** A zero-result combination names the filter that caused it and offers to drop
+  that one — never a bare empty panel.
+
+### 8.3 Search
+
+- **R-8.11** One always-reachable field, matching feature ID, feature name,
+  foundational-build text, MVP ref and title, capability text, assumption text, and epic ref.
+- **R-8.12** Results grouped by what matched — a hit inside an assumption means something
+  different from a hit on a title.
+- **R-8.13** Keyboard-navigable; Enter selects and reveals the feature on the map.
+
+### 8.4 Feature detail panel
+
+Opens beside the map — never over it, never as a route change that loses map state.
+
+- **R-8.14** Shows ID, name, release, phase (with epic ref), foundational-build statement,
+  assumptions in source order, mapped MVP features with scope option, and capabilities
+  grouped by actor with each capability's own release × phase.
+- **R-8.15** Where a capability's placement differs from the feature's, show both inline
+  with the conflict state. This is the single most useful thing on the panel.
+- **R-8.16** MVP chips pivot the map to that MVP feature (UC-2) without closing the panel.
+- **R-8.17** A "connected features" list — others sharing an MVP feature — flagging which
+  connections cross a release boundary.
+- **R-8.18** Where a feature has no mapped capabilities (F-008, F-029), state the source's
+  own qualifier rather than rendering an empty section.
+- **R-8.19** Inline edit affordances on every field, per [§9](#9-crud-and-forms).
+
+### 8.5 Reconciliation view (`/reconciliation`)
+
+The work queue for [§7](#7-the-two-sources-disagree). Groups the 35 release conflicts and
+10 remaining phase conflicts by type, shows both placements side by side, and lets a user
+set a resolution state and note without leaving the list. Filterable by resolution state so
+the unreviewed set shrinks visibly as work happens.
+
+### 8.6 Coverage view (`/coverage`)
+
+- **R-8.20** MVP features ranked by referencing PwC feature count (947 = 4; 938, 951, 969,
+  990 = 3; then 10 at 2).
+- **R-8.21** MVP features spanning more than one release, called out separately.
+- **R-8.22** Orphans in both directions: MVP features with no capabilities (`937`, `953`);
+  the 9 table-only refs with no PwC feature; features with no capabilities (F-008, F-029).
+- **R-8.23** Feature and capability counts per release and per cell.
+- **R-8.24** Actor breakdown per release — showing, for instance, that jobseeker
   capabilities appear only from 1.2 onward.
 
 ---
 
-## 6. UX requirements
+## 9. CRUD and forms
 
-- **R-6.1 One UI, no page-to-page navigation for core tasks.** Map, filters, search and
-  detail coexist. Filtering and selecting mutate the same screen.
-- **R-6.2 Every state is URL-addressable** — filters, search, selected feature, selected
-  MVP feature. This view gets shared in Slack mid-meeting; a link must reproduce it exactly.
-- **R-6.3 Nothing is hidden behind hover alone.** Hover may reveal edges as a shortcut, but
-  the same information must be reachable by click, and by keyboard.
-- **R-6.4 Keyboard navigable throughout** — `/` focuses search, arrows move between cards,
-  Enter opens detail, Escape closes.
-- **R-6.5 Responsive down to tablet.** Below `md` the X/Y grid stops working; fall back to
-  a release-grouped accordion list with the same filters and detail panel. The map is a
-  desktop affordance; the data must remain fully reachable without it.
-- **R-6.6 Accessible colour.** Release and actor are encoded by more than hue — label,
-  shape or position as well. Meets WCAG AA contrast.
-- **R-6.7 No loading spinner on filter.** The whole dataset is small enough (48 features,
-  123 capability links) to load once and filter client-side. Filtering is instant.
+Every entity is fully creatable, readable, updatable and deletable through the UI. This
+makes SQLite the source of truth after import ([§11](#11-import)), not a cache of the
+markdown.
+
+**R-9.1 — Coverage.** Full CRUD on `releases`, `phases`, `pwc_features`, `assumptions`,
+`mvp_features`, `capabilities`, and both join tables. Nothing is editable only by SQL.
+
+**R-9.2 — Editing happens in context.** The primary path is the detail panel: click a field,
+edit, save. A separate admin list page per entity (`/manage/:entity`) exists for bulk work
+and for entities without a natural home on the map — but the map is never a read-only view
+you have to leave in order to fix something.
+
+**R-9.3 — Validation, server-side and shared.** One Zod schema per entity in
+`src/lib/validators.ts`, used by both the form and the route handler. Client-side validation
+alone is not validation.
+
+Rules that must be enforced:
+- `pwc_features.id` matches `F-\d{3}` and is unique.
+- `pwc_features` requires a release and a phase — the map has nowhere to draw an orphan.
+- `mvp_features` is unique on `(ref, scope_option)`; `scope_option` ∈ `1A` | `1B` | `null`.
+- `capabilities.actor` ∈ the four known actors; a new actor is a schema change, not free text.
+- `capabilities` requires a release and a phase.
+- `assumptions.position` stays contiguous per feature after any insert, delete or reorder.
+- `phases.display_order` stays contiguous 1–n.
+
+**R-9.4 — Referential integrity is explicit, never silent.** `foreign_keys = ON`. Deleting
+anything with dependents is refused with a message naming what depends on it and how many
+(*"Cannot delete MVP feature 947 — 4 PwC features and 6 capabilities reference it"*), and
+offers the cascade as a separate, explicitly confirmed action. Assumptions and join rows
+cascade from their parent; features, releases, phases and MVP features never cascade
+silently.
+
+**R-9.5 — Destructive actions confirm with specifics.** The dialog states exactly what will
+be removed and how many rows. No bare "Are you sure?".
+
+**R-9.6 — Optimistic UI with real rollback.** Mutations update the TanStack Query cache
+optimistically and roll back on error with the server's message surfaced. A failed save
+never leaves the map showing a value the database rejected.
+
+**R-9.7 — Create flows pre-fill from context.** Adding a feature from a map cell pre-fills
+that release and phase. Adding a capability from an MVP feature pre-fills the ref.
+
+**R-9.8 — Ordered lists are reorderable** without drag-and-drop being the only route —
+assumptions and phases both need explicit move-up / move-down controls alongside any drag
+affordance.
+
+**R-9.9 — Provenance survives editing.** Every row keeps `source`
+(`mapping` | `sequencing` | `both` | `manual`), `created_at` and `updated_at`. A manually
+created row is distinguishable from an imported one forever, and the map can show what has
+diverged from the documents.
+
+**R-9.10 — Re-import never destroys manual work.** See [R-11.4](#11-import).
+
+**R-9.11 — Markdown export.** `GET /api/export/mapping.md` and `/api/export/sequencing.md`
+regenerate both source documents from the database in their original format.
+
+> This is not in the original brief. It is included because once CRUD exists, the database
+> and the documents diverge immediately, and the documents are what circulates with PwC.
+> Without export the app becomes a silo holding the only current copy of the scope. Cuttable
+> if you disagree — see [D-5](#15-open-decisions).
 
 ---
 
-## 7. Data ingestion & source of truth
+## 10. UX requirements
 
-`_docs/pwc-scope-to-mvp-mapping.md` stays the single source of truth. The app never writes
-to it, and scope is never edited in the UI.
-
-**Approach:** a parser reads the markdown and populates SQLite on server start, replacing
-the previous contents wholesale. Editing the document and restarting is the update path.
-
-- **R-7.1** The parser is a standalone, unit-tested module — it is the highest-risk part of
-  the app and must be testable against fixture markdown without a database.
-- **R-7.2** The parser **fails loudly**. An unrecognised heading, an unparseable capability
-  line, or a feature with no MVP mapping raises a clear error naming the source line
-  number. Silent skipping would let scope quietly vanish from the map.
-- **R-7.3** After ingest, log a reconciliation summary — releases, phases, features,
-  MVP features, capabilities, assumptions parsed — so a drift from the expected
-  4 / 8 / 48 / 39 / 92 / 92 is visible on boot.
-- **R-7.4** Known parser hazards, all confirmed present in the source:
-  - **Inconsistent bullet formatting.** Line 90 reads `  * *(No direct individual…)*`;
-    line 668 reads `  *(Mapped under Release 2+ in table)*` — missing the bullet's space.
-    Both must be recognised as "no capabilities, with a reason", not as a capability.
-  - **`(Option 1A)` / `(Option 1B)` title suffixes** on IDs 938, 946, 951 — strip to
-    `scope_option`, key on the integer ID (see [§4](#4-data-model)).
-  - **Case-variant capability text.** `Filter and Sort Applications` and `Filter and sort
-    applications` both appear under MVP 980 and are the same capability. Normalise
-    case-insensitively when deduplicating; preserve the first-seen casing for display.
-  - **Near-duplicate capability text.** MVP 941 carries both `View authenticated landing
-    page / dashboard` and `View authenticated landing page`. These are *not* safe to merge
-    automatically — keep both and flag them in the coverage view for a human to resolve.
-  - **Em-dashes, `&`, `/` and curly apostrophes** in names — do not use them as delimiters.
-- **R-7.5** Missing companion data. The source document cites
-  `R1-sequenced-release-capabilities-table.md` 48 times, and it is **not in this repo**.
-  Everything the app knows about capabilities comes from the denormalised text inside the
-  mapping file. If that table is later supplied, it supersedes the inline text as the
-  capability source — the parser should be structured so that is a swap, not a rewrite.
+- **R-10.1 One UI.** Map, filters, search and detail coexist. Filtering, selecting and
+  editing mutate the same screen. No page-to-page navigation for core tasks.
+- **R-10.2 Every state is URL-addressable** — filters, search, selection. This view gets
+  shared in Slack mid-meeting; a link must reproduce it exactly.
+- **R-10.3 Nothing hidden behind hover alone.** Hover may reveal edges as a shortcut; the
+  same information must be reachable by click and by keyboard.
+- **R-10.4 Keyboard navigable throughout** — `/` focuses search, arrows move between cards,
+  Enter opens detail, Escape closes. Forms are fully keyboard-operable and submit on Enter.
+- **R-10.5 Responsive to tablet.** Below `md` the X/Y grid stops working; fall back to a
+  release-grouped accordion with the same filters, detail panel and edit affordances. The
+  map is a desktop affordance; the data and the editing must not be.
+- **R-10.6 Accessible colour.** Release, actor and conflict state encode by more than hue —
+  label, shape or position too. WCAG AA contrast throughout. Form errors are never
+  colour-only.
+- **R-10.7 No spinner on filter.** The whole dataset is small (48 features, 107
+  capabilities, 123 links) — load once, filter client-side, respond instantly.
+- **R-10.8 Unsaved-change protection.** Navigating away from a dirty form warns first.
 
 ---
 
-## 8. Technical approach
+## 11. Import
 
-Follows [`.claude/rules/rules-react-shadcn-tailwind.md`](../.claude/rules/rules-react-shadcn-tailwind.md)
+A one-time seed, plus a re-runnable reconciling import. **After the first import, SQLite is
+the source of truth** — the markdown files are inputs, not live state.
+
+- **R-11.1** Two parsers, `server/services/mapping-parser.ts` and
+  `server/services/sequencing-parser.ts`, each standalone and unit-tested against fixture
+  markdown with no database. These are the highest-risk components in the app.
+- **R-11.2** Parsers **fail loudly**. An unrecognised heading, an unparseable capability
+  line, or a table cell that is neither `-` nor a `<br>`-joined bullet list raises an error
+  naming the source line. Silent skipping would let scope quietly vanish.
+- **R-11.3** Import logs a reconciliation summary against the [§6](#6-data-model) table and
+  fails the boot check on any drift.
+- **R-11.4** Re-import is **additive and non-destructive**. It inserts new rows, reports
+  changed rows for review, and **never** overwrites a row whose `source` is `manual` or
+  whose conflict has been resolved. Re-import is an explicit action, not something that
+  happens on every server start after the first.
+
+### Known parser hazards — all confirmed present
+
+**Mapping file:**
+- **Inconsistent bullet formatting.** Line 90 reads `  * *(No direct individual…)*`; line 668
+  reads `  *(Mapped under Release 2+ in table)*` — missing the bullet's space. Both mean "no
+  capabilities, with a reason", not "a capability".
+- **`(Option 1A)` / `(Option 1B)` title suffixes** on refs 938, 946, 951 — strip to
+  `scope_option` and key on `(ref, scope_option)`. Leaving the suffix in the title produces
+  three phantom MVP features with near-identical names.
+- **Case-variant capability text.** `Filter and Sort Applications` and `Filter and sort
+  applications` both appear under ref 980 and are the same capability. Deduplicate
+  case-insensitively; keep first-seen casing for display.
+- **Near-duplicate capability text.** Ref 941 carries both `View authenticated landing page /
+  dashboard` and `View authenticated landing page`; ref 956 has a similar pair. **Not** safe
+  to auto-merge — keep both, flag in coverage for a human ([D-4](#15-open-decisions)).
+
+**Sequencing table:**
+- Cells are `<br>`-joined bullet lists inside a single markdown table cell — split on `<br>`,
+  then strip the leading `•`.
+- Empty cells are a literal `-`, not blank. 24 of the 40 cells are empty.
+- Release labels are bolded (`**Release 1.1**`) and `Release 2` has no minor version.
+- Phase names come from the header row and differ in casing from the mapping file
+  (`Access & Onboarding` vs `Access & onboarding`) — normalise to canonical before matching.
+
+**Both:**
+- Em-dashes, `&`, `/`, `,` and curly apostrophes appear inside names. None are safe
+  delimiters. Parse capability strings with an anchored regex on the trailing
+  `(actor, ref)`, not by splitting.
+
+---
+
+## 12. Technical approach
+
+Follows [`rules-react-shadcn-tailwind.md`](../.claude/rules/rules-react-shadcn-tailwind.md)
 and [`rules-database.md`](../.claude/rules/rules-database.md). No deviation from the
-established stack is required or proposed.
+established stack is proposed.
 
 | Concern | Approach |
 |---|---|
-| Ingest | `server/services/scope-parser.ts` → `server/repositories/*` on boot |
-| Storage | SQLite (`better-sqlite3`), migrations in `server/migrations/` |
-| API | `GET /api/scope` returns the whole graph in one payload; `GET /api/scope/features/:id` for detail |
-| Client data | TanStack Query, one query for the graph; all filtering client-side |
-| Filter state | URL search params as the single source of truth, read via React Router |
-| Map rendering | SVG overlay for edges over a CSS-grid card layout — the grid is 4×8, well within CSS grid's comfort; a graph library is not warranted |
-| Styling | Tailwind for the grid and page layout; BEM per [`rules-css-bem.md`](../.claude/rules/rules-css-bem.md) for the feature card, filter rail and detail panel, which are custom components with their own identity |
-| Tokens | `src/globals.css` `@theme` only — including release and actor colours |
+| Parsers | `server/services/{mapping,sequencing}-parser.ts` — pure, tested, no DB |
+| Storage | SQLite (`better-sqlite3`), `journal_mode = WAL`, `foreign_keys = ON` |
+| Migrations | Numbered `.sql` in `server/migrations/`, applied on boot |
+| Repositories | One per entity in `server/repositories/`; all SQL lives here, prepared lazily with `??=` |
+| API | `GET /api/scope` returns the whole graph in one payload; REST CRUD per entity; `POST /api/import`; `GET /api/export/*` |
+| Validation | Zod in `src/lib/validators.ts`, shared by form and route handler |
+| Client data | TanStack Query — one graph query, mutations invalidate it once |
+| Filter state | URL search params as the single source of truth, via React Router v7 |
+| Map rendering | SVG edge overlay above a CSS-grid card layout. The grid is 6×7 — well within CSS grid; a graph library is not warranted |
+| Forms | Shadcn form primitives; BEM per [`rules-css-bem.md`](../.claude/rules/rules-css-bem.md) for the custom components |
+| Styling | Tailwind for grid and page layout; BEM files for feature card, filter rail, detail panel, conflict badge |
+| Tokens | `src/globals.css` `@theme` only — including release, actor and conflict-state colours |
 
 **No AI, no Anthropic API, no file uploads.** `rules-ai-api.md` does not apply to this app.
 
+Transactions matter more than usual here: assumption reorder, cascade delete, and import are
+all multi-step writes and must use `db.transaction(fn)()`.
+
 ### Build order
 
-1. Parser + fixtures + tests (no UI) — until the reconciliation counts are exact, nothing
-   downstream is trustworthy.
+1. **Both parsers + fixtures + tests.** No UI. Until the reconciliation counts in
+   [§6](#6-data-model) come out exact, nothing downstream is trustworthy.
 2. Migrations, repositories, `GET /api/scope`.
-3. Static map grid — cards in cells, no filtering, no edges.
+3. Static map grid — cards in cells, no filtering, no edges, no editing.
 4. Filter rail + URL state.
-5. Detail panel.
-6. Connection edges.
-7. Search.
-8. Coverage view.
-9. Tablet fallback layout.
+5. Detail panel (read-only).
+6. **CRUD** — routes, validators, forms, referential-integrity guards.
+7. Connection edges.
+8. Reconciliation view.
+9. Search.
+10. Coverage view.
+11. Markdown export.
+12. Tablet fallback layout.
 
 Steps 1–3 are the walking skeleton and should be demonstrable before anything else starts.
+Step 6 is the largest single chunk and benefits from one entity done end-to-end
+(`pwc_features`) as the pattern before the rest follow.
 
 ---
 
-## 9. Success criteria
+## 13. Success criteria
 
-- A stakeholder who has never read the source document can, unaided, state what is in
-  MVP 1.2 within 30 seconds of the map loading.
-- All five core use cases are completable without leaving the main screen.
-- Reconciliation on boot reports exactly 4 releases, 8 phases, 48 features, 39 MVP
-  features, 92 capabilities, 92 assumptions, 60 MVP links, 123 capability links.
-- Any view can be reproduced from its URL alone.
-- Filter response is imperceptible (no spinner, no layout thrash).
-- `npm run test`, `npm run lint` and `npm run build` all pass.
+- A stakeholder who has never read either document can state what is in MVP 1.2 within 30
+  seconds of the map loading.
+- All seven core use cases complete without leaving the main screen.
+- Import reports exactly the [§6](#6-data-model) counts: 6 releases, 7 phases, 48 features,
+  51 MVP records across 48 refs, 107 capabilities, 92 assumptions, 60 MVP links, 123
+  capability links, 35 release conflicts, 21 phase conflicts.
+- Every entity is creatable, editable and deletable from the UI, with a delete blocked by
+  dependents producing a specific, actionable message.
+- Any view is reproducible from its URL alone.
+- Filter response is imperceptible — no spinner, no layout thrash.
+- Regenerated markdown round-trips: export → re-import produces an identical database.
+- `npm run test`, `npm run lint` and `npm run build` pass.
 
-## 10. Out of scope for v1
+## 14. Out of scope for v1
 
-Editing scope · auth and multi-user · comments and annotations · export to PDF or
-PowerPoint · Jira or Confluence integration · Release 2+ data · effort estimates and
-dates · dependency modelling beyond shared MVP features · diffing two versions of the
-source document.
+Auth and multi-user · comment threads · PDF or PowerPoint export · Jira or Confluence
+integration · effort estimates and dates · delivery status tracking · dependency modelling
+beyond shared MVP features · diffing two versions of a source document · full row-level
+audit history (only `created_at` / `updated_at` / `source` in v1).
 
-## 11. Future considerations
+## 15. Open decisions
 
-- **Release 2+.** The source covers Release 1 only. The data model already treats releases
-  as rows, so additional releases extend the X axis without a schema change — but the 4-wide
-  grid assumption in the map layout should not be hardcoded.
-- **The sequenced capabilities table.** If `R1-sequenced-release-capabilities-table.md`
-  arrives, capabilities gain their own sequencing and the map could show a capability-level
-  timeline beneath the feature-level one.
-- **Source-document diffing.** Once scope revisions circulate, "what changed between
-  v3 and v4" becomes the highest-value question this app could answer.
+Recorded rather than assumed. Build can start on the recommendation in each case.
 
----
+**D-1 — How should Release 1.9 be represented?** Its 15 features cite capabilities the
+sequencing table places in 1.1, 1.4 and 2. *Recommendation:* keep 1.9 as a release so the
+mapping file stays representable, show its decomposition in the reconciliation view, and
+treat the choice of which framing is authoritative as a programme decision the app records
+rather than makes. This is the most consequential open question in the dataset.
 
-## 12. Open decisions
+**D-2 — Epic ref `186` appears on two phases** (Applications & Referrals, Employer
+Recruitment). Almost certainly a diagram typo. Stored faithfully and not enforced unique;
+needs confirming with whoever owns the journey diagram.
 
-Recorded rather than assumed. The build can start on the recommendation in each case; only
-D-1 changes the shape of the work.
+**D-3 — Are bare `938` and `946` really separate from their Option 1A records?** Option 1A
+and 1B are separate features per the brief, which is unambiguous for `951`. For `938` and
+`946` one variant carries no option, which reads more like loose authoring. Modelled as
+separate records for now; resolving a bare record into `1A` later is a single edit.
 
-**D-1 — Read-only, or editable?** *Recommendation: read-only, markdown-as-source.* It keeps
-the source document authoritative, avoids a second diverging copy of the scope, and matches
-the "simple app" brief. Making scope editable in the app would add auth, concurrency,
-write-back or export, and an ownership question about which artefact is true — roughly
-tripling the build.
+**D-4 — Are the near-duplicate capabilities under refs 941 and 956 intentional?** Treated as
+distinct and flagged for review. If they are source duplication, the capability count drops
+below 107.
 
-**D-2 — Canonical phase order.** The source has none; the app must impose one. The order
-proposed in [§4](#4-data-model) is derived from the sequence phases appear in within each
-release. The one genuine ambiguity is Manage Vacancies vs Document Management — Manage
-Vacancies precedes it in Release 1.1, but Document Management precedes it in Release 1.2.
-Needs a decision from someone who knows the intended employer journey.
+**D-5 — Keep markdown export?** Recommended and specified in
+[R-9.11](#9-crud-and-forms), but it is an addition to the brief. Cutting it means the
+database becomes the only current copy of the scope and the circulating documents go stale
+immediately.
 
-**D-3 — Are the near-duplicate capabilities under MVP 941 and 980 intentional?** Treated as
-distinct and flagged for review ([R-7.4](#7-data-ingestion--source-of-truth)). If they are
-source-document duplication, the parser should merge them and the capability count drops.
-
-**D-4 — Should F-008 and F-029 render as gaps or as deferrals?** The source says their
-capabilities are mapped in the Release 1.1–1.3 table (F-008) or under Release 2+ (F-029).
-These are different situations and arguably want different treatment in the coverage view.
-
-**D-5 — Stale `CLAUDE.md`.** The product sections of the root `CLAUDE.md` describe an
-unrelated project. It should be rewritten for this app before implementation begins,
-because it currently instructs future sessions to apply neurodivergent-child accessibility
-constraints and an "AI never writes the story" rule that have no bearing here. The
-stack and styling rules in `.claude/rules/` are sound and should be kept as-is.
+**D-6 — Stale `CLAUDE.md`.** Its product sections describe an unrelated project and
+currently instruct future sessions to apply neurodivergent-child accessibility constraints
+and an "AI never writes the story" rule that have no bearing here. It should be rewritten
+for this app before implementation begins. The stack and styling rules in `.claude/rules/`
+are sound and should be kept as-is.

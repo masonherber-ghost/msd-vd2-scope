@@ -16,6 +16,8 @@ dist-ssr/
 *.db-journal
 *.db-wal
 *.db-shm
+# Backups are deliberately committable — see the /backup-db skill.
+!server/backups/*.db
 
 # Uploaded files live on disk; only filenames go in the database
 server/uploads/
