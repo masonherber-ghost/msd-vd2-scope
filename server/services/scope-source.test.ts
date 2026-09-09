@@ -154,6 +154,59 @@ describe('the real source documents reconcile to the PRD counts', () => {
     expect(one[0].capabilityText).toBe('Electronic T&Cs acceptance')
   })
 
+  /**
+   * The Phase 4 filter gate asserts these. Locked here so a source change or
+   * a new override cannot move them silently.
+   */
+  it('distributes features across releases as the filter gate expects', () => {
+    const byRelease = new Map<string, number>()
+    for (const feature of result.features) {
+      byRelease.set(feature.releaseId, (byRelease.get(feature.releaseId) ?? 0) + 1)
+    }
+    expect(Object.fromEntries(byRelease)).toEqual({
+      '1.1': 20,
+      // 9, not the pre-split 8: OV-002 puts F-085 in 1.2.
+      '1.2': 9,
+      '1.3': 5,
+      '1.9': 15,
+    })
+  })
+
+  it('has exactly four features citing MVP ref 947', () => {
+    const citing = result.features
+      .filter((f) => f.mvpFeatures.some((m) => m.ref === 947))
+      .map((f) => f.id)
+    expect(citing).toEqual(['F-039', 'F-045', 'F-050', 'F-051'])
+  })
+
+  it('has three features carrying an Option 1B record, not two', () => {
+    // PRD §11 lists the option suffix on refs 938, 946 and 951 but omits 948,
+    // which F-011 cites as "(Option 1B)".
+    const withOption1B = result.features
+      .filter((f) => f.mvpFeatures.some((m) => m.scopeOption === '1B'))
+      .map((f) => f.id)
+    expect(withOption1B).toEqual(['F-009', 'F-010', 'F-011'])
+
+    const refs = result.mvpFeatures
+      .filter((m) => m.scopeOption === '1B')
+      .map((m) => m.ref)
+      .sort((a, b) => a - b)
+    expect(refs).toEqual([948, 951])
+  })
+
+  it('has no release 1.1 feature citing a jobseeker capability', () => {
+    const capabilityByKey = new Map(result.capabilities.map((c) => [c.key, c]))
+    const jobseekerIn11 = result.features
+      .filter((f) => f.releaseId === '1.1')
+      .filter((f) =>
+        f.capabilities.some(
+          (c) =>
+            capabilityByKey.get(`${c.text.toLowerCase()}|${c.ref}`)?.actor === 'jobseeker',
+        ),
+      )
+    expect(jobseekerIn11).toEqual([])
+  })
+
   it('has no duplicate PwC feature ids', () => {
     const ids = result.features.map((f) => f.id)
     expect(new Set(ids).size).toBe(ids.length)

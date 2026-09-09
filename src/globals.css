@@ -12,6 +12,7 @@
 /* BEM component CSS. One file per component, per rules-css-bem.md. */
 @import "./components/ScopeMapGrid.css";
 @import "./components/FeatureCard.css";
+@import "./components/FilterRail.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values
@@ -194,6 +195,19 @@
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
   }
+}
+
+/* Visually hidden but available to assistive technology. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border-width: 0;
 }
 
 /* ============================================================

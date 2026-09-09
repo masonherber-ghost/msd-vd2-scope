@@ -26,6 +26,12 @@ export type FeatureCardModel = {
   conflicts: { release: number; phase: number; unmatched: number; unreviewed: number }
   /** True when the source documents were corrected for this feature. */
   overridden: boolean
+  /** Provenance: mapping | sequencing | both | manual (R-9.9). */
+  source: string
+  /** Distinct actors across this feature's capabilities, for filtering. */
+  actors: Set<Actor>
+  /** MVP refs this feature cites, for filtering. */
+  mvpRefs: Set<number>
 }
 
 export type ScopeCell = {
@@ -39,6 +45,10 @@ export type ScopeCell = {
 export type ScopeMapModel = {
   releases: ReleaseRow[]
   phases: PhaseRow[]
+  /** Every card, unfiltered — the filter rail derives its counts from these. */
+  features: FeatureCardModel[]
+  /** All MVP records, for the searchable MVP filter. */
+  mvpFeatures: MvpFeatureRow[]
   cells: ScopeCell[]
   /** Keyed `${phaseId}|${releaseId}` for O(1) lookup while rendering. */
   cellIndex: Map<string, ScopeCell>
@@ -83,14 +93,19 @@ function buildFeatureCard(
     }
   }
 
+  const mvpRecords = mvpByFeature.get(feature.id) ?? []
+
   return {
     id: feature.id,
     name: feature.name,
     releaseId: feature.release_id,
     phaseId: feature.phase_id,
+    source: feature.source,
+    actors: new Set(counts.keys()),
+    mvpRefs: new Set(mvpRecords.map((m) => m.ref)),
     // Sorted by ref, then bare before 1A before 1B — the option-agnostic
     // record reads as the feature itself, with its variants after it.
-    mvpFeatures: (mvpByFeature.get(feature.id) ?? [])
+    mvpFeatures: mvpRecords
       .map((m) => ({ ref: m.ref, scopeOption: m.scope_option }))
       .sort(
         (a, b) => a.ref - b.ref || (a.scopeOption ?? '').localeCompare(b.scopeOption ?? ''),
@@ -185,6 +200,8 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
   return {
     releases: graph.releases,
     phases: graph.phases,
+    features: cards,
+    mvpFeatures: graph.mvpFeatures,
     cells,
     cellIndex,
     totals: {
@@ -199,3 +216,60 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
 
 /** Token suffix for a release id: `1.1` → `1-1`. */
 export const releaseTokenSuffix = (releaseId: string) => releaseId.replace(/\./g, '-')
+
+/**
+ * Recomputes the grid for a subset of features. The full model keeps every
+ * card so the filter rail can count against all of them; the grid renders
+ * only what survived.
+ *
+ * Capability counts are deliberately not filtered — they are the sequencing
+ * table's placement, a separate layer from the feature filters (R-8.5).
+ */
+export function projectCells(
+  model: ScopeMapModel,
+  visible: FeatureCardModel[],
+): Pick<ScopeMapModel, 'cells' | 'cellIndex' | 'totals'> {
+  const byCell = new Map<string, FeatureCardModel[]>()
+  for (const card of visible) {
+    const key = cellKey(card.phaseId, card.releaseId)
+    const list = byCell.get(key) ?? []
+    list.push(card)
+    byCell.set(key, list)
+  }
+
+  const cells: ScopeCell[] = []
+  const cellIndex = new Map<string, ScopeCell>()
+  let populatedCells = 0
+
+  for (const phase of model.phases) {
+    for (const release of model.releases) {
+      const key = cellKey(phase.id, release.id)
+      const features = byCell.get(key) ?? []
+      if (features.length > 0) populatedCells += 1
+      const cell: ScopeCell = {
+        releaseId: release.id,
+        phaseId: phase.id,
+        features,
+        capabilityCount: model.cellIndex.get(key)?.capabilityCount ?? 0,
+      }
+      cells.push(cell)
+      cellIndex.set(key, cell)
+    }
+  }
+
+  const featuresByRelease = new Map<string, number>()
+  for (const card of visible) {
+    featuresByRelease.set(card.releaseId, (featuresByRelease.get(card.releaseId) ?? 0) + 1)
+  }
+
+  return {
+    cells,
+    cellIndex,
+    totals: {
+      ...model.totals,
+      features: visible.length,
+      populatedCells,
+      featuresByRelease,
+    },
+  }
+}

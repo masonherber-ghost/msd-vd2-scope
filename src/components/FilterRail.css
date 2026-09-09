@@ -1,0 +1,172 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+/* Persistent and always visible — never a modal (R-8.8). */
+.filter-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  padding: var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+}
+
+.filter-rail__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.filter-rail__title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.filter-rail__summary {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   GROUPS
+   ======================================== */
+
+.filter-rail__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.filter-rail__legend {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+  padding: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+}
+
+.filter-rail__legend-count {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.filter-rail__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+/* A scrollable group for the long MVP list. */
+.filter-rail__options--scroll {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+/* ========================================
+   OPTION
+   ======================================== */
+
+.filter-rail__option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  /* Comfortable target height for a dense list of checkboxes. */
+  min-height: var(--spacing-8);
+  padding: 0 var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.filter-rail__option:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.filter-rail__option:focus-within {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.filter-rail__checkbox {
+  width: var(--spacing-4);
+  height: var(--spacing-4);
+  accent-color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.filter-rail__option-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The live result count for this control (R-8.9). */
+.filter-rail__option-count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  flex-shrink: 0;
+}
+
+/* Selecting this would empty the map; still selectable, but flagged. */
+.filter-rail__option--zero .filter-rail__option-label,
+.filter-rail__option--zero .filter-rail__option-count {
+  opacity: 0.55;
+}
+
+/* ========================================
+   SEARCH WITHIN A GROUP
+   ======================================== */
+
+.filter-rail__search {
+  width: 100%;
+  min-height: var(--spacing-8);
+  padding: 0 var(--spacing-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-size: 0.8125rem;
+}
+
+.filter-rail__search:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.filter-rail__empty-note {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  padding: 0 var(--spacing-2);
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+/* 1024px is --breakpoint-lg from globals.css. CSS custom properties cannot be
+   used inside a media query, so the raw value is copied here. */
+@media (min-width: 1024px) {
+  .filter-rail {
+    /* Sticks alongside the map while the grid scrolls. */
+    position: sticky;
+    top: var(--spacing-4);
+    max-height: calc(100dvh - var(--spacing-16));
+    overflow-y: auto;
+  }
+}
