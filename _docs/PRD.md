@@ -345,9 +345,12 @@ compose — AND across categories, OR within a category.
   > been restored — provenance turned out to be a useful way to narrow the map once manual
   > edits started accumulating.
   >
-  > The MVP feature group shows only its search field until something is typed: 48 refs is
-  > too long a list to sit open in the rail. Anything already selected stays visible while
-  > collapsed, so an active filter is never hidden.
+  > A **PwC feature** group is added, so a known set of F-nnn features can be isolated on the
+  > map directly.
+  >
+  > The MVP feature and PwC feature groups show only their search field until something is
+  > typed: 48 refs and 49 features are too long to sit open in the rail. Anything already
+  > selected stays visible while collapsed, so an active filter is never hidden.
 - **R-8.9** Every control shows a live result count. A single visible "clear all" resets.
   Active filters reflect in the URL.
 - **R-8.10** A zero-result combination names the filter that caused it and offers to drop

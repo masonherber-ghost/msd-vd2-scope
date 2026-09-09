@@ -8,6 +8,8 @@ Filters:
 - ~~MVP feature filter lookup - collapse into a search field until some string is
   added, then show the list as results~~ done — a selected ref stays visible while
   collapsed so an active filter is never hidden.
+- ~~Add similar lookup filter for PwC feature (F-XXX)~~ done — searchable by id or
+  name, same collapse behaviour; `?feature=f-039` is normalised to `F-039`.
 
 Navigation:
 - ~~Remove contact and 404 pages from the nav and any routes~~ done — the catch-all

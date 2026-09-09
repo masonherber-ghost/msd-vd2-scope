@@ -273,6 +273,7 @@ describe('ScopeMap filter rail', () => {
       'Scope option',
       'Conflict state',
       'Source',
+      'PwC feature',
     ]) {
       expect(screen.getByRole('group', { name: new RegExp(group, 'i') })).toBeInTheDocument()
     }
@@ -1077,5 +1078,75 @@ describe('ScopeMap MVP filter collapses until searched', () => {
     expect(within(mvp).getByText(/1 selected\. type to find more/i)).toBeInTheDocument()
     // The unselected one stays hidden until searched for.
     expect(within(mvp).queryByRole('checkbox', { name: /948/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap PwC feature filter', () => {
+  const featureGroup = () => screen.getByRole('group', { name: /^PwC feature/i })
+
+  it('collapses to a search field like the MVP lookup', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    expect(within(featureGroup()).getByLabelText('Search PwC features')).toBeInTheDocument()
+    expect(within(featureGroup()).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(featureGroup()).getByText(/type to search 2 PwC features/i)).toBeInTheDocument()
+  })
+
+  it('finds a feature by id', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    await user.type(within(featureGroup()).getByLabelText('Search PwC features'), 'F-002')
+
+    expect(within(featureGroup()).getByRole('checkbox', { name: /F-002/ })).toBeInTheDocument()
+    expect(
+      within(featureGroup()).queryByRole('checkbox', { name: /F-001/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('finds a feature by name', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    await user.type(within(featureGroup()).getByLabelText('Search PwC features'), 'Verify')
+
+    expect(within(featureGroup()).getByRole('checkbox', { name: /F-002/ })).toBeInTheDocument()
+  })
+
+  it('narrows the map to the selected feature and writes it to the URL', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    await user.type(within(featureGroup()).getByLabelText('Search PwC features'), 'F-001')
+    await user.click(within(featureGroup()).getByRole('checkbox', { name: /F-001/ }))
+
+    await waitFor(() => expect(url()).toContain('feature=F-001'))
+    expect(screen.getByLabelText('F-001 Invite employer')).toBeInTheDocument()
+    expect(screen.queryByLabelText('F-002 Verify employer')).not.toBeInTheDocument()
+  })
+
+  it('reproduces the view from the URL, keeping the selection visible', async () => {
+    const user = userEvent.setup()
+    renderPage('/?feature=F-002')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(screen.getByLabelText('F-002 Verify employer')).toBeInTheDocument()
+    expect(screen.queryByLabelText('F-001 Invite employer')).not.toBeInTheDocument()
+
+    await openFilters(user)
+    expect(within(featureGroup()).getByRole('checkbox', { name: /F-002/ })).toBeChecked()
+    // The legend also says "1 selected", so match the collapsed note itself.
+    expect(
+      within(featureGroup()).getByText(/1 selected\. type to find more/i),
+    ).toBeInTheDocument()
   })
 })

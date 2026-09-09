@@ -12,12 +12,14 @@ export type FilterGroup =
   | 'option'
   | 'conflict'
   | 'source'
+  | 'feature'
 
 export const FILTER_GROUPS: readonly FilterGroup[] = [
   'release',
   'phase',
   'actor',
   'mvp',
+  'feature',
   'option',
   'conflict',
   'source',
@@ -31,6 +33,7 @@ export const GROUP_LABEL: Record<FilterGroup, string> = {
   option: 'Scope option',
   conflict: 'Conflict state',
   source: 'Source',
+  feature: 'PwC feature',
 }
 
 /** `none` is the option-agnostic (bare) record. */
@@ -53,6 +56,8 @@ export type FilterState = {
   conflict: ConflictFilter[]
   /** Provenance: mapping | sequencing | both | manual (R-9.9). */
   source: string[]
+  /** Specific PwC feature ids, for isolating a known set on the map. */
+  feature: string[]
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -63,6 +68,7 @@ export const EMPTY_FILTERS: FilterState = {
   option: [],
   conflict: [],
   source: [],
+  feature: [],
 }
 
 export function isEmpty(state: FilterState): boolean {
@@ -85,6 +91,7 @@ const PARAM: Record<FilterGroup, string> = {
   option: 'option',
   conflict: 'conflict',
   source: 'source',
+  feature: 'feature',
 }
 
 const split = (value: string | null): string[] =>
@@ -117,6 +124,10 @@ export function parseFilters(params: URLSearchParams): FilterState {
       conflicts.has(v),
     ) as ConflictFilter[],
     source: split(params.get(PARAM.source)).filter((v) => sources.has(v)),
+    // Normalised, so ?feature=f-001 from a hand-typed link still works.
+    feature: split(params.get(PARAM.feature))
+      .map((v) => v.toUpperCase())
+      .filter((v) => /^F-\d{3}$/.test(v)),
   }
 }
 
@@ -184,6 +195,7 @@ export function matchesFilters(feature: FeatureCardModel, state: FilterState): b
   if (!matchesOption(feature, state.option)) return false
   if (!matchesConflict(feature, state.conflict)) return false
   if (state.source.length > 0 && !state.source.includes(feature.source)) return false
+  if (state.feature.length > 0 && !state.feature.includes(feature.id)) return false
   return true
 }
 

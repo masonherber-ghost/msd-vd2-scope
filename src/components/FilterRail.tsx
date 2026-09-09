@@ -61,6 +61,7 @@ export function FilterRail({
   visible,
 }: FilterRailProps) {
   const [mvpQuery, setMvpQuery] = useState('')
+  const [featureQuery, setFeatureQuery] = useState('')
 
   const releaseOptions = useMemo<Option[]>(
     () =>
@@ -102,6 +103,28 @@ export function FilterRail({
         (option.hint ?? '').toLowerCase().includes(query),
     )
   }, [mvpOptions, mvpQuery])
+
+  const featureOptions = useMemo<Option[]>(
+    () =>
+      [...model.features]
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((feature) => ({
+          value: feature.id,
+          label: feature.id,
+          hint: feature.name,
+        })),
+    [model.features],
+  )
+
+  const filteredFeatureOptions = useMemo(() => {
+    const query = featureQuery.trim().toLowerCase()
+    if (!query) return featureOptions
+    return featureOptions.filter(
+      (option) =>
+        option.label.toLowerCase().includes(query) ||
+        (option.hint ?? '').toLowerCase().includes(query),
+    )
+  }, [featureOptions, featureQuery])
 
   const set = <G extends FilterGroup>(group: G, values: FilterState[G]) =>
     onChange({ ...state, [group]: values })
@@ -216,6 +239,26 @@ export function FilterRail({
         }}
         onToggle={(value) => set('mvp', toggleValue(state.mvp, Number(value)))}
       />
+
+      <Group
+        group="feature"
+        options={filteredFeatureOptions}
+        selected={state.feature}
+        model={model}
+        state={state}
+        scroll
+        // Same treatment as the MVP lookup: 49 features is too long a list to
+        // sit open, and a selected one stays visible while collapsed.
+        collapseUntilSearch
+        totalOptionCount={featureOptions.length}
+        searchNoun="PwC features"
+        search={{
+          value: featureQuery,
+          onChange: setFeatureQuery,
+          label: 'Search PwC features',
+        }}
+        onToggle={(value) => set('feature', toggleValue(state.feature, String(value)))}
+      />
     </aside>
   )
 }
@@ -231,6 +274,7 @@ function Group({
   search,
   collapseUntilSearch = false,
   totalOptionCount,
+  searchNoun = 'MVP features',
 }: {
   group: FilterGroup
   options: Option[]
@@ -243,6 +287,7 @@ function Group({
   /** Show results only once something is typed, for a very long list. */
   collapseUntilSearch?: boolean
   totalOptionCount?: number
+  searchNoun?: string
 }) {
   const searchId = `filter-${group}-search`
   const searching = (search?.value ?? '').trim() !== ''
@@ -285,7 +330,7 @@ function Group({
             ? `${selected.length} selected. Type to find more of the ${
                 totalOptionCount ?? options.length
               }.`
-            : `Type to search ${totalOptionCount ?? options.length} MVP features.`}
+            : `Type to search ${totalOptionCount ?? options.length} ${searchNoun}.`}
         </p>
       ) : null}
 

@@ -76,6 +76,27 @@ describe('matchesFilters — scope option', () => {
   })
 })
 
+describe('matchesFilters — PwC feature', () => {
+  it('isolates the named features', () => {
+    expect(ids(withFilters({ feature: ['F-001'] }))).toEqual(['F-001'])
+    expect(ids(withFilters({ feature: ['F-002'] }))).toEqual(['F-002'])
+  })
+
+  it('ORs several features together', () => {
+    expect(ids(withFilters({ feature: ['F-001', 'F-002'] }))).toEqual(['F-001', 'F-002'])
+  })
+
+  it('ANDs with another group', () => {
+    expect(ids(withFilters({ feature: ['F-001', 'F-002'], actor: ['staff'] }))).toEqual([
+      'F-001',
+    ])
+  })
+
+  it('matches nothing for a feature that is not there', () => {
+    expect(ids(withFilters({ feature: ['F-999'] }))).toEqual([])
+  })
+})
+
 describe('matchesFilters — source (R-9.9)', () => {
   it('matches a feature by its provenance', () => {
     // Both fixture features are imported from the mapping file.
@@ -220,6 +241,7 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
       option: ['1A', 'none'],
       conflict: ['release'],
       source: ['manual'],
+      feature: ['F-001'],
     })
     expect(parseFilters(writeFilters(state))).toEqual(state)
   })
@@ -256,6 +278,18 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
 
   it('reads an empty URL as no filters', () => {
     expect(parseFilters(new URLSearchParams())).toEqual(EMPTY_FILTERS)
+  })
+})
+
+describe('feature ids in the URL', () => {
+  it('normalises a hand-typed lower-case id', () => {
+    expect(parseFilters(new URLSearchParams('feature=f-001')).feature).toEqual(['F-001'])
+  })
+
+  it('drops anything that is not an F-nnn id', () => {
+    expect(
+      parseFilters(new URLSearchParams('feature=F-001,nonsense,F-1')).feature,
+    ).toEqual(['F-001'])
   })
 })
 
