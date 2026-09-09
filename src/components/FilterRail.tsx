@@ -36,6 +36,13 @@ const OPTION_OPTIONS: Option[] = [
   { value: 'none', label: 'No option set' },
 ]
 
+const SOURCE_OPTIONS: Option[] = [
+  { value: 'mapping', label: 'Mapping file' },
+  { value: 'sequencing', label: 'Sequencing table' },
+  { value: 'both', label: 'Both sources' },
+  { value: 'manual', label: 'Added or edited here' },
+]
+
 const CONFLICT_OPTIONS: Option[] = [
   { value: 'release', label: 'Release conflict' },
   { value: 'phase', label: 'Phase conflict' },
@@ -182,12 +189,26 @@ export function FilterRail({
       />
 
       <Group
+        group="source"
+        options={SOURCE_OPTIONS}
+        selected={state.source}
+        model={model}
+        state={state}
+        onToggle={(value) => set('source', toggleValue(state.source, String(value)))}
+      />
+
+      <Group
         group="mvp"
         options={filteredMvpOptions}
         selected={state.mvp}
         model={model}
         state={state}
         scroll
+        // 48 refs is too long to sit open; the list appears as you search.
+        // Anything already selected stays visible so an active filter is
+        // never hidden.
+        collapseUntilSearch
+        totalOptionCount={mvpOptions.length}
         search={{
           value: mvpQuery,
           onChange: setMvpQuery,
@@ -208,6 +229,8 @@ function Group({
   onToggle,
   scroll = false,
   search,
+  collapseUntilSearch = false,
+  totalOptionCount,
 }: {
   group: FilterGroup
   options: Option[]
@@ -217,8 +240,19 @@ function Group({
   onToggle: (value: string | number) => void
   scroll?: boolean
   search?: { value: string; onChange: (value: string) => void; label: string }
+  /** Show results only once something is typed, for a very long list. */
+  collapseUntilSearch?: boolean
+  totalOptionCount?: number
 }) {
   const searchId = `filter-${group}-search`
+  const searching = (search?.value ?? '').trim() !== ''
+  const collapsed = collapseUntilSearch && !searching
+
+  // Collapsed, only the current selection is worth showing — losing sight of
+  // an active filter is exactly what the rail is meant to prevent.
+  const shown = collapsed
+    ? options.filter((option) => selected.includes(option.value))
+    : options
 
   return (
     <fieldset className="filter-rail__group">
@@ -245,15 +279,25 @@ function Group({
         </>
       ) : null}
 
+      {collapsed ? (
+        <p className="filter-rail__empty-note">
+          {selected.length > 0
+            ? `${selected.length} selected. Type to find more of the ${
+                totalOptionCount ?? options.length
+              }.`
+            : `Type to search ${totalOptionCount ?? options.length} MVP features.`}
+        </p>
+      ) : null}
+
       <div
         className={`filter-rail__options${
           scroll ? ' filter-rail__options--scroll' : ''
         }`}
       >
-        {options.length === 0 ? (
-          <p className="filter-rail__empty-note">No matches.</p>
+        {shown.length === 0 ? (
+          collapsed ? null : <p className="filter-rail__empty-note">No matches.</p>
         ) : (
-          options.map((option) => {
+          shown.map((option) => {
             const count = countForValue(model.features, state, group, option.value)
             const checked = selected.includes(option.value)
             return (

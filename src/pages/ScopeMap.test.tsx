@@ -272,26 +272,42 @@ describe('ScopeMap filter rail', () => {
       'MVP feature',
       'Scope option',
       'Conflict state',
+      'Source',
     ]) {
       expect(screen.getByRole('group', { name: new RegExp(group, 'i') })).toBeInTheDocument()
     }
   })
 
-  it('no longer offers a Source filter', async () => {
+  it('filters by source from the URL', async () => {
+    // Both fixture features are imported, so a manual-only filter empties the
+    // map — which replaces the grid, so there are no cells to wait for.
+    renderPage('/?source=manual')
+    await waitFor(() => expect(screen.getByText(/no features match/i)).toBeInTheDocument())
+    expect(screen.getByText(/the Source filter is what excludes everything/i)).toBeInTheDocument()
+  })
+
+  it('keeps every feature when filtering to the mapping source', async () => {
+    renderPage('/?source=mapping')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    expect(screen.getByLabelText('F-001 Invite employer')).toBeInTheDocument()
+    expect(screen.getByLabelText('F-002 Verify employer')).toBeInTheDocument()
+  })
+
+  it('offers the four provenance values', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     await openFilters(user)
 
-    expect(screen.queryByRole('group', { name: /^source$/i })).not.toBeInTheDocument()
-  })
-
-  it('ignores a source filter left in an old URL', async () => {
-    renderPage('/?source=manual')
-    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
-    // Both features still show; the retired param narrows nothing.
-    expect(screen.getByLabelText('F-001 Invite employer')).toBeInTheDocument()
-    expect(screen.getByLabelText('F-002 Verify employer')).toBeInTheDocument()
+    const source = screen.getByRole('group', { name: /^source/i })
+    for (const label of [
+      'Mapping file',
+      'Sequencing table',
+      'Both sources',
+      'Added or edited here',
+    ]) {
+      expect(within(source).getByRole('checkbox', { name: new RegExp(label) })).toBeInTheDocument()
+    }
   })
 
   it('writes the selected filter into the URL (R-10.2)', async () => {
@@ -1005,5 +1021,61 @@ describe('ScopeMap capability link editing', () => {
         'No capability with id 99999.',
       ),
     )
+  })
+})
+
+describe('ScopeMap MVP filter collapses until searched', () => {
+  it('shows only the search field, not the whole list', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    const mvp = screen.getByRole('group', { name: /MVP feature/i })
+    expect(within(mvp).getByLabelText('Search MVP features')).toBeInTheDocument()
+    expect(within(mvp).queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(within(mvp).getByText(/type to search 2 MVP features/i)).toBeInTheDocument()
+  })
+
+  it('shows results once something is typed', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    const mvp = screen.getByRole('group', { name: /MVP feature/i })
+    await user.type(within(mvp).getByLabelText('Search MVP features'), '938')
+
+    expect(within(mvp).getByRole('checkbox', { name: /938/ })).toBeInTheDocument()
+    expect(within(mvp).queryByRole('checkbox', { name: /948/ })).not.toBeInTheDocument()
+  })
+
+  it('collapses again when the search is cleared', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    const mvp = screen.getByRole('group', { name: /MVP feature/i })
+    const search = within(mvp).getByLabelText('Search MVP features')
+    await user.type(search, '938')
+    expect(within(mvp).getByRole('checkbox', { name: /938/ })).toBeInTheDocument()
+
+    await user.clear(search)
+    expect(within(mvp).queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('keeps a selected ref visible while collapsed, so an active filter is never hidden', async () => {
+    const user = userEvent.setup()
+    renderPage('/?mvp=938')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    const mvp = screen.getByRole('group', { name: /MVP feature/i })
+    const checkbox = within(mvp).getByRole('checkbox', { name: /938/ })
+    expect(checkbox).toBeChecked()
+    expect(within(mvp).getByText(/1 selected\. type to find more/i)).toBeInTheDocument()
+    // The unselected one stays hidden until searched for.
+    expect(within(mvp).queryByRole('checkbox', { name: /948/ })).not.toBeInTheDocument()
   })
 })

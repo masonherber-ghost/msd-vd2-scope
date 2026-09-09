@@ -76,6 +76,42 @@ describe('matchesFilters — scope option', () => {
   })
 })
 
+describe('matchesFilters — source (R-9.9)', () => {
+  it('matches a feature by its provenance', () => {
+    // Both fixture features are imported from the mapping file.
+    expect(ids(withFilters({ source: ['mapping'] }))).toEqual(['F-001', 'F-002'])
+    expect(ids(withFilters({ source: ['manual'] }))).toEqual([])
+  })
+
+  it('finds a row that was added or edited here', () => {
+    const edited = buildScopeMap(
+      makeScopeGraph({
+        pwcFeatures: makeScopeGraph().pwcFeatures.map((f) =>
+          f.id === 'F-002' ? { ...f, source: 'manual' } : f,
+        ),
+      }),
+    )
+    expect(
+      applyFilters(edited.features, withFilters({ source: ['manual'] })).map((f) => f.id),
+    ).toEqual(['F-002'])
+  })
+
+  it('ORs several sources together', () => {
+    const mixed = buildScopeMap(
+      makeScopeGraph({
+        pwcFeatures: makeScopeGraph().pwcFeatures.map((f) =>
+          f.id === 'F-002' ? { ...f, source: 'manual' } : f,
+        ),
+      }),
+    )
+    expect(
+      applyFilters(mixed.features, withFilters({ source: ['mapping', 'manual'] })).map(
+        (f) => f.id,
+      ),
+    ).toEqual(['F-001', 'F-002'])
+  })
+})
+
 describe('matchesFilters — conflict state', () => {
   it('finds features with a release conflict', () => {
     expect(ids(withFilters({ conflict: ['release'] }))).toEqual(['F-002'])
@@ -183,6 +219,7 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
       mvp: [938, 948],
       option: ['1A', 'none'],
       conflict: ['release'],
+      source: ['manual'],
     })
     expect(parseFilters(writeFilters(state))).toEqual(state)
   })
@@ -206,11 +243,14 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
 
   it('drops values that are not valid for their group', () => {
     const state = parseFilters(
-      new URLSearchParams('actor=wizard,staff&option=1C&conflict=nope&mvp=abc'),
+      new URLSearchParams(
+        'actor=wizard,staff&option=1C&conflict=nope&source=invented&mvp=abc',
+      ),
     )
     expect(state.actor).toEqual(['staff'])
     expect(state.option).toEqual([])
     expect(state.conflict).toEqual([])
+    expect(state.source).toEqual([])
     expect(state.mvp).toEqual([])
   })
 

@@ -339,12 +339,15 @@ compose — AND across categories, OR within a category.
 > reachable. It remains a column, never a modal.
 
 - **R-8.8** Release (6), Phase (7), Actor (4), MVP feature (48 refs, searchable), Scope
-  option (1A / 1B / unspecified), Conflict state.
+  option (1A / 1B / unspecified), Conflict state, Source (mapping / table / both / manual).
 
-  > **Amended after Phase 4.** The Source filter (mapping / table / both / manual) is
-  > retired. Provenance is still stored on every row per R-9.9 and shown on the detail
-  > panel; it was not a useful way to narrow the map. An old link carrying `?source=…` is
-  > ignored rather than erroring.
+  > **Amended after Phase 9.** The Source filter was briefly retired after Phase 4 and has
+  > been restored — provenance turned out to be a useful way to narrow the map once manual
+  > edits started accumulating.
+  >
+  > The MVP feature group shows only its search field until something is typed: 48 refs is
+  > too long a list to sit open in the rail. Anything already selected stays visible while
+  > collapsed, so an active filter is never hidden.
 - **R-8.9** Every control shows a live result count. A single visible "clear all" resets.
   Active filters reflect in the URL.
 - **R-8.10** A zero-result combination names the filter that caused it and offers to drop

@@ -6,7 +6,6 @@ import { Layout } from '@/components/Layout'
 const ScopeMap = lazy(() => import('@/pages/ScopeMap'))
 const Reconciliation = lazy(() => import('@/pages/Reconciliation'))
 const Manage = lazy(() => import('@/pages/Manage'))
-const Contact = lazy(() => import('@/pages/Contact'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
 
 export const router = createBrowserRouter([
@@ -21,7 +20,6 @@ export const router = createBrowserRouter([
       // Bulk editing for entities with no single home on the map (R-9.2).
       { path: 'manage', element: <Manage />, handle: { fluid: true } },
       { path: 'manage/:entity', element: <Manage />, handle: { fluid: true } },
-      { path: 'contact', element: <Contact /> },
       // Catch-all: always last.
       { path: '*', element: <NotFound /> },
     ],

@@ -11,6 +11,7 @@ export type FilterGroup =
   | 'mvp'
   | 'option'
   | 'conflict'
+  | 'source'
 
 export const FILTER_GROUPS: readonly FilterGroup[] = [
   'release',
@@ -19,6 +20,7 @@ export const FILTER_GROUPS: readonly FilterGroup[] = [
   'mvp',
   'option',
   'conflict',
+  'source',
 ]
 
 export const GROUP_LABEL: Record<FilterGroup, string> = {
@@ -28,6 +30,7 @@ export const GROUP_LABEL: Record<FilterGroup, string> = {
   mvp: 'MVP feature',
   option: 'Scope option',
   conflict: 'Conflict state',
+  source: 'Source',
 }
 
 /** `none` is the option-agnostic (bare) record. */
@@ -48,6 +51,8 @@ export type FilterState = {
   mvp: number[]
   option: ScopeOptionFilter[]
   conflict: ConflictFilter[]
+  /** Provenance: mapping | sequencing | both | manual (R-9.9). */
+  source: string[]
 }
 
 export const EMPTY_FILTERS: FilterState = {
@@ -57,6 +62,7 @@ export const EMPTY_FILTERS: FilterState = {
   mvp: [],
   option: [],
   conflict: [],
+  source: [],
 }
 
 export function isEmpty(state: FilterState): boolean {
@@ -78,6 +84,7 @@ const PARAM: Record<FilterGroup, string> = {
   mvp: 'mvp',
   option: 'option',
   conflict: 'conflict',
+  source: 'source',
 }
 
 const split = (value: string | null): string[] =>
@@ -87,6 +94,7 @@ const split = (value: string | null): string[] =>
 export function parseFilters(params: URLSearchParams): FilterState {
   const actors = new Set(['employer', 'staff', 'jobseeker', 'system'])
   const options = new Set(['1A', '1B', 'none'])
+  const sources = new Set(['mapping', 'sequencing', 'both', 'manual'])
   const conflicts = new Set([
     'release',
     'phase',
@@ -108,6 +116,7 @@ export function parseFilters(params: URLSearchParams): FilterState {
     conflict: split(params.get(PARAM.conflict)).filter((v) =>
       conflicts.has(v),
     ) as ConflictFilter[],
+    source: split(params.get(PARAM.source)).filter((v) => sources.has(v)),
   }
 }
 
@@ -174,6 +183,7 @@ export function matchesFilters(feature: FeatureCardModel, state: FilterState): b
   if (state.mvp.length > 0 && !state.mvp.some((ref) => feature.mvpRefs.has(ref))) return false
   if (!matchesOption(feature, state.option)) return false
   if (!matchesConflict(feature, state.conflict)) return false
+  if (state.source.length > 0 && !state.source.includes(feature.source)) return false
   return true
 }
 

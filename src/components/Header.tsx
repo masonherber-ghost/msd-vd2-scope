@@ -25,13 +25,6 @@ export function Header() {
             <NavLink to="/manage" className={linkClass}>
               Manage
             </NavLink>
-            <NavLink to="/contact" className={linkClass}>
-              Contact
-            </NavLink>
-            {/* No matching route — always renders NotFound. */}
-            <NavLink to="/404-test" className={linkClass}>
-              404
-            </NavLink>
           </nav>
         </div>
         <ThemeToggle />

@@ -20,18 +20,29 @@ describe('Header', () => {
     expect(screen.getByRole('navigation', { name: /main/i })).toBeInTheDocument()
   })
 
-  it('links to home, contact and an unmatched path', () => {
+  it('links to the three real destinations', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: 'Scope map' })).toHaveAttribute('href', '/')
-    expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact')
-    expect(screen.getByRole('link', { name: '404' })).toHaveAttribute('href', '/404-test')
+    expect(screen.getByRole('link', { name: 'Reconciliation' })).toHaveAttribute(
+      'href',
+      '/reconciliation',
+    )
+    expect(screen.getByRole('link', { name: 'Manage' })).toHaveAttribute('href', '/manage')
+  })
+
+  it('offers nothing else', () => {
+    renderHeader()
+    // Contact and the 404 probe were scaffolding and are gone.
+    expect(screen.getAllByRole('link')).toHaveLength(3)
+    expect(screen.queryByRole('link', { name: 'Contact' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: '404' })).not.toBeInTheDocument()
   })
 
   it('marks the current route as the active link', () => {
-    renderHeader('/contact')
+    renderHeader('/reconciliation')
 
-    expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Reconciliation' })).toHaveAttribute(
       'aria-current',
       'page',
     )

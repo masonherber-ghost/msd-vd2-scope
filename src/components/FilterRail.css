@@ -82,7 +82,9 @@
 
 .filter-rail__option {
   display: flex;
-  align-items: center;
+  /* A wrapping label reads better against the top of its checkbox than
+     centred on three lines. */
+  align-items: flex-start;
   gap: var(--spacing-2);
   /* Same reason as LinkPicker: a scrolling column flex container would
      otherwise squash these rows into each other. */
@@ -108,6 +110,7 @@
 .filter-rail__checkbox {
   width: var(--spacing-4);
   height: var(--spacing-4);
+  margin-top: 0.375rem;
   accent-color: var(--color-primary);
   flex-shrink: 0;
 }
@@ -115,6 +118,7 @@
 .filter-rail__option-label {
   flex: 1;
   min-width: 0;
+  padding: var(--spacing-1) 0;
   overflow-wrap: anywhere;
 }
 
@@ -124,6 +128,7 @@
   font-size: 0.75rem;
   color: var(--color-muted-foreground);
   flex-shrink: 0;
+  padding-top: 0.3125rem;
 }
 
 /* Selecting this would empty the map; still selectable, but flagged. */
