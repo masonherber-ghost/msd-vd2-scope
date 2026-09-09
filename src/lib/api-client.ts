@@ -1,7 +1,135 @@
-export type Note = {
+export type ReleaseRow = {
+  id: string
+  label: string
+  name: string
+  description: string
+  display_order: number
+  in_mapping_source: number
+  in_sequencing_source: number
+  source: string
+}
+
+export type PhaseRow = {
+  id: string
+  name: string
+  epic_ref: string
+  epic_description: string
+  display_order: number
+  source: string
+}
+
+export type PwcFeatureRow = {
+  id: string
+  name: string
+  foundational_build: string
+  release_id: string
+  phase_id: string
+  source_phase_label: string | null
+  capability_note: string | null
+  display_order: number
+  source: string
+}
+
+export type AssumptionRow = {
   id: number
+  pwc_feature_id: string
+  position: number
   text: string
-  created_at: string
+  source: string
+}
+
+export type MvpFeatureRow = {
+  id: number
+  ref: number
+  scope_option: '1A' | '1B' | null
+  title: string
+  source: string
+}
+
+export type CapabilityRow = {
+  id: number
+  mvp_feature_id: number | null
+  mvp_ref: number
+  mvp_owner_ambiguous: number
+  text: string
+  actor: 'employer' | 'staff' | 'jobseeker' | 'system'
+  release_id: string | null
+  phase_id: string | null
+  source_phase_label: string | null
+  source: string
+}
+
+export type FeatureMvpLinkRow = {
+  pwc_feature_id: string
+  mvp_feature_id: number
+  source: string
+}
+
+export type FeatureCapabilityLinkRow = {
+  id: number
+  pwc_feature_id: string
+  capability_id: number
+  source_citations: number
+  matched: number
+  release_conflict: number
+  phase_conflict: number
+  feature_release_id: string | null
+  capability_release_id: string | null
+  feature_phase_label: string | null
+  capability_phase_label: string | null
+  phase_conflict_merged: number
+  resolution_state:
+    | 'unreviewed'
+    | 'mapping_wins'
+    | 'table_wins'
+    | 'both_correct'
+    | 'defect_raised'
+  resolution_note: string | null
+  resolved_at: string | null
+  source: string
+}
+
+export type ScopeGraph = {
+  releases: ReleaseRow[]
+  phases: PhaseRow[]
+  pwcFeatures: PwcFeatureRow[]
+  assumptions: AssumptionRow[]
+  mvpFeatures: MvpFeatureRow[]
+  capabilities: CapabilityRow[]
+  featureMvpLinks: FeatureMvpLinkRow[]
+  featureCapabilityLinks: FeatureCapabilityLinkRow[]
+  counts: {
+    releases: number
+    phases: number
+    pwcFeatures: number
+    assumptions: number
+    mvpFeatures: number
+    capabilities: number
+    featureMvpLinks: number
+    featureCapabilityEdges: number
+    featureCapabilityCitations: number
+    releaseConflicts: number
+    phaseConflicts: number
+    unresolvedConflicts: number
+    unmatchedLinks: number
+  }
+}
+
+export type ImportSummary = {
+  releases: number
+  phases: number
+  pwcFeatures: number
+  assumptions: number
+  mvpFeatures: number
+  capabilities: number
+  featureMvpLinks: number
+  featureCapabilityEdges: number
+  featureCapabilityCitations: number
+  collapsedDuplicateCitations: number
+  ambiguousMvpOwners: number
+  releaseConflicts: number
+  phaseConflicts: number
+  unmatchedLinks: number
 }
 
 export class ApiError extends Error {
@@ -43,9 +171,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const apiClient = {
   health: () => request<{ status: string; uptime: number }>('/api/health'),
 
-  notes: {
-    list: () => request<Note[]>('/api/notes'),
-    create: (text: string) =>
-      request<Note>('/api/notes', { method: 'POST', body: JSON.stringify({ text }) }),
+  scope: {
+    get: () => request<ScopeGraph>('/api/scope'),
+  },
+
+  import: {
+    run: () =>
+      request<{ status: string; summary: ImportSummary }>('/api/import', { method: 'POST' }),
   },
 }

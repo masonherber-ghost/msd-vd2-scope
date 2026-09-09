@@ -15,10 +15,60 @@ dotenv.config({ path: path.join(here, '.env'), quiet: true })
 // Imported dynamically, after dotenv: database.ts reads DB_PATH at module
 // load, and a static import would be hoisted above the config() call above.
 const { runMigrations } = await import('./migrate.js')
-const { notesRouter } = await import('./routes/notes.js')
+const { scopeRouter } = await import('./routes/scope.js')
+const { importRouter } = await import('./routes/import.js')
 const { errorHandler, notFoundHandler } = await import('./middleware/error-handler.js')
+const { isScopeEmpty } = await import('./repositories/scope-repository.js')
+const { importScopeFromSources } = await import('./services/importer.js')
+const { findCountDrift, loadScopeFromSources } = await import('./services/scope-source.js')
 
 runMigrations()
+
+/**
+ * Logs the reconciliation summary and refuses to serve a drifted graph
+ * (R-11.3). The first boot seeds the database; later boots only verify, so
+ * re-import stays an explicit action (R-11.4).
+ */
+function checkAndSeedScope(): void {
+  const reconciled = loadScopeFromSources()
+  const drift = findCountDrift(reconciled)
+  const s = reconciled.summary
+
+  console.log(
+    `[scope] ${s.releases} releases · ${s.phases} phases · ${s.pwcFeatures} features · ` +
+      `${s.assumptions} assumptions · ${s.mvpRecords} MVP records (${s.mvpRefs} refs) · ` +
+      `${s.capabilities} capabilities`,
+  )
+  console.log(
+    `[scope] links: ${s.featureMvpLinks} feature→MVP, ${s.featureCapabilityLinks} feature→capability`,
+  )
+  console.log(
+    `[scope] conflicts: ${s.releaseConflicts} release, ${s.phaseConflicts} phase ` +
+      `(${s.phaseConflictsAfterMerge} after the canonical merge), ${s.unmatchedLinks} unmatched`,
+  )
+
+  if (drift.length > 0) {
+    for (const d of drift) {
+      console.error(`[scope] DRIFT ${d.key}: got ${d.actual}, expected ${d.expected}`)
+    }
+    throw new Error(
+      `Boot check failed — the source documents no longer reconcile to the expected counts (${drift.length} drifted).`,
+    )
+  }
+
+  if (isScopeEmpty()) {
+    const summary = importScopeFromSources()
+    console.log(
+      `[scope] first run — imported ${summary.pwcFeatures} features, ` +
+        `${summary.capabilities} capabilities, ${summary.featureCapabilityEdges} edges ` +
+        `(${summary.featureCapabilityCitations} citations)`,
+    )
+  } else {
+    console.log('[scope] database already populated — POST /api/import to re-import')
+  }
+}
+
+checkAndSeedScope()
 
 const app = express()
 const PORT = Number(process.env.PORT ?? 3001)
@@ -36,7 +86,8 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() })
 })
 
-app.use('/api/notes', notesRouter)
+app.use('/api/scope', scopeRouter)
+app.use('/api/import', importRouter)
 
 app.use('/api', notFoundHandler)
 
