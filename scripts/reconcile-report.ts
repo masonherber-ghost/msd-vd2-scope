@@ -14,6 +14,21 @@ console.log('Reconciliation summary — PwC scope mapping × R1 sequencing table
 console.log('='.repeat(64))
 console.log()
 
+if (result.appliedSplits.length > 0) {
+  console.log('Declared splits applied before reconciliation')
+  console.log('  ' + '-'.repeat(52))
+  for (const applied of result.appliedSplits) {
+    console.log(`  ${applied.split.id}  ${applied.from.featureId} "${applied.from.name}"`)
+    for (const part of applied.into) {
+      console.log(
+        `     → ${part.featureId}  ${part.phaseId} / ${part.releaseId}` +
+          `  (${part.capabilities} capabilities)`,
+      )
+    }
+  }
+  console.log()
+}
+
 if (result.appliedOverrides.length > 0) {
   console.log('Declared overrides applied before reconciliation')
   console.log('  ' + '-'.repeat(52))

@@ -693,14 +693,31 @@ conflicts are derived from the corrected placement rather than left stale.
 
 #### Recorded overrides
 
-| ID | Target | Change | Effect on conflicts |
-|---|---|---|---|
-| OV-001 | F-085 | Outcomes & Support / 1.3 → Manage Vacancies / 1.1 | release 35 → 37, phase 21 → 20 |
+| ID | Kind | Target | Change | Effect |
+|---|---|---|---|---|
+| ~~OV-001~~ | placement | F-085 | Outcomes & Support / 1.3 → Manage Vacancies / 1.1 | superseded by OV-002 |
+| OV-002 | split | F-085 | divided into F-085 + F-093 | features 48 → 49; release conflicts 35 → 34, phase 21 → 18 |
 
-OV-001 raises the release conflict count because two of F-085's three
-capabilities are sequenced at 1.3 in Employer Recruitment; at its old 1.3
-placement those agreed. The correction surfaces them rather than hiding them,
-which is the intended behaviour — and P-1 suggests the durable fix is a split.
+**OV-002 — the F-085 split.** OV-001 moved the whole feature and raised its
+release conflicts from 1 to 3, because two of its three capabilities are
+sequenced at 1.3 in Employer Recruitment. Under P-1 no single placement could
+be right: the feature conflated a *vacancy* outcome with an *applicant*
+outcome. The split falls on the MVP feature boundary, and each half then agrees
+with the sequencing table on both phase and release:
+
+| | Feature | MVP | Capabilities | Phase | Release |
+|---|---|---|---|---|---|
+| A | F-085 *Record vacancy outcome* | 972 | Extend vacancy | Manage Vacancies | 1.2 |
+| B | F-093 *Record applicant progression outcome* | 990 | Shortlist / progress candidates · Manage Applicant Progression and Outcomes | Employer Recruitment | 1.3 |
+
+Both halves carry **zero conflicts**. The three assumptions divide along the
+same seam — #1 is vacancy-outcome, #2 and #3 are application-outcome and
+referral/shortlisting flow — and each half is renumbered from 1.
+
+A split redistributes scope and never adds or drops any: `featureMvpLinks`
+(60), `featureCapabilityLinks` (123) and `assumptions` (92) are all unchanged,
+and every assigned MVP ref and assumption position is validated to appear
+exactly once or the import fails.
 
 ### Release 1.9 is a bucket, not a sequenced release
 

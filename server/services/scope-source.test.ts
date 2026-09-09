@@ -79,35 +79,70 @@ describe('the real source documents reconcile to the PRD counts', () => {
     expect(exact?.releaseId).toBeNull()
   })
 
-  it('applies OV-001, moving F-085 to Manage Vacancies at 1.1', () => {
-    expect(result.appliedOverrides).toHaveLength(1)
-    const [applied] = result.appliedOverrides
-    expect(applied.override.id).toBe('OV-001')
-    expect(applied.from).toEqual({
+  it('applies OV-002, splitting F-085 into F-085 and F-093', () => {
+    expect(result.appliedSplits).toHaveLength(1)
+    const [applied] = result.appliedSplits
+    expect(applied.split.id).toBe('OV-002')
+    expect(applied.from).toMatchObject({
+      featureId: 'F-085',
+      name: 'Record recruitment outcome',
       releaseId: '1.3',
-      phaseId: 'outcomes-and-support',
       sourcePhaseLabel: 'Outcomes & Support',
     })
-    expect(applied.to).toEqual({
-      releaseId: '1.1',
-      phaseId: 'manage-vacancies',
-      sourcePhaseLabel: 'Manage Vacancies',
-    })
-
-    const feature = result.features.find((f) => f.id === 'F-085')
-    expect(feature).toMatchObject({ releaseId: '1.1', phaseId: 'manage-vacancies' })
+    expect(applied.into).toEqual([
+      { featureId: 'F-085', releaseId: '1.2', phaseId: 'manage-vacancies', capabilities: 1 },
+      {
+        featureId: 'F-093',
+        releaseId: '1.3',
+        phaseId: 'employer-recruitment',
+        capabilities: 2,
+      },
+    ])
   })
 
-  it('recomputes F-085 conflicts from the corrected placement, not the source', () => {
-    const release = result.conflicts.release.filter((c) => c.pwcFeatureId === 'F-085')
-    const phase = result.conflicts.phase.filter((c) => c.pwcFeatureId === 'F-085')
+  it('places each half where the sequencing table already put its capabilities', () => {
+    const a = result.features.find((f) => f.id === 'F-085')!
+    const b = result.features.find((f) => f.id === 'F-093')!
 
-    // The correction resolves the Manage Vacancies phase disagreement and
-    // exposes two release disagreements that its old 1.3 placement hid.
-    expect(release).toHaveLength(3)
-    expect(phase).toHaveLength(2)
-    expect(release.every((c) => c.featureReleaseId === '1.1')).toBe(true)
-    expect(phase.every((c) => c.capabilityPhaseLabel === 'Employer Recruitment')).toBe(true)
+    expect(a).toMatchObject({
+      name: 'Record vacancy outcome',
+      releaseId: '1.2',
+      phaseId: 'manage-vacancies',
+    })
+    expect(b).toMatchObject({
+      name: 'Record applicant progression outcome',
+      releaseId: '1.3',
+      phaseId: 'employer-recruitment',
+    })
+  })
+
+  it('clears every conflict the undivided feature carried', () => {
+    for (const id of ['F-085', 'F-093']) {
+      expect(result.conflicts.release.filter((c) => c.pwcFeatureId === id)).toEqual([])
+      expect(result.conflicts.phase.filter((c) => c.pwcFeatureId === id)).toEqual([])
+    }
+  })
+
+  it('redistributes links without adding or dropping any', () => {
+    // A split moves scope between features; it never creates or loses it.
+    expect(result.summary.featureMvpLinks).toBe(raw.summary.featureMvpLinks)
+    expect(result.summary.featureCapabilityLinks).toBe(raw.summary.featureCapabilityLinks)
+    expect(result.summary.assumptions).toBe(raw.summary.assumptions)
+    expect(result.summary.pwcFeatures).toBe(raw.summary.pwcFeatures + 1)
+  })
+
+  it('divides assumptions and renumbers each half from 1', () => {
+    const a = result.features.find((f) => f.id === 'F-085')!
+    const b = result.features.find((f) => f.id === 'F-093')!
+    expect(a.assumptions.map((x) => x.position)).toEqual([1])
+    expect(b.assumptions.map((x) => x.position)).toEqual([1, 2])
+    expect(a.assumptions[0].text).toMatch(/vacancy outcome process/i)
+    expect(b.assumptions[0].text).toMatch(/application outcome process/i)
+  })
+
+  it('keeps display_order contiguous after the insertion', () => {
+    const orders = result.features.map((f) => f.displayOrder)
+    expect(orders).toEqual(Array.from({ length: orders.length }, (_, i) => i + 1))
   })
 
   it('sees the single 1.1 → 1.4 conflict on F-014 electronic T&Cs', () => {

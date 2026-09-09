@@ -23,17 +23,69 @@ export type ScopeOverride = {
 }
 
 export const SCOPE_OVERRIDES: readonly ScopeOverride[] = [
+  // OV-001 (F-085 → Manage Vacancies / 1.1) was superseded by the OV-002 split
+  // below, which places both halves explicitly. Recorded here rather than
+  // deleted so the decision trail stays readable.
+]
+
+/**
+ * A feature split. Under PRD §16 P-1 a feature exists in exactly one place, so
+ * a feature whose capabilities sit in two phases cannot be placed correctly —
+ * it has to be divided.
+ *
+ * Capabilities follow their MVP ref, and assumptions follow their position in
+ * the original feature. Every ref and every assumption must be assigned
+ * exactly once, so a split can never silently drop scope.
+ */
+export type SplitPart = {
+  featureId: string
+  name: string
+  releaseId: string
+  phaseLabel: string
+  /** MVP refs from the original feature that belong to this part. */
+  mvpRefs: number[]
+  /** 1-based assumption positions from the original feature. */
+  assumptionPositions: number[]
+}
+
+export type ScopeSplit = {
+  id: string
+  featureId: string
+  into: SplitPart[]
+  rationale: string
+  decidedOn: string
+}
+
+export const SCOPE_SPLITS: readonly ScopeSplit[] = [
   {
-    id: 'OV-001',
+    id: 'OV-002',
     featureId: 'F-085',
-    releaseId: '1.1',
-    phaseLabel: 'Manage Vacancies',
     rationale:
-      'Programme decision: F-085 belongs in Manage Vacancies at release 1.1. The mapping ' +
-      'file files it under Outcomes & Support at 1.9. Note this raises its release conflicts ' +
-      'from 1 to 3, because two of its three capabilities are sequenced at 1.3 in ' +
-      'Employer Recruitment — those remain open findings rather than being hidden.',
+      'F-085 "Record recruitment outcome" conflated a vacancy outcome with an applicant ' +
+      'outcome, so its capabilities sat in two phases and PRD §16 P-1 made any single ' +
+      'placement wrong. The split falls on the MVP feature boundary: 972 is vacancy ' +
+      'outcome, 990 is applicant progression. Each half then agrees with the sequencing ' +
+      'table on both phase and release, clearing all five of its conflicts. Supersedes ' +
+      'OV-001, which moved the whole feature to Manage Vacancies / 1.1.',
     decidedOn: '2026-09-09',
+    into: [
+      {
+        featureId: 'F-085',
+        name: 'Record vacancy outcome',
+        releaseId: '1.2',
+        phaseLabel: 'Manage Vacancies',
+        mvpRefs: [972],
+        assumptionPositions: [1],
+      },
+      {
+        featureId: 'F-093',
+        name: 'Record applicant progression outcome',
+        releaseId: '1.3',
+        phaseLabel: 'Employer Recruitment',
+        mvpRefs: [990],
+        assumptionPositions: [2, 3],
+      },
+    ],
   },
 ]
 
@@ -98,6 +150,143 @@ export function applyScopeOverrides(
       )
     }
   }
+
+  return { mapping: { ...mapping, features }, applied }
+}
+
+export type AppliedSplit = {
+  split: ScopeSplit
+  from: {
+    featureId: string
+    name: string
+    releaseId: string
+    phaseId: string
+    sourcePhaseLabel: string
+  }
+  into: { featureId: string; releaseId: string; phaseId: string; capabilities: number }[]
+}
+
+/**
+ * Divides a feature into the declared parts. Applied after the placement
+ * overrides and before reconciliation, so conflicts derive from the split
+ * shape rather than the original.
+ */
+export function applyScopeSplits(
+  mapping: MappingParseResult,
+  splits: readonly ScopeSplit[] = SCOPE_SPLITS,
+): { mapping: MappingParseResult; applied: AppliedSplit[] } {
+  if (splits.length === 0) return { mapping, applied: [] }
+
+  const applied: AppliedSplit[] = []
+  let features = [...mapping.features]
+
+  for (const split of splits) {
+    const index = features.findIndex((f) => f.id === split.featureId)
+    if (index === -1) {
+      throw new Error(
+        `Split ${split.id} targets ${split.featureId}, which is not in the mapping document.`,
+      )
+    }
+    const original = features[index]
+
+    if (split.into.length < 2) {
+      throw new Error(`Split ${split.id} must produce at least two parts.`)
+    }
+
+    // Every part id unique, and a new id must not already be taken.
+    const partIds = split.into.map((p) => p.featureId)
+    if (new Set(partIds).size !== partIds.length) {
+      throw new Error(`Split ${split.id} has duplicate part ids.`)
+    }
+    for (const id of partIds) {
+      if (id !== original.id && features.some((f) => f.id === id)) {
+        throw new Error(`Split ${split.id} would create ${id}, which already exists.`)
+      }
+    }
+
+    // Every MVP ref assigned exactly once — a split must not drop scope.
+    const originalRefs = original.mvpFeatures.map((m) => m.ref)
+    const assignedRefs = split.into.flatMap((p) => p.mvpRefs)
+    const missingRefs = originalRefs.filter((r) => !assignedRefs.includes(r))
+    const unknownRefs = assignedRefs.filter((r) => !originalRefs.includes(r))
+    if (missingRefs.length > 0) {
+      throw new Error(
+        `Split ${split.id} leaves MVP ref(s) ${missingRefs.join(', ')} unassigned.`,
+      )
+    }
+    if (unknownRefs.length > 0) {
+      throw new Error(
+        `Split ${split.id} assigns MVP ref(s) ${unknownRefs.join(', ')} that ${original.id} does not cite.`,
+      )
+    }
+    if (new Set(assignedRefs).size !== assignedRefs.length) {
+      throw new Error(`Split ${split.id} assigns an MVP ref to more than one part.`)
+    }
+
+    // Same for assumptions, by position.
+    const originalPositions = original.assumptions.map((a) => a.position)
+    const assignedPositions = split.into.flatMap((p) => p.assumptionPositions)
+    const missingPositions = originalPositions.filter((p) => !assignedPositions.includes(p))
+    if (missingPositions.length > 0) {
+      throw new Error(
+        `Split ${split.id} leaves assumption(s) ${missingPositions.join(', ')} unassigned.`,
+      )
+    }
+    if (new Set(assignedPositions).size !== assignedPositions.length) {
+      throw new Error(`Split ${split.id} assigns an assumption to more than one part.`)
+    }
+
+    // Every capability must follow one of the assigned refs.
+    const orphanCapabilities = original.capabilities.filter(
+      (c) => !assignedRefs.includes(c.ref),
+    )
+    if (orphanCapabilities.length > 0) {
+      throw new Error(
+        `Split ${split.id} leaves capability ref(s) ` +
+          `${[...new Set(orphanCapabilities.map((c) => c.ref))].join(', ')} unassigned.`,
+      )
+    }
+
+    const parts: ParsedPwcFeature[] = split.into.map((part) => {
+      const phase = toCanonicalPhase(part.phaseLabel, SOURCE, 0)
+      return {
+        ...original,
+        id: part.featureId,
+        name: part.name,
+        releaseId: part.releaseId,
+        phaseId: phase.id,
+        sourcePhaseLabel: phase.name,
+        mvpFeatures: original.mvpFeatures.filter((m) => part.mvpRefs.includes(m.ref)),
+        capabilities: original.capabilities.filter((c) => part.mvpRefs.includes(c.ref)),
+        assumptions: original.assumptions
+          .filter((a) => part.assumptionPositions.includes(a.position))
+          // Positions are per-feature and must stay contiguous 1..n.
+          .map((a, i) => ({ ...a, position: i + 1 })),
+      }
+    })
+
+    applied.push({
+      split,
+      from: {
+        featureId: original.id,
+        name: original.name,
+        releaseId: original.releaseId,
+        phaseId: original.phaseId,
+        sourcePhaseLabel: original.sourcePhaseLabel,
+      },
+      into: parts.map((p) => ({
+        featureId: p.id,
+        releaseId: p.releaseId,
+        phaseId: p.phaseId,
+        capabilities: p.capabilities.length,
+      })),
+    })
+
+    features = [...features.slice(0, index), ...parts, ...features.slice(index + 1)]
+  }
+
+  // Renumber so display_order stays contiguous after the insertion.
+  features = features.map((f, i) => ({ ...f, displayOrder: i + 1 }))
 
   return { mapping: { ...mapping, features }, applied }
 }

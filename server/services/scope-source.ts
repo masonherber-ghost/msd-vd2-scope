@@ -4,7 +4,12 @@ import { fileURLToPath } from 'node:url'
 import { parseMappingDocument } from './mapping-parser.js'
 import { parseSequencingTable } from './sequencing-parser.js'
 import { reconcile, type ReconcileResult } from './reconcile.js'
-import { applyScopeOverrides, type AppliedOverride } from './scope-overrides.js'
+import {
+  applyScopeOverrides,
+  applyScopeSplits,
+  type AppliedOverride,
+  type AppliedSplit,
+} from './scope-overrides.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DOCS_DIR = path.join(here, '..', '..', '_docs')
@@ -37,21 +42,26 @@ export const EXPECTED_SOURCE_COUNTS = {
 } as const
 
 /**
- * The expected counts *after* the declared overrides in scope-overrides.ts.
- * Drift from these is a bug, not a tolerance — it fails the boot check on
- * import (R-11.3).
+ * The expected counts *after* the declared overrides and splits in
+ * scope-overrides.ts. Drift from these is a bug, not a tolerance — it fails
+ * the boot check on import (R-11.3).
  *
- * These differ from EXPECTED_SOURCE_COUNTS only in the conflict rows, and only
- * because of OV-001 (F-085 → Manage Vacancies / 1.1):
- *   releaseConflicts         35 → 37  (its two 1.3 capabilities now conflict at 1.1)
- *   phaseConflicts           21 → 20  (its Manage Vacancies capability now agrees)
- *   phaseConflictsAfterMerge 10 → 9
+ * These differ from EXPECTED_SOURCE_COUNTS because of OV-002, the F-085 split
+ * (PRD §16 P-1):
+ *   pwcFeatures              48 → 49  (F-085 divided into F-085 + F-093)
+ *   releaseConflicts         35 → 34  (both halves now agree with the table)
+ *   phaseConflicts           21 → 18
+ *   phaseConflictsAfterMerge 10 → 7
+ *
+ * Link counts are unchanged: a split redistributes links, it never adds or
+ * drops any.
  */
 export const EXPECTED_COUNTS = {
   ...EXPECTED_SOURCE_COUNTS,
-  releaseConflicts: 37,
-  phaseConflicts: 20,
-  phaseConflictsAfterMerge: 9,
+  pwcFeatures: 49,
+  releaseConflicts: 34,
+  phaseConflicts: 18,
+  phaseConflictsAfterMerge: 7,
 } as const
 
 /** Release conflict breakdown from PRD §7, before overrides. */
@@ -63,14 +73,12 @@ export const EXPECTED_SOURCE_RELEASE_CONFLICTS = [
   { from: '1.1', to: '1.4', links: 1 },
 ] as const
 
-/** Release conflict breakdown after the declared overrides. */
+/** Release conflict breakdown after the declared overrides and splits. */
 export const EXPECTED_RELEASE_CONFLICTS = [
   { from: '1.9', to: '2', links: 16 },
   { from: '1.9', to: '1.1', links: 11 },
   { from: '1.9', to: '1.4', links: 5 },
-  { from: '1.1', to: '1.3', links: 2 },
   { from: '1.1', to: '1.4', links: 1 },
-  { from: '1.1', to: '1.2', links: 1 },
   { from: '1.3', to: '1.2', links: 1 },
 ] as const
 
@@ -81,11 +89,15 @@ export const EXPECTED_RELEASE_CONFLICTS = [
  */
 export function loadScopeFromSources(): ReconcileResult & {
   appliedOverrides: AppliedOverride[]
+  appliedSplits: AppliedSplit[]
 } {
   const parsed = parseMappingDocument(fs.readFileSync(MAPPING_PATH, 'utf8'))
-  const { mapping, applied } = applyScopeOverrides(parsed)
+  const { mapping: overridden, applied: appliedOverrides } = applyScopeOverrides(parsed)
+  // Splits run after placement overrides: a split states each part's placement
+  // explicitly, so it supersedes any override on the feature it divides.
+  const { mapping, applied: appliedSplits } = applyScopeSplits(overridden)
   const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
-  return { ...reconcile(mapping, sequencing), appliedOverrides: applied }
+  return { ...reconcile(mapping, sequencing), appliedOverrides, appliedSplits }
 }
 
 /** Parses and reconciles the sources with NO overrides applied. */

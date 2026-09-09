@@ -72,14 +72,14 @@ describe('importScope writes the whole graph', () => {
     expect(summary).toMatchObject({
       releases: 6,
       phases: 7,
-      pwcFeatures: 48,
+      pwcFeatures: 49,
       assumptions: 92,
       mvpFeatures: 51,
       capabilities: 107,
       featureMvpLinks: 60,
-      // Post-override figures: OV-001 moves F-085 to Manage Vacancies / 1.1.
-      releaseConflicts: 37,
-      phaseConflicts: 20,
+      // Post-split figures: OV-002 divides F-085 into F-085 + F-093.
+      releaseConflicts: 34,
+      phaseConflicts: 18,
       unmatchedLinks: 2,
     })
   })
@@ -142,16 +142,43 @@ describe('importScope writes the whole graph', () => {
     ])
   })
 
-  it('records F-085 at its overridden placement', () => {
+  it('writes both halves of the F-085 split', () => {
     importScope(reconciled)
-    const row = db
-      .prepare("SELECT release_id, phase_id, source_phase_label FROM pwc_features WHERE id='F-085'")
-      .get()
-    expect(row).toEqual({
-      release_id: '1.1',
-      phase_id: 'manage-vacancies',
-      source_phase_label: 'Manage Vacancies',
-    })
+    const rows = db
+      .prepare(
+        `SELECT id, name, release_id, phase_id FROM pwc_features
+          WHERE id IN ('F-085', 'F-093') ORDER BY id`,
+      )
+      .all()
+    expect(rows).toEqual([
+      {
+        id: 'F-085',
+        name: 'Record vacancy outcome',
+        release_id: '1.2',
+        phase_id: 'manage-vacancies',
+      },
+      {
+        id: 'F-093',
+        name: 'Record applicant progression outcome',
+        release_id: '1.3',
+        phase_id: 'employer-recruitment',
+      },
+    ])
+  })
+
+  it('gives each half of the split its own assumptions', () => {
+    importScope(reconciled)
+    const counts = db
+      .prepare(
+        `SELECT pwc_feature_id, COUNT(*) AS n FROM assumptions
+          WHERE pwc_feature_id IN ('F-085','F-093')
+          GROUP BY pwc_feature_id ORDER BY pwc_feature_id`,
+      )
+      .all()
+    expect(counts).toEqual([
+      { pwc_feature_id: 'F-085', n: 1 },
+      { pwc_feature_id: 'F-093', n: 2 },
+    ])
   })
 
   it('flags the 11 phase conflicts the canonical merge resolves', () => {
