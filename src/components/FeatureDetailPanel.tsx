@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AssumptionList } from '@/components/AssumptionList'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
+import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
 
@@ -30,6 +31,8 @@ export type FeatureDetailPanelProps = {
   }) => Promise<unknown>
   onDelete?: (cascade: boolean) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
+  /** The search term that led here, highlighted on arrival (R-8.13). */
+  highlight?: string
   /** Release and phase choices, for editing the feature's placement. */
   releaseOptions?: { value: string; label: string }[]
   phaseOptions?: { value: string; label: string }[]
@@ -57,6 +60,7 @@ export function FeatureDetailPanel({
   onSaveField,
   onDelete,
   onDirtyChange,
+  highlight = '',
   releaseOptions,
   phaseOptions,
   mvpOptions,
@@ -204,9 +208,12 @@ export function FeatureDetailPanel({
             multiline
             onSave={(foundational_build) => onSaveField({ foundational_build })}
             onDirtyChange={onDirtyChange}
+            highlight={highlight}
           />
         ) : (
-          <p className="feature-detail__prose">{detail.foundationalBuild}</p>
+          <p className="feature-detail__prose">
+            <HighlightText text={detail.foundationalBuild} term={highlight} />
+          </p>
         )}
       </div>
 
@@ -221,13 +228,16 @@ export function FeatureDetailPanel({
             onEdit={onEditAssumption}
             onMove={onMoveAssumption}
             onDelete={onDeleteAssumption}
+            highlight={highlight}
           />
         ) : detail.assumptions.length === 0 ? (
           <p className="feature-detail__note">None recorded.</p>
         ) : (
           <ol className="feature-detail__list">
             {detail.assumptions.map((assumption) => (
-              <li key={assumption.id}>{assumption.text}</li>
+              <li key={assumption.id}>
+                <HighlightText text={assumption.text} term={highlight} />
+              </li>
             ))}
           </ol>
         )}

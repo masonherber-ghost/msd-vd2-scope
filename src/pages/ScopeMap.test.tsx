@@ -1150,3 +1150,161 @@ describe('ScopeMap PwC feature filter', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('ScopeMap search (R-8.11 – R-8.13)', () => {
+  const searchBox = () => screen.getByRole('combobox', { name: /search the scope/i })
+
+  it('is always reachable, not behind a toggle', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    expect(searchBox()).toBeInTheDocument()
+  })
+
+  it('focuses from the / key (R-10.4)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(searchBox()).not.toHaveFocus()
+    await user.keyboard('/')
+    expect(searchBox()).toHaveFocus()
+  })
+
+  it('does not steal a / typed into another field', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    const mvpSearch = within(screen.getByRole('group', { name: /MVP feature/i })).getByLabelText(
+      'Search MVP features',
+    )
+    await user.click(mvpSearch)
+    await user.keyboard('/')
+
+    expect(mvpSearch).toHaveValue('/')
+    expect(searchBox()).not.toHaveFocus()
+  })
+
+  it('groups results by what matched', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'employer')
+
+    const list = screen.getByRole('listbox', { name: /search results/i })
+    expect(within(list).getByText(/^Feature name/)).toBeInTheDocument()
+    expect(within(list).getAllByRole('option').length).toBeGreaterThan(0)
+  })
+
+  it('highlights the term inside the result', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'Verify')
+
+    const list = screen.getByRole('listbox', { name: /search results/i })
+    expect(within(list).getAllByText('Verify')[0].tagName).toBe('MARK')
+  })
+
+  it('says so when nothing matches', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'zzzzz')
+    expect(screen.getByText(/nothing matches “zzzzz”/i)).toBeInTheDocument()
+  })
+
+  it('walks results with the arrow keys and selects with Enter', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'F-002')
+    // The first hit is active by default; Enter reveals it on the map.
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => expect(url()).toContain('selected=F-002'))
+    expect(url()).toContain('q=F-002')
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+
+  it('moves the active option with ArrowDown', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'employer')
+    const first = screen.getAllByRole('option')[0]
+    expect(first).toHaveAttribute('aria-selected', 'true')
+
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getAllByRole('option')[0]).toHaveAttribute('aria-selected', 'false')
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('wraps from the last option back to the first', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'F-002')
+    await user.keyboard('{ArrowUp}')
+
+    const options = screen.getAllByRole('option')
+    expect(options[options.length - 1]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('closes on Escape', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.type(searchBox(), 'employer')
+    expect(screen.getByRole('listbox', { name: /search results/i })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('listbox', { name: /search results/i })).not.toBeInTheDocument()
+  })
+
+  it('highlights the term in the panel\'s long-form text on arrival', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      pwcFeatures: base.pwcFeatures.map((f) =>
+        f.id === 'F-002'
+          ? { ...f, foundational_build: 'Staff verify an employer before publishing.' }
+          : f,
+      ),
+      assumptions: [
+        {
+          id: 1,
+          pwc_feature_id: 'F-002',
+          position: 1,
+          text: 'Assumes an Omniscript saves the partial verification.',
+          source: 'mapping',
+        },
+      ],
+    }
+
+    renderPage('/?selected=F-002&q=Omniscript')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const panel = screen.getByRole('region', { name: 'Verify employer' })
+    expect(within(panel).getByText('Omniscript').tagName).toBe('MARK')
+  })
+
+  it('leaves the panel unmarked when no term was carried', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+    const panel = screen.getByRole('region', { name: 'Verify employer' })
+    expect(panel.querySelector('mark')).toBeNull()
+  })
+})

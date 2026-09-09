@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 
 export type InlineEditFieldProps = {
@@ -11,6 +12,8 @@ export type InlineEditFieldProps = {
   options?: { value: string; label: string }[]
   /** Shown instead of the raw value when not editing. */
   displayValue?: string
+  /** A search term to mark in the displayed value (R-8.13). */
+  highlight?: string
   /** Reports whether an edit is in progress, for navigation protection. */
   onDirtyChange?: (dirty: boolean) => void
 }
@@ -27,6 +30,7 @@ export function InlineEditField({
   multiline = false,
   options,
   displayValue,
+  highlight = '',
   onDirtyChange,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
@@ -84,7 +88,7 @@ export function InlineEditField({
     return (
       <div className="inline-edit">
         <span className="inline-edit__value">
-          {displayValue ?? value ?? ''}
+          <HighlightText text={displayValue ?? value ?? ''} term={highlight} />
           {!displayValue && !value ? <em>Not set</em> : null}
         </span>
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>

@@ -6,6 +6,7 @@ import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
+import { ScopeSearch } from '@/components/ScopeSearch'
 import {
   useCreateFeature,
   useDeleteFeature,
@@ -25,6 +26,7 @@ import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
+import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
   EMPTY_FILTERS,
   GROUP_LABEL,
@@ -47,6 +49,7 @@ const clamp = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
 export default function ScopeMap() {
   const scope = useScope()
   const [zoom, setZoom] = useState(1)
+  const [query, setQuery] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -124,6 +127,32 @@ export default function ScopeMap() {
   )
 
   // Edges follow the filtered view, so a hidden feature never anchors one.
+  const results = useMemo(
+    () => (scope.data ? searchScope(scope.data, query) : { query: '', groups: [], total: 0, flat: [] }),
+    [scope.data, query],
+  )
+
+  /**
+   * Enter reveals the feature on the map. The term is carried in the URL so
+   * the detail panel can highlight it on arrival, and so the whole view is
+   * still reproducible from a link (R-10.2).
+   */
+  const revealHit = useCallback(
+    (hit: SearchHit) => {
+      if (!hit.featureId) return
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        next.set('selected', hit.featureId as string)
+        if (query.trim()) next.set('q', query.trim())
+        else next.delete('q')
+        return next
+      })
+    },
+    [query, setSearchParams],
+  )
+
+  const highlight = searchParams.get('q') ?? ''
+
   const edges = useMemo(() => buildEdges(visible), [visible])
   const density = useMemo(() => connectionDensity(edges), [edges])
 
@@ -309,12 +338,20 @@ export default function ScopeMap() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">Scope map</h1>
           <p className="text-sm text-muted-foreground">
             Releases across, canonical phases down. An empty cell means nothing in that phase
             lands in that release.
           </p>
+          <div className="max-w-md">
+            <ScopeSearch
+              value={query}
+              onChange={setQuery}
+              results={results}
+              onSelect={revealHit}
+            />
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -507,6 +544,7 @@ export default function ScopeMap() {
                 setSelected(null)
               }}
               onDirtyChange={setDirty}
+              highlight={highlight}
               releaseOptions={releaseOptions}
               phaseOptions={phaseOptions}
               mvpOptions={mvpOptions}

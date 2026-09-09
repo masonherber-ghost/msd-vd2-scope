@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 import type { FeatureDetail } from '@/lib/feature-detail'
 
@@ -8,6 +9,8 @@ export type AssumptionListProps = {
   onEdit: (id: number, text: string) => Promise<unknown>
   onMove: (id: number, direction: 'up' | 'down') => Promise<unknown>
   onDelete: (id: number) => Promise<unknown>
+  /** A search term to mark in the assumption text (R-8.13). */
+  highlight?: string
 }
 
 /**
@@ -20,6 +23,7 @@ export function AssumptionList({
   onEdit,
   onMove,
   onDelete,
+  highlight = '',
 }: AssumptionListProps) {
   const [draft, setDraft] = useState('')
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -90,7 +94,9 @@ export function AssumptionList({
                 </>
               ) : (
                 <>
-                  <span className="assumption-list__text">{assumption.text}</span>
+                  <span className="assumption-list__text">
+                    <HighlightText text={assumption.text} term={highlight} />
+                  </span>
                   {assumption.source === 'manual' ? (
                     <span className="assumption-list__manual">added here</span>
                   ) : null}
