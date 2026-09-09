@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Filter } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -17,7 +18,9 @@ import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
 import {
+  EMPTY_FILTERS,
   GROUP_LABEL,
+  activeGroups,
   applyFilters,
   blameGroups,
   isEmpty,
@@ -112,6 +115,10 @@ export default function ScopeMap() {
     [model, filters],
   )
 
+  // Counts the active groups, not the selected values — the badge answers
+  // "how many filters are narrowing this", which is what the rail hides.
+  const activeFilterCount = useMemo(() => activeGroups(filters).length, [filters])
+
   const detail = useMemo(
     () => (scope.data && selectedId ? buildFeatureDetail(scope.data, selectedId) : null),
     [scope.data, selectedId],
@@ -123,6 +130,8 @@ export default function ScopeMap() {
     phaseId: string
   } | null>(null)
   const [dirty, setDirty] = useState(false)
+  // The rail is hidden until asked for, then opens as a column beside the map.
+  const [filtersOpen, setFiltersOpen] = useState(false)
 
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
@@ -287,6 +296,28 @@ export default function ScopeMap() {
 
         <div className="flex items-center gap-2">
           <Button
+            variant={filtersOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setFiltersOpen((open) => !open)}
+            aria-pressed={filtersOpen}
+            aria-expanded={filtersOpen}
+            aria-controls="scope-filter-rail"
+            aria-label={
+              activeFilterCount > 0
+                ? `Filters, ${activeFilterCount} active`
+                : 'Filters'
+            }
+          >
+            <Filter aria-hidden="true" />
+            Filters
+            {activeFilterCount > 0 ? (
+              <span className="rounded-full bg-background px-1.5 text-foreground tabular-nums">
+                {activeFilterCount}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
             variant="outline"
             size="sm"
             onClick={() => setZoom((z) => clamp(z - STEP))}
@@ -333,17 +364,25 @@ export default function ScopeMap() {
       ) : model && projected ? (
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start ${
-            detail
+            filtersOpen && detail
               ? 'lg:grid-cols-[14rem_minmax(0,1fr)_22rem]'
-              : 'lg:grid-cols-[16rem_minmax(0,1fr)]'
+              : filtersOpen
+                ? 'lg:grid-cols-[16rem_minmax(0,1fr)]'
+                : detail
+                  ? 'lg:grid-cols-[minmax(0,1fr)_22rem]'
+                  : 'lg:grid-cols-1'
           }`}
         >
-          <FilterRail
-            model={model}
-            state={filters}
-            onChange={setFilters}
-            visible={visible}
-          />
+          {filtersOpen ? (
+            <FilterRail
+              id="scope-filter-rail"
+              model={model}
+              state={filters}
+              onChange={setFilters}
+              visible={visible}
+              onClose={() => setFiltersOpen(false)}
+            />
+          ) : null}
 
           <div className="flex min-w-0 flex-col gap-4">
             {creatingIn ? (
@@ -372,17 +411,8 @@ export default function ScopeMap() {
               <ZeroResults
                 blame={blame}
                 onDrop={(group) => setFilters(withoutGroup(filters, group))}
-                onClearAll={() =>
-                  setFilters({
-                    release: [],
-                    phase: [],
-                    actor: [],
-                    mvp: [],
-                    option: [],
-                    conflict: [],
-                    source: [],
-                  })
-                }
+                onClearAll={() => setFilters(EMPTY_FILTERS)}
+                onShowFilters={filtersOpen ? undefined : () => setFiltersOpen(true)}
               />
             ) : (
               <ScopeMapGrid
@@ -474,10 +504,13 @@ function ZeroResults({
   blame,
   onDrop,
   onClearAll,
+  onShowFilters,
 }: {
   blame: ReturnType<typeof blameGroups>
   onDrop: (group: ReturnType<typeof blameGroups>[number]) => void
   onClearAll: () => void
+  /** Offered only when the rail is closed, so the cause stays reachable. */
+  onShowFilters?: () => void
 }) {
   return (
     <div
@@ -509,9 +542,16 @@ function ZeroResults({
         </p>
       )}
 
-      <Button variant="outline" size="sm" onClick={onClearAll}>
-        Clear all filters
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={onClearAll}>
+          Clear all filters
+        </Button>
+        {onShowFilters ? (
+          <Button variant="outline" size="sm" onClick={onShowFilters}>
+            Show filters
+          </Button>
+        ) : null}
+      </div>
     </div>
   )
 }

@@ -104,6 +104,12 @@ function renderPage(initialUrl = '/') {
 
 const url = () => screen.getByTestId('url').textContent ?? ''
 
+/** The rail is hidden until asked for, so most filter tests open it first. */
+async function openFilters(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /^filters/i }))
+  return screen.getByRole('complementary', { name: 'Filters' })
+}
+
 beforeEach(() => {
   state.graph = makeScopeGraph()
   state.fail = null
@@ -192,15 +198,60 @@ describe('ScopeMap zoom controls (R-8.7)', () => {
 })
 
 describe('ScopeMap filter rail', () => {
-  it('is always visible, never behind a toggle (R-8.8)', async () => {
+  it('is hidden until the filters button is pressed', async () => {
+    const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(screen.queryByRole('complementary', { name: 'Filters' })).not.toBeInTheDocument()
+
+    await openFilters(user)
     expect(screen.getByRole('complementary', { name: 'Filters' })).toBeInTheDocument()
   })
 
-  it('offers every filter group', async () => {
+  it('opens as a column beside the map, not over it', async () => {
+    const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await openFilters(user)
+    // The map is still rendered — the rail is a column, never a modal.
+    expect(screen.getAllByRole('cell')).toHaveLength(4)
+    expect(screen.getByRole('complementary', { name: 'Filters' })).not.toHaveAttribute(
+      'role',
+      'dialog',
+    )
+  })
+
+  it('closes again from the button and from the rail', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await openFilters(user)
+    await user.click(screen.getByRole('button', { name: /hide/i }))
+    expect(screen.queryByRole('complementary', { name: 'Filters' })).not.toBeInTheDocument()
+
+    await openFilters(user)
+    await user.click(screen.getByRole('button', { name: /^filters/i }))
+    expect(screen.queryByRole('complementary', { name: 'Filters' })).not.toBeInTheDocument()
+  })
+
+  it('counts the active filter groups on the button, so hiding loses nothing', async () => {
+    renderPage('/?actor=staff&release=1.1')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    // Rail closed, but the button still says the view is filtered.
+    expect(screen.queryByRole('complementary', { name: 'Filters' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Filters, 2 active' })).toBeInTheDocument()
+  })
+
+  it('offers every filter group', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
     for (const group of [
       'Release',
       'Phase',
@@ -208,16 +259,33 @@ describe('ScopeMap filter rail', () => {
       'MVP feature',
       'Scope option',
       'Conflict state',
-      'Source',
     ]) {
       expect(screen.getByRole('group', { name: new RegExp(group, 'i') })).toBeInTheDocument()
     }
+  })
+
+  it('no longer offers a Source filter', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
+
+    expect(screen.queryByRole('group', { name: /^source$/i })).not.toBeInTheDocument()
+  })
+
+  it('ignores a source filter left in an old URL', async () => {
+    renderPage('/?source=manual')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    // Both features still show; the retired param narrows nothing.
+    expect(screen.getByLabelText('F-001 Invite employer')).toBeInTheDocument()
+    expect(screen.getByLabelText('F-002 Verify employer')).toBeInTheDocument()
   })
 
   it('writes the selected filter into the URL (R-10.2)', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
 
     const release = screen.getByRole('group', { name: /release/i })
     await user.click(within(release).getByRole('checkbox', { name: /Release 1\.4/ }))
@@ -226,28 +294,35 @@ describe('ScopeMap filter rail', () => {
   })
 
   it('reproduces a view from the URL alone', async () => {
+    const user = userEvent.setup()
     renderPage('/?actor=staff')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    // Only F-001 cites a staff capability.
+    // Only F-001 cites a staff capability — filtering applies even though
+    // the rail is closed.
     expect(screen.getByLabelText('F-001 Invite employer')).toBeInTheDocument()
     expect(screen.queryByLabelText('F-002 Verify employer')).not.toBeInTheDocument()
+
+    await openFilters(user)
     const actor = screen.getByRole('group', { name: /actor/i })
     expect(within(actor).getByRole('checkbox', { name: /Staff/ })).toBeChecked()
   })
 
   it('reports how many features survive the filters', async () => {
+    const user = userEvent.setup()
     renderPage('/?actor=staff')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     // The count is interpolated, so it spans several text nodes.
-    const rail = screen.getByRole('complementary', { name: 'Filters' })
+    const rail = await openFilters(user)
     expect(rail).toHaveTextContent('1 of 2 features')
   })
 
   it('shows a live count on each control (R-8.9)', async () => {
+    const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
 
     const release = screen.getByRole('group', { name: /release/i })
     // Release 1.1 holds both features; 1.4 holds none.
@@ -259,6 +334,7 @@ describe('ScopeMap filter rail', () => {
     const user = userEvent.setup()
     renderPage('/?actor=staff&release=1.1')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
 
     await user.click(screen.getByRole('button', { name: /clear all/i }))
 
@@ -268,8 +344,10 @@ describe('ScopeMap filter rail', () => {
   })
 
   it('disables clear-all when nothing is filtered', async () => {
+    const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await openFilters(user)
     expect(screen.getByRole('button', { name: /clear all/i })).toBeDisabled()
   })
 })
@@ -304,6 +382,15 @@ describe('ScopeMap zero-result state (R-8.10)', () => {
     renderPage('/?actor=jobseeker')
     await waitFor(() => expect(screen.getByText(/no features match/i)).toBeInTheDocument())
     expect(screen.getByRole('button', { name: /clear all filters/i })).toBeInTheDocument()
+  })
+
+  it('offers to reveal the rail when it is hidden, so the cause is reachable', async () => {
+    const user = userEvent.setup()
+    renderPage('/?actor=jobseeker')
+    await waitFor(() => expect(screen.getByText(/no features match/i)).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: /show filters/i }))
+    expect(screen.getByRole('complementary', { name: 'Filters' })).toBeInTheDocument()
   })
 })
 

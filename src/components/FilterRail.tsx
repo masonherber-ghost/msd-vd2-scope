@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { FeatureCardModel, ScopeMapModel } from '@/lib/scope-derive'
 import {
+  EMPTY_FILTERS,
   GROUP_LABEL,
   countForValue,
   isEmpty,
@@ -13,6 +14,8 @@ import {
 type Option = { value: string | number; label: string; hint?: string }
 
 export type FilterRailProps = {
+  id?: string
+  onClose?: () => void
   model: ScopeMapModel
   state: FilterState
   onChange: (next: FilterState) => void
@@ -42,14 +45,14 @@ const CONFLICT_OPTIONS: Option[] = [
   { value: 'none', label: 'No conflict' },
 ]
 
-const SOURCE_OPTIONS: Option[] = [
-  { value: 'mapping', label: 'Mapping file' },
-  { value: 'sequencing', label: 'Sequencing table' },
-  { value: 'both', label: 'Both' },
-  { value: 'manual', label: 'Manual' },
-]
-
-export function FilterRail({ model, state, onChange, visible }: FilterRailProps) {
+export function FilterRail({
+  id,
+  onClose,
+  model,
+  state,
+  onChange,
+  visible,
+}: FilterRailProps) {
   const [mvpQuery, setMvpQuery] = useState('')
 
   const releaseOptions = useMemo<Option[]>(
@@ -97,27 +100,24 @@ export function FilterRail({ model, state, onChange, visible }: FilterRailProps)
     onChange({ ...state, [group]: values })
 
   return (
-    <aside className="filter-rail" aria-label="Filters">
+    <aside className="filter-rail" aria-label="Filters" id={id}>
       <div className="filter-rail__header">
         <h2 className="filter-rail__title">Filters</h2>
-        <span className="filter-rail__summary" role="status">
-          {visible.length} of {model.features.length} features
-        </span>
+        {onClose ? (
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Hide
+          </Button>
+        ) : null}
       </div>
+      <span className="filter-rail__summary" role="status">
+        {visible.length} of {model.features.length} features
+      </span>
 
       <Button
         variant="outline"
         size="sm"
         onClick={() =>
-          onChange({
-            release: [],
-            phase: [],
-            actor: [],
-            mvp: [],
-            option: [],
-            conflict: [],
-            source: [],
-          })
+          onChange(EMPTY_FILTERS)
         }
         disabled={isEmpty(state)}
       >
@@ -179,15 +179,6 @@ export function FilterRail({ model, state, onChange, visible }: FilterRailProps)
             toggleValue(state.conflict, String(value) as FilterState['conflict'][number]),
           )
         }
-      />
-
-      <Group
-        group="source"
-        options={SOURCE_OPTIONS}
-        selected={state.source}
-        model={model}
-        state={state}
-        onToggle={(value) => set('source', toggleValue(state.source, String(value)))}
       />
 
       <Group

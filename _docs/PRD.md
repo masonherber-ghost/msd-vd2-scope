@@ -328,11 +328,23 @@ information: nothing in that phase lands in that release.
 
 ### 8.2 Filter rail
 
-Persistent, always visible, never a modal. Filters compose — AND across categories, OR
-within a category — and reshape the map in place.
+Opens as a column beside the map, never as a modal, and reshapes the map in place. Filters
+compose — AND across categories, OR within a category.
+
+> **Amended after Phase 4.** This originally read "persistent, always visible". The rail is
+> now **hidden by default** behind a filters button, on the grounds that the map is the point
+> and the rail is a tool. Two things keep the earlier requirement's intent: the button carries
+> a count of the active filter groups, so a filtered view never looks unfiltered; and the
+> zero-result state offers to reveal the rail, so the cause of an empty map is always
+> reachable. It remains a column, never a modal.
 
 - **R-8.8** Release (6), Phase (7), Actor (4), MVP feature (48 refs, searchable), Scope
-  option (1A / 1B / unspecified), Conflict state, Source (mapping / table / both / manual).
+  option (1A / 1B / unspecified), Conflict state.
+
+  > **Amended after Phase 4.** The Source filter (mapping / table / both / manual) is
+  > retired. Provenance is still stored on every row per R-9.9 and shown on the detail
+  > panel; it was not a useful way to narrow the map. An old link carrying `?source=…` is
+  > ignored rather than erroring.
 - **R-8.9** Every control shows a live result count. A single visible "clear all" resets.
   Active filters reflect in the URL.
 - **R-8.10** A zero-result combination names the filter that caused it and offers to drop

@@ -183,7 +183,6 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
       mvp: [938, 948],
       option: ['1A', 'none'],
       conflict: ['release'],
-      source: ['manual'],
     })
     expect(parseFilters(writeFilters(state))).toEqual(state)
   })
@@ -207,12 +206,11 @@ describe('URL round trip — the URL is the source of truth (R-10.2)', () => {
 
   it('drops values that are not valid for their group', () => {
     const state = parseFilters(
-      new URLSearchParams('actor=wizard,staff&option=1C&conflict=nope&source=invented&mvp=abc'),
+      new URLSearchParams('actor=wizard,staff&option=1C&conflict=nope&mvp=abc'),
     )
     expect(state.actor).toEqual(['staff'])
     expect(state.option).toEqual([])
     expect(state.conflict).toEqual([])
-    expect(state.source).toEqual([])
     expect(state.mvp).toEqual([])
   })
 
