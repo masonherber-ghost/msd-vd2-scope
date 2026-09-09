@@ -1,3 +1,4 @@
+import { ConflictBadge } from '@/components/ConflictBadge'
 import type { FeatureCardModel } from '@/lib/scope-derive'
 import { densityBand } from '@/lib/scope-edges'
 
@@ -18,6 +19,8 @@ export type FeatureCardProps = {
   density?: number
   /** Reveals this card's edges without requiring a click (R-10.3). */
   onActivate?: (featureId: string | null) => void
+  /** True when at least one of this feature's conflicts is still unreviewed. */
+  hasUnreviewedConflict?: boolean
 }
 
 export function FeatureCard({
@@ -27,6 +30,7 @@ export function FeatureCard({
   onSelect,
   density = 0,
   onActivate,
+  hasUnreviewedConflict = true,
 }: FeatureCardProps) {
   const conflicts = feature.conflicts.release + feature.conflicts.phase
 
@@ -121,10 +125,10 @@ export function FeatureCard({
       {conflicts > 0 || feature.conflicts.unmatched > 0 || feature.overridden ? (
         <div className="feature-card__badges">
           {conflicts > 0 ? (
-            <span className="feature-card__badge feature-card__badge--conflict">
-              <span aria-hidden="true">!</span>
-              {conflicts} conflict{conflicts === 1 ? '' : 's'}
-            </span>
+            <ConflictBadge
+              count={conflicts}
+              state={hasUnreviewedConflict ? 'unreviewed' : 'both_correct'}
+            />
           ) : null}
           {feature.conflicts.unmatched > 0 ? (
             <span className="feature-card__badge feature-card__badge--unmatched">

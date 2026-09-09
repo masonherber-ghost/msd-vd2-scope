@@ -98,3 +98,14 @@ export const useUpdateCapability = () =>
 
 export const useDeleteCapability = () =>
   useGraphMutation((id: number) => apiClient.capabilities.remove(id))
+
+// ---- Conflict resolution --------------------------------------------------
+
+export const useResolveConflict = () =>
+  useGraphMutation(
+    (vars: { id: number; state: string; note: string | null }) =>
+      apiClient.conflicts.resolve(vars.id, {
+        resolution_state: vars.state,
+        resolution_note: vars.note,
+      }),
+  )

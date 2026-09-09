@@ -23,6 +23,7 @@ import {
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
+import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import {
   EMPTY_FILTERS,
@@ -125,6 +126,13 @@ export default function ScopeMap() {
   // Edges follow the filtered view, so a hidden feature never anchors one.
   const edges = useMemo(() => buildEdges(visible), [visible])
   const density = useMemo(() => connectionDensity(edges), [edges])
+
+  // A conflict is visible on the map without opening the reconciliation
+  // view, and stops being flagged once someone has decided (R-7.4).
+  const unreviewedIds = useMemo(
+    () => (scope.data ? unreviewedFeatureIds(buildConflictModel(scope.data)) : new Set<string>()),
+    [scope.data],
+  )
 
   // Counts the active groups, not the selected values — the badge answers
   // "how many filters are narrowing this", which is what the rail hides.
@@ -439,6 +447,7 @@ export default function ScopeMap() {
                 }}
                 edges={edges}
                 density={density}
+                unreviewedIds={unreviewedIds}
                 selectedId={selectedId}
                 onSelect={(id) => {
                   if (!confirmDiscard()) return

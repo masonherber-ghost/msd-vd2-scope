@@ -20,6 +20,8 @@ export type ScopeMapGridProps = {
   /** All edges for the visible features; drawn only for the active one. */
   edges?: ScopeEdge[]
   density?: Map<string, number>
+  /** Features with at least one unreviewed conflict, badged on the map (R-7.4). */
+  unreviewedIds?: Set<string>
 }
 
 export function ScopeMapGrid({
@@ -33,6 +35,7 @@ export function ScopeMapGrid({
   onAddToCell,
   edges = [],
   density,
+  unreviewedIds,
 }: ScopeMapGridProps) {
   const compact = zoom < compactBelow
   // Edges are off until a card is selected, hovered or focused — 60 drawn at
@@ -101,6 +104,7 @@ export function ScopeMapGrid({
               onAddToCell={onAddToCell}
               density={density}
               onActivate={setActiveId}
+              unreviewedIds={unreviewedIds}
             />
           ))}
 
@@ -124,6 +128,7 @@ function ScopeMapRow({
   onAddToCell,
   density,
   onActivate,
+  unreviewedIds,
 }: {
   model: ScopeMapModel
   phase: ScopeMapModel['phases'][number]
@@ -133,6 +138,7 @@ function ScopeMapRow({
   onAddToCell?: (releaseId: string, phaseId: string) => void
   density?: Map<string, number>
   onActivate: (featureId: string | null) => void
+  unreviewedIds?: Set<string>
 }) {
   return (
     <>
@@ -190,6 +196,7 @@ function ScopeMapRow({
                     onSelect={onSelect}
                     density={density?.get(feature.id) ?? 0}
                     onActivate={onActivate}
+                    hasUnreviewedConflict={unreviewedIds?.has(feature.id) ?? true}
                   />
                 ))}
                 {capabilityCount > 0 ? (

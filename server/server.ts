@@ -25,6 +25,7 @@ const {
   phasesRouter,
   releasesRouter,
 } = await import('./routes/entities.js')
+const { conflictsRouter } = await import('./routes/conflicts.js')
 const { errorHandler, notFoundHandler } = await import('./middleware/error-handler.js')
 const { isScopeEmpty } = await import('./repositories/scope-repository.js')
 const { importScopeFromSources } = await import('./services/importer.js')
@@ -102,6 +103,7 @@ app.use('/api/phases', phasesRouter)
 app.use('/api/assumptions', assumptionsRouter)
 app.use('/api/mvp-features', mvpFeaturesRouter)
 app.use('/api/capabilities', capabilitiesRouter)
+app.use('/api/conflicts', conflictsRouter)
 
 app.use('/api', notFoundHandler)
 

@@ -352,4 +352,15 @@ export const apiClient = {
     remove: (id: number) =>
       request<{ deleted: number }>(`/api/capabilities/${id}`, { method: 'DELETE' }),
   },
+
+  conflicts: {
+    resolve: (
+      id: number,
+      body: { resolution_state: string; resolution_note: string | null },
+    ) =>
+      request<FeatureCapabilityLinkRow>(`/api/conflicts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+  },
 }

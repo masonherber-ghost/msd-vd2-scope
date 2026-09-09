@@ -19,6 +19,9 @@ export function Header() {
             <NavLink to="/" end className={linkClass}>
               Scope map
             </NavLink>
+            <NavLink to="/reconciliation" className={linkClass}>
+              Reconciliation
+            </NavLink>
             <NavLink to="/manage" className={linkClass}>
               Manage
             </NavLink>

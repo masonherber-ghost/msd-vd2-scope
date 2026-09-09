@@ -212,3 +212,34 @@ export const updateCapabilitySchema = z
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
+
+// ---------------------------------------------------------------------------
+// Conflict resolution (R-7.2)
+// ---------------------------------------------------------------------------
+
+export const RESOLUTION_STATES = [
+  'unreviewed',
+  'mapping_wins',
+  'table_wins',
+  'both_correct',
+  'defect_raised',
+] as const
+
+export type ResolutionState = (typeof RESOLUTION_STATES)[number]
+
+export const RESOLUTION_LABEL: Record<ResolutionState, string> = {
+  unreviewed: 'Unreviewed',
+  mapping_wins: 'Mapping file is right',
+  table_wins: 'Sequencing table is right',
+  both_correct: 'Both are correct',
+  defect_raised: 'Defect raised',
+}
+
+export const resolveConflictSchema = z.object({
+  resolution_state: z.enum(RESOLUTION_STATES, {
+    message: `A resolution state must be one of ${RESOLUTION_STATES.join(', ')}.`,
+  }),
+  resolution_note: z.string().trim().max(1000).nullable().default(null),
+})
+
+export type ResolveConflictInput = z.infer<typeof resolveConflictSchema>

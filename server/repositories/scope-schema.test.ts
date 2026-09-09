@@ -42,6 +42,8 @@ const {
   getMvpFeatureIdsFor,
   setCapabilityLinks,
   setMvpFeatureLinks,
+  getFeatureCapabilityLink,
+  resolveConflict,
 } = await import('./feature-link-repository.js')
 
 function reset() {
@@ -663,5 +665,104 @@ describe('editing a feature\'s links', () => {
 
     expect(getMvpFeatureIdsFor('F-001')).toEqual([])
     expect(getMvpFeatureIdsFor('F-002')).toEqual([a])
+  })
+})
+
+describe('conflict resolution (R-7.2)', () => {
+  const seedLink = () => {
+    upsertImportedMvpFeature({ ref: 951, scope_option: '1A', title: 'A', source: 'mapping' })
+    upsertImportedCapability({
+      mvp_feature_id: findMvpFeature(951, '1A')!.id,
+      mvp_ref: 951,
+      mvp_owner_ambiguous: 0,
+      text: 'Electronic T&Cs acceptance',
+      actor: 'employer',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+      source_phase_label: 'Manage Vacancies',
+      source: 'sequencing',
+    })
+    const capability = findCapability(951, 'Electronic T&Cs acceptance')!
+    upsertImportedFeatureCapabilityLink({
+      pwc_feature_id: 'F-001',
+      capability_id: capability.id,
+      source_citations: 1,
+      matched: 1,
+      release_conflict: 1,
+      phase_conflict: 0,
+      feature_release_id: '1.1',
+      capability_release_id: '1.4',
+      feature_phase_label: null,
+      capability_phase_label: null,
+      phase_conflict_merged: 0,
+    })
+    return getAllFeatureCapabilityLinks()[0]
+  }
+
+  it('starts unreviewed with no timestamp', () => {
+    const link = seedLink()
+    expect(link.resolution_state).toBe('unreviewed')
+    expect(link.resolved_at).toBeNull()
+  })
+
+  it('records a decision, a note and when it was made', () => {
+    const link = seedLink()
+    const resolved = resolveConflict(link.id, 'defect_raised', 'Raised with the programme')!
+
+    expect(resolved.resolution_state).toBe('defect_raised')
+    expect(resolved.resolution_note).toBe('Raised with the programme')
+    expect(resolved.resolved_at).toBeTruthy()
+  })
+
+  it('leaves both placements untouched — a decision is not an edit (R-7.1)', () => {
+    const link = seedLink()
+    resolveConflict(link.id, 'table_wins', null)
+
+    const after = getFeatureCapabilityLink(link.id)!
+    expect(after.feature_release_id).toBe('1.1')
+    expect(after.capability_release_id).toBe('1.4')
+    expect(after.release_conflict).toBe(1)
+  })
+
+  it('clears the timestamp when a conflict is reopened', () => {
+    const link = seedLink()
+    resolveConflict(link.id, 'mapping_wins', 'note')
+    const reopened = resolveConflict(link.id, 'unreviewed', null)!
+
+    expect(reopened.resolution_state).toBe('unreviewed')
+    expect(reopened.resolved_at).toBeNull()
+  })
+
+  it('rejects a state outside the known set', () => {
+    const link = seedLink()
+    expect(() => resolveConflict(link.id, 'invented', null)).toThrow(
+      /CHECK constraint failed/,
+    )
+  })
+
+  /** R-11.4: a decision must outlive the next import. */
+  it('is not overwritten by a re-import', () => {
+    const link = seedLink()
+    resolveConflict(link.id, 'both_correct', 'Confirmed with delivery')
+
+    upsertImportedFeatureCapabilityLink({
+      pwc_feature_id: 'F-001',
+      capability_id: link.capability_id,
+      source_citations: 1,
+      matched: 1,
+      // The import would otherwise clear the conflict flag.
+      release_conflict: 0,
+      phase_conflict: 0,
+      feature_release_id: null,
+      capability_release_id: null,
+      feature_phase_label: null,
+      capability_phase_label: null,
+      phase_conflict_merged: 0,
+    })
+
+    const after = getFeatureCapabilityLink(link.id)!
+    expect(after.resolution_state).toBe('both_correct')
+    expect(after.resolution_note).toBe('Confirmed with delivery')
+    expect(after.release_conflict).toBe(1)
   })
 })

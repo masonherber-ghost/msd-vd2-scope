@@ -39,6 +39,8 @@ let addCapabilityLink: Statement | undefined
 let removeCapabilityLink: Statement | undefined
 let liveMvpLinksFor: Statement | undefined
 let liveCapabilityLinksFor: Statement | undefined
+let selectLink: Statement | undefined
+let setResolution: Statement | undefined
 
 export function getAllFeatureMvpLinks(): FeatureMvpLinkRow[] {
   selectMvpLinks ??= db.prepare(
@@ -223,4 +225,42 @@ export function setCapabilityLinks(featureId: string, capabilityIds: number[]): 
     }
     for (const id of wanted) linkCapability(featureId, id)
   })()
+}
+
+export function getFeatureCapabilityLink(
+  id: number,
+): FeatureCapabilityLinkRow | undefined {
+  selectLink ??= db.prepare(
+    `SELECT id, pwc_feature_id, capability_id, source_citations, matched,
+            release_conflict, phase_conflict, feature_release_id, capability_release_id,
+            feature_phase_label, capability_phase_label, phase_conflict_merged,
+            resolution_state, resolution_note, resolved_at, source, removed_at
+       FROM pwc_feature_capabilities WHERE id = ?`,
+  )
+  return selectLink.get(id) as FeatureCapabilityLinkRow | undefined
+}
+
+/**
+ * Records a human's decision about a conflict (R-7.2, R-7.3). Neither
+ * placement is changed — the conflict stays visible, it just stops being
+ * unreviewed, and a later import will not overwrite the decision (R-11.4).
+ */
+export function resolveConflict(
+  id: number,
+  state: string,
+  note: string | null,
+): FeatureCapabilityLinkRow | undefined {
+  setResolution ??= db.prepare(`
+    UPDATE pwc_feature_capabilities
+       SET resolution_state = @state,
+           resolution_note  = @note,
+           -- Returning a conflict to unreviewed clears the timestamp too,
+           -- so "resolved_at is set" always means "someone decided".
+           resolved_at      = CASE WHEN @state = 'unreviewed'
+                                   THEN NULL ELSE datetime('now') END,
+           updated_at       = datetime('now')
+     WHERE id = @id
+  `)
+  setResolution.run({ id, state, note })
+  return getFeatureCapabilityLink(id)
 }

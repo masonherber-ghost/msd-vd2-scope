@@ -20,6 +20,8 @@
 @import "./components/AssumptionList.css";
 @import "./components/ManageTable.css";
 @import "./components/ScopeEdgeOverlay.css";
+@import "./components/ConflictBadge.css";
+@import "./components/ConflictQueue.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values
