@@ -23,6 +23,7 @@ import {
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
+import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import {
   EMPTY_FILTERS,
   GROUP_LABEL,
@@ -120,6 +121,10 @@ export default function ScopeMap() {
     () => (model ? blameGroups(model.features, filters) : []),
     [model, filters],
   )
+
+  // Edges follow the filtered view, so a hidden feature never anchors one.
+  const edges = useMemo(() => buildEdges(visible), [visible])
+  const density = useMemo(() => connectionDensity(edges), [edges])
 
   // Counts the active groups, not the selected values — the badge answers
   // "how many filters are narrowing this", which is what the rail hides.
@@ -429,7 +434,11 @@ export default function ScopeMap() {
                 model={{ ...model, ...projected }}
                 zoom={zoom}
                 scrollRef={scrollRef}
-                contentRef={contentRef}
+                contentRef={(node) => {
+                  contentRef.current = node
+                }}
+                edges={edges}
+                density={density}
                 selectedId={selectedId}
                 onSelect={(id) => {
                   if (!confirmDiscard()) return

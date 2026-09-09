@@ -1,0 +1,67 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+/* Sits above the cards but must never intercept a click on one. */
+.scope-edges {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+/* ========================================
+   EDGE
+   ======================================== */
+
+.scope-edges__line {
+  fill: none;
+  stroke: var(--color-edge);
+  stroke-width: 1.5;
+}
+
+/* Cross-release couplings are the ones that matter most to a delivery plan,
+   so they differ by dash pattern as well as colour — never hue alone
+   (R-8.4, R-10.6). */
+.scope-edges__line--cross-release {
+  stroke: var(--color-edge-cross-release);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.scope-edges__halo {
+  fill: none;
+  stroke: var(--color-background);
+  stroke-width: 5;
+  opacity: 0.9;
+}
+
+/* ========================================
+   LABEL
+   ======================================== */
+
+.scope-edges__label-box {
+  fill: var(--color-card);
+  stroke: var(--color-border);
+  rx: 3;
+}
+
+.scope-edges__label-text {
+  fill: var(--color-foreground);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+/* ========================================
+   ENDPOINTS
+   ======================================== */
+
+.scope-edges__endpoint {
+  fill: var(--color-edge);
+}
+
+.scope-edges__endpoint--cross-release {
+  fill: var(--color-edge-cross-release);
+}

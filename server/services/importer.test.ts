@@ -185,6 +185,76 @@ describe('importScope writes the whole graph', () => {
   })
 })
 
+/**
+ * The summary is derived from the reconciler, so asserting it cannot catch an
+ * import that writes fewer rows than it reconciled. These compare what is
+ * actually in the database against the reconciled input.
+ */
+describe('importScope writes exactly what it reconciled', () => {
+  const rows = (table: string) =>
+    (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n
+
+  it('writes a row per reconciled entity', () => {
+    importScope(reconciled)
+
+    expect(rows('releases')).toBe(reconciled.releases.length)
+    expect(rows('phases')).toBe(reconciled.phases.length)
+    expect(rows('pwc_features')).toBe(reconciled.features.length)
+    expect(rows('assumptions')).toBe(reconciled.assumptions.length)
+    expect(rows('mvp_features')).toBe(reconciled.mvpFeatures.length)
+    expect(rows('capabilities')).toBe(reconciled.capabilities.length)
+    expect(rows('pwc_feature_mvp_features')).toBe(reconciled.featureMvpLinks.length)
+  })
+
+  it('writes one edge per distinct pair, and citations that sum to the links', () => {
+    const summary = importScope(reconciled)
+    expect(rows('pwc_feature_capabilities')).toBe(summary.featureCapabilityEdges)
+
+    const citations = db
+      .prepare('SELECT IFNULL(SUM(source_citations), 0) AS n FROM pwc_feature_capabilities')
+      .get() as { n: number }
+    expect(citations.n).toBe(reconciled.featureCapabilityLinks.length)
+  })
+
+  it('writes every feature\'s assumptions, not just most of them', () => {
+    importScope(reconciled)
+    const perFeature = new Map(
+      (
+        db
+          .prepare('SELECT pwc_feature_id AS id, COUNT(*) AS n FROM assumptions GROUP BY 1')
+          .all() as { id: string; n: number }[]
+      ).map((row) => [row.id, row.n]),
+    )
+
+    const mismatched = reconciled.features
+      .map((feature) => ({
+        id: feature.id,
+        expected: feature.assumptions.length,
+        actual: perFeature.get(feature.id) ?? 0,
+      }))
+      .filter((row) => row.expected !== row.actual)
+
+    expect(mismatched).toEqual([])
+  })
+
+  it('writes every reconciled MVP record, keyed on ref and option', () => {
+    importScope(reconciled)
+    const written = new Set(
+      (
+        db
+          .prepare("SELECT ref, IFNULL(scope_option, '') AS o FROM mvp_features").all() as {
+          ref: number
+          o: string
+        }[]
+      ).map((row) => `${row.ref}|${row.o}`),
+    )
+    const expected = reconciled.mvpFeatures.map((m) => `${m.ref}|${m.scopeOption ?? ''}`)
+
+    expect(expected.filter((key) => !written.has(key))).toEqual([])
+    expect(written.size).toBe(expected.length)
+  })
+})
+
 describe('importScope is idempotent (R-11.4)', () => {
   it('produces identical counts when run three times', () => {
     const first = importScope(reconciled)

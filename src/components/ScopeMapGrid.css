@@ -19,6 +19,9 @@
 }
 
 .scope-map-grid__table {
+  /* The edge overlay is absolutely positioned against this, and cards report
+     offsetLeft/offsetTop relative to it. */
+  position: relative;
   display: grid;
   /* One sticky row-header column, then one column per release. */
   grid-template-columns: 14rem repeat(var(--scope-release-count, 6), var(--scope-card-min-width));

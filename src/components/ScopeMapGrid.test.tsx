@@ -1,12 +1,41 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { buildScopeMap } from '@/lib/scope-derive'
+import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { makeScopeGraph } from '@/test/scope-fixture'
 
 const model = buildScopeMap(makeScopeGraph())
 
 const renderGrid = (zoom = 1) => render(<ScopeMapGrid model={model} zoom={zoom} />)
+
+/** Two features sharing ref 938, so there is exactly one edge to draw. */
+const sharedModel = buildScopeMap(
+  makeScopeGraph({
+    featureMvpLinks: [
+      { pwc_feature_id: 'F-001', mvp_feature_id: 1, source: 'mapping' },
+      { pwc_feature_id: 'F-002', mvp_feature_id: 2, source: 'mapping' },
+    ],
+  }),
+)
+const sharedEdges = buildEdges(sharedModel.features)
+const sharedDensity = connectionDensity(sharedEdges)
+
+const renderConnected = (props: Partial<Parameters<typeof ScopeMapGrid>[0]> = {}) =>
+  render(
+    <ScopeMapGrid
+      model={sharedModel}
+      zoom={1}
+      edges={sharedEdges}
+      density={sharedDensity}
+      {...props}
+    />,
+  )
+
+/** The overlay is aria-hidden, so it is queried by test id in the DOM. */
+const edgeLines = (container: HTMLElement) =>
+  container.querySelectorAll('.scope-edges__line')
 
 describe('ScopeMapGrid — axes', () => {
   it('renders one column header per release, including ones with no features', () => {
@@ -111,5 +140,119 @@ describe('ScopeMapGrid — feature cards', () => {
     expect(screen.getByLabelText('F-001 Invite employer')).not.toHaveClass(
       'feature-card--compact',
     )
+  })
+})
+
+describe('ScopeMapGrid — connection edges (R-8.2)', () => {
+  it('draws no edges by default', () => {
+    const { container } = renderConnected()
+    expect(edgeLines(container)).toHaveLength(0)
+  })
+
+  it('draws no edges even when the model has them, until one is focused', () => {
+    expect(sharedEdges).toHaveLength(1)
+    const { container } = renderConnected()
+    expect(container.querySelector('.scope-edges')).toBeNull()
+  })
+
+  it('draws the selected feature\'s edges', () => {
+    const { container } = renderConnected({ selectedId: 'F-001' })
+    expect(edgeLines(container)).toHaveLength(1)
+  })
+
+  it('reveals edges on hover as a shortcut', async () => {
+    const user = userEvent.setup()
+    const { container } = renderConnected()
+
+    await user.hover(screen.getByLabelText('F-001 Invite employer'))
+    expect(edgeLines(container)).toHaveLength(1)
+
+    await user.unhover(screen.getByLabelText('F-001 Invite employer'))
+    expect(edgeLines(container)).toHaveLength(0)
+  })
+
+  it('reveals edges on keyboard focus, not hover alone (R-10.3)', () => {
+    const { container } = renderConnected({ onSelect: () => {} })
+
+    const card = screen.getByRole('button', { name: 'F-001 Invite employer' })
+    // React's onFocus is delegated from focusin, which bubbles from the
+    // button up to the card; act() flushes the resulting render.
+    act(() => card.focus())
+    expect(edgeLines(container)).toHaveLength(1)
+
+    act(() => card.blur())
+    expect(edgeLines(container)).toHaveLength(0)
+  })
+
+  it('labels an edge with the shared ref', () => {
+    const { container } = renderConnected({ selectedId: 'F-001' })
+    expect(container.querySelector('.scope-edges__label-text')?.textContent).toBe('938')
+  })
+
+  it('marks a cross-release edge distinctly, by dash pattern not hue alone', () => {
+    const crossing = buildScopeMap(
+      makeScopeGraph({
+        pwcFeatures: [
+          {
+            id: 'F-001',
+            name: 'A',
+            foundational_build: '',
+            release_id: '1.1',
+            phase_id: 'access-and-onboarding',
+            source_phase_label: null,
+            capability_note: null,
+            display_order: 1,
+            source: 'mapping',
+          },
+          {
+            id: 'F-002',
+            name: 'B',
+            foundational_build: '',
+            release_id: '1.4',
+            phase_id: 'access-and-onboarding',
+            source_phase_label: null,
+            capability_note: null,
+            display_order: 2,
+            source: 'mapping',
+          },
+        ],
+        featureMvpLinks: [
+          { pwc_feature_id: 'F-001', mvp_feature_id: 1, source: 'mapping' },
+          { pwc_feature_id: 'F-002', mvp_feature_id: 2, source: 'mapping' },
+        ],
+      }),
+    )
+    const edges = buildEdges(crossing.features)
+    const { container } = render(
+      <ScopeMapGrid model={crossing} zoom={1} edges={edges} selectedId="F-001" />,
+    )
+
+    const line = container.querySelector('.scope-edges__line')
+    expect(line).toHaveClass('scope-edges__line--cross-release')
+  })
+
+  it('keeps the overlay out of the accessibility tree and out of the way', () => {
+    const { container } = renderConnected({ selectedId: 'F-001' })
+    const svg = container.querySelector('.scope-edges')
+    expect(svg).toHaveAttribute('aria-hidden', 'true')
+    expect(svg).toHaveAttribute('focusable', 'false')
+  })
+})
+
+describe('ScopeMapGrid — connection density (R-8.3)', () => {
+  it('shows a link count on a connected card', () => {
+    renderConnected()
+    expect(screen.getByLabelText('F-001 Invite employer')).toHaveTextContent('1 link')
+  })
+
+  it('shows nothing on an unconnected card', () => {
+    renderGrid()
+    expect(screen.getByLabelText('F-001 Invite employer')).not.toHaveTextContent('link')
+  })
+
+  it('states the count in words, not by colour alone (R-10.6)', () => {
+    renderConnected()
+    const card = screen.getByLabelText('F-002 Verify employer')
+    expect(card).toHaveTextContent('1 link')
   })
 })

@@ -1,4 +1,5 @@
 import type { FeatureCardModel } from '@/lib/scope-derive'
+import { densityBand } from '@/lib/scope-edges'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -13,6 +14,10 @@ export type FeatureCardProps = {
   compact?: boolean
   selected?: boolean
   onSelect?: (featureId: string) => void
+  /** How many other features share an MVP feature with this one (R-8.3). */
+  density?: number
+  /** Reveals this card's edges without requiring a click (R-10.3). */
+  onActivate?: (featureId: string | null) => void
 }
 
 export function FeatureCard({
@@ -20,6 +25,8 @@ export function FeatureCard({
   compact = false,
   selected = false,
   onSelect,
+  density = 0,
+  onActivate,
 }: FeatureCardProps) {
   const conflicts = feature.conflicts.release + feature.conflicts.phase
 
@@ -35,6 +42,11 @@ export function FeatureCard({
       // Labelled here only when there is no select button, so the card and
       // its button never carry the same name twice.
       aria-label={onSelect ? undefined : `${feature.id} ${feature.name}`}
+      data-feature-id={feature.id}
+      onMouseEnter={onActivate ? () => onActivate(feature.id) : undefined}
+      onMouseLeave={onActivate ? () => onActivate(null) : undefined}
+      onFocus={onActivate ? () => onActivate(feature.id) : undefined}
+      onBlur={onActivate ? () => onActivate(null) : undefined}
     >
       <div className="feature-card__header">
         {onSelect ? (
@@ -54,11 +66,27 @@ export function FeatureCard({
         ) : (
           <span className="feature-card__id">{feature.id}</span>
         )}
-        {feature.capabilityCount > 0 ? (
-          <span className="feature-card__id">
-            {feature.capabilityCount} cap{feature.capabilityCount === 1 ? '' : 's'}
-          </span>
-        ) : null}
+        <span className="feature-card__meta">
+          {density > 0 ? (
+            // Shown passively so load-bearing features read as important
+            // before any interaction (R-8.3). The count carries the meaning;
+            // the bars are only a scanning aid.
+            <span
+              className={`feature-card__density feature-card__density--${densityBand(density)}`}
+              title={`Shares an MVP feature with ${density} other feature${
+                density === 1 ? '' : 's'
+              }`}
+            >
+              <span className="feature-card__density-bar" aria-hidden="true" />
+              {density} link{density === 1 ? '' : 's'}
+            </span>
+          ) : null}
+          {feature.capabilityCount > 0 ? (
+            <span className="feature-card__id">
+              {feature.capabilityCount} cap{feature.capabilityCount === 1 ? '' : 's'}
+            </span>
+          ) : null}
+        </span>
       </div>
 
       <h3 className="feature-card__name">{feature.name}</h3>

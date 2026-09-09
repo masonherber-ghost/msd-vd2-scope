@@ -19,6 +19,7 @@
 @import "./components/LinkPicker.css";
 @import "./components/AssumptionList.css";
 @import "./components/ManageTable.css";
+@import "./components/ScopeEdgeOverlay.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values
@@ -113,6 +114,12 @@
   --color-actor-jobseeker: oklch(0.85 0 0);
   --color-actor-system: oklch(0.80 0 0);
 
+  /* ---- Scope map: connection edges ----
+     Cross-release edges also differ by dash pattern, so hue is never the only
+     signal (R-8.4, R-10.6). */
+  --color-edge: oklch(0.55 0 0);
+  --color-edge-cross-release: oklch(0.577 0.245 27.325);
+
   /* ---- Scope map: structure ---- */
   --color-cell-empty: oklch(0.975 0 0);
   --color-cell-empty-border: oklch(0.93 0 0);
@@ -170,6 +177,9 @@
   --color-actor-staff: oklch(0.35 0 0);
   --color-actor-jobseeker: oklch(0.40 0 0);
   --color-actor-system: oklch(0.45 0 0);
+
+  --color-edge: oklch(0.72 0 0);
+  --color-edge-cross-release: oklch(0.704 0.191 22.216);
 
   --color-cell-empty: oklch(0.19 0 0);
   --color-cell-empty-border: oklch(0.26 0 0);

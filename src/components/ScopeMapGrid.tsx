@@ -1,6 +1,8 @@
-import type { CSSProperties } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
 import { FeatureCard } from '@/components/FeatureCard'
+import { ScopeEdgeOverlay } from '@/components/ScopeEdgeOverlay'
 import { cellKey, releaseTokenSuffix, type ScopeMapModel } from '@/lib/scope-derive'
+import { edgesFor, type ScopeEdge } from '@/lib/scope-edges'
 
 export type ScopeMapGridProps = {
   model: ScopeMapModel
@@ -8,11 +10,16 @@ export type ScopeMapGridProps = {
   /** Below this zoom, cards drop to ID-only so the map stays legible (R-8.7). */
   compactBelow?: number
   scrollRef?: React.Ref<HTMLDivElement>
-  contentRef?: React.Ref<HTMLDivElement>
+  /** A callback rather than a ref object: the grid also needs this node for
+   *  the edge overlay, and merging two refs would mean writing to a prop. */
+  contentRef?: (node: HTMLDivElement | null) => void
   selectedId?: string | null
   onSelect?: (featureId: string) => void
   /** Starts a create pre-filled with this cell's release and phase (R-9.7). */
   onAddToCell?: (releaseId: string, phaseId: string) => void
+  /** All edges for the visible features; drawn only for the active one. */
+  edges?: ScopeEdge[]
+  density?: Map<string, number>
 }
 
 export function ScopeMapGrid({
@@ -24,8 +31,20 @@ export function ScopeMapGrid({
   selectedId = null,
   onSelect,
   onAddToCell,
+  edges = [],
+  density,
 }: ScopeMapGridProps) {
   const compact = zoom < compactBelow
+  // Edges are off until a card is selected, hovered or focused — 60 drawn at
+  // once is noise, not insight (R-8.2). Hover is a shortcut; selection and
+  // keyboard focus reach the same thing (R-10.3).
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [table, setTable] = useState<HTMLDivElement | null>(null)
+
+  const shownEdges = useMemo(() => {
+    const focus = activeId ?? selectedId
+    return focus ? edgesFor(edges, focus) : []
+  }, [edges, activeId, selectedId])
 
   const style = {
     '--scope-zoom': zoom,
@@ -35,7 +54,14 @@ export function ScopeMapGrid({
   return (
     <div className="scope-map-grid" ref={scrollRef}>
       <div className="scope-map-grid__scaler" style={style}>
-        <div className="scope-map-grid__table" ref={contentRef} role="table">
+        <div
+          className="scope-map-grid__table"
+          ref={(node) => {
+            setTable(node)
+            contentRef?.(node)
+          }}
+          role="table"
+        >
           <div className="scope-map-grid__corner" role="columnheader">
             <span className="scope-map-grid__axis-label">Phase / Release</span>
           </div>
@@ -73,8 +99,16 @@ export function ScopeMapGrid({
               selectedId={selectedId}
               onSelect={onSelect}
               onAddToCell={onAddToCell}
+              density={density}
+              onActivate={setActiveId}
             />
           ))}
+
+          <ScopeEdgeOverlay
+            container={table}
+            edges={shownEdges}
+            layoutKey={`${model.cells.length}:${zoom}:${compact}:${shownEdges.length}`}
+          />
         </div>
       </div>
     </div>
@@ -88,6 +122,8 @@ function ScopeMapRow({
   selectedId,
   onSelect,
   onAddToCell,
+  density,
+  onActivate,
 }: {
   model: ScopeMapModel
   phase: ScopeMapModel['phases'][number]
@@ -95,6 +131,8 @@ function ScopeMapRow({
   selectedId: string | null
   onSelect?: (featureId: string) => void
   onAddToCell?: (releaseId: string, phaseId: string) => void
+  density?: Map<string, number>
+  onActivate: (featureId: string | null) => void
 }) {
   return (
     <>
@@ -150,6 +188,8 @@ function ScopeMapRow({
                     compact={compact}
                     selected={feature.id === selectedId}
                     onSelect={onSelect}
+                    density={density?.get(feature.id) ?? 0}
+                    onActivate={onActivate}
                   />
                 ))}
                 {capabilityCount > 0 ? (

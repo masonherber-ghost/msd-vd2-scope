@@ -71,6 +71,38 @@
 }
 
 /* ========================================
+   DENSITY
+   ======================================== */
+
+.feature-card__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex-shrink: 0;
+}
+
+.feature-card__density {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-muted-foreground);
+  white-space: nowrap;
+}
+
+/* A width, not a hue — the count beside it is the real signal (R-10.6). */
+.feature-card__density-bar {
+  display: inline-block;
+  height: 0.25rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-edge);
+}
+
+.feature-card__density--1 .feature-card__density-bar { width: var(--spacing-2); }
+.feature-card__density--2 .feature-card__density-bar { width: var(--spacing-4); }
+.feature-card__density--3 .feature-card__density-bar { width: var(--spacing-6); }
+
+/* ========================================
    MVP CHIPS
    ======================================== */
 
