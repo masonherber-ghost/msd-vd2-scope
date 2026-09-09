@@ -104,6 +104,19 @@ function renderPage(initialUrl = '/') {
 
 const url = () => screen.getByTestId('url').textContent ?? ''
 
+/** The link lookups stay closed until the shown item is tapped. */
+async function openMvpEditor(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /change MVP features|link an MVP/i }))
+  return screen.getByRole('group', { name: /linked MVP features/i })
+}
+
+async function openCapabilityEditor(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(
+    screen.getByRole('button', { name: /change assigned capabilities|assign capabilities/i }),
+  )
+  return screen.getByRole('group', { name: /assigned capabilities/i })
+}
+
 /** The rail is hidden until asked for, so most filter tests open it first. */
 async function openFilters(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /^filters/i }))
@@ -468,14 +481,16 @@ describe('ScopeMap selection and detail panel', () => {
     await waitFor(() => expect(url()).not.toContain('selected'))
   })
 
-  it('an MVP chip pivots the map without closing the panel (R-8.16)', async () => {
+  it('the pivot control filters the map without closing the panel (R-8.16)', async () => {
     const user = userEvent.setup()
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: /948/ }))
+    await user.click(
+      screen.getByRole('button', { name: 'Filter the map to MVP feature 948' }),
+    )
 
     await waitFor(() => expect(url()).toContain('mvp=948'))
     // Still open, and still on the same feature.
@@ -800,25 +815,55 @@ describe('ScopeMap placement editing', () => {
 })
 
 describe('ScopeMap MVP link editing', () => {
-  it('lists every MVP record with its ref and option', async () => {
+  it('stays closed until the shown MVP item is tapped', async () => {
+    const user = userEvent.setup()
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    expect(
+      screen.queryByRole('group', { name: /linked MVP features/i }),
+    ).not.toBeInTheDocument()
+
+    // The chip for the MVP feature that is already there.
+    await user.click(screen.getByRole('button', { name: /948.*Verification methods/i }))
+    expect(screen.getByRole('group', { name: /linked MVP features/i })).toBeInTheDocument()
+  })
+
+  it('closes again from Done', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await openMvpEditor(user)
+    await user.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(
+      screen.queryByRole('group', { name: /linked MVP features/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('lists every MVP record with its ref and option', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+    const picker = await openMvpEditor(user)
     expect(within(picker).getByText('938')).toBeInTheDocument()
     expect(within(picker).getByText('938 · Option 1A')).toBeInTheDocument()
     expect(within(picker).getByText('948 · Option 1B')).toBeInTheDocument()
   })
 
   it('shows the feature\'s current links as checked', async () => {
+    const user = userEvent.setup()
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
-
-    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    const picker = await openMvpEditor(user)
     // F-002 links to record 3 (ref 948 / 1B).
     expect(within(picker).getByRole('checkbox', { name: /948/ })).toBeChecked()
     expect(within(picker).getByRole('checkbox', { name: /938 · Option 1A/ })).not.toBeChecked()
@@ -831,7 +876,7 @@ describe('ScopeMap MVP link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    const picker = await openMvpEditor(user)
     await user.click(within(picker).getByRole('checkbox', { name: /938 · Option 1A/ }))
 
     await waitFor(() => expect(state.mvpLinkCalls).toHaveLength(1))
@@ -845,7 +890,7 @@ describe('ScopeMap MVP link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    const picker = await openMvpEditor(user)
     await user.click(within(picker).getByRole('checkbox', { name: /948/ }))
 
     await waitFor(() => expect(state.mvpLinkCalls).toHaveLength(1))
@@ -859,7 +904,7 @@ describe('ScopeMap MVP link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    const picker = await openMvpEditor(user)
     await user.type(
       within(picker).getByLabelText(/search MVP features/i),
       'Verification',
@@ -871,25 +916,40 @@ describe('ScopeMap MVP link editing', () => {
 })
 
 describe('ScopeMap capability link editing', () => {
-  it('lists capabilities with their ref, actor and release', async () => {
+  it('stays closed until the shown capability is tapped', async () => {
+    const user = userEvent.setup()
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    expect(
+      screen.queryByRole('group', { name: /assigned capabilities/i }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Electronic T&Cs acceptance' }))
+    expect(screen.getByRole('group', { name: /assigned capabilities/i })).toBeInTheDocument()
+  })
+
+  it('lists capabilities with their ref, actor and release', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+    const picker = await openCapabilityEditor(user)
     expect(within(picker).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
     expect(within(picker).getByText(/948 · employer/)).toBeInTheDocument()
     expect(within(picker).getAllByText('Release 1.4').length).toBeGreaterThan(0)
   })
 
   it('shows the current assignment as checked', async () => {
+    const user = userEvent.setup()
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
-
-    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    const picker = await openCapabilityEditor(user)
     expect(
       within(picker).getByRole('checkbox', { name: /Electronic T&Cs acceptance/ }),
     ).toBeChecked()
@@ -902,7 +962,7 @@ describe('ScopeMap capability link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    const picker = await openCapabilityEditor(user)
     await user.click(
       within(picker).getByRole('checkbox', { name: /Invite employer to register/ }),
     )
@@ -918,7 +978,7 @@ describe('ScopeMap capability link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    const picker = await openCapabilityEditor(user)
     await user.click(
       within(picker).getByRole('checkbox', { name: /Electronic T&Cs acceptance/ }),
     )
@@ -935,7 +995,7 @@ describe('ScopeMap capability link editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    const picker = await openCapabilityEditor(user)
     await user.click(
       within(picker).getByRole('checkbox', { name: /Invite employer to register/ }),
     )

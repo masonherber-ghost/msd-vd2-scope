@@ -48,6 +48,10 @@
   display: flex;
   align-items: flex-start;
   gap: var(--spacing-2);
+  /* Without this the rows shrink below their content inside the scrolling
+     column and the labels overlap: flex children default to shrink: 1, and
+     min-height only stops them at 2rem, which two lines of text exceed. */
+  flex-shrink: 0;
   min-height: var(--spacing-8);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-sm);

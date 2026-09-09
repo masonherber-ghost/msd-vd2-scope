@@ -117,18 +117,20 @@ describe('FeatureDetailPanel — MVP chips pivot the map (R-8.16)', () => {
     const user = userEvent.setup()
     const { onPivotToMvp, onClose } = renderPanel('F-002')
 
-    await user.click(screen.getByRole('button', { name: /948/ }))
+    // Pivot has its own control; tapping the chip itself opens the lookup.
+    await user.click(
+      screen.getByRole('button', { name: 'Filter the map to MVP feature 948' }),
+    )
 
     expect(onPivotToMvp).toHaveBeenCalledWith(948)
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('shows a chip as pressed when the map is pivoted to it', () => {
+  it('shows the pivot control as pressed when the map is pivoted to it', () => {
     renderPanel('F-002', [948])
-    expect(screen.getByRole('button', { name: /948/ })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(
+      screen.getByRole('button', { name: 'Filter the map to MVP feature 948' }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 })
 

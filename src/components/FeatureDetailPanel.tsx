@@ -1,3 +1,4 @@
+import { Filter } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
@@ -66,12 +67,21 @@ export function FeatureDetailPanel({
   // A different feature arriving abandons any pending confirmation. Tracked
   // during render rather than in an effect.
   const [confirmingFor, setConfirmingFor] = useState(detail.id)
+  // The lookups stay closed until the shown item is tapped, so the panel
+  // reads as the feature rather than as two long checklists.
+  const [mvpEditorOpen, setMvpEditorOpen] = useState(false)
+  const [capabilityEditorOpen, setCapabilityEditorOpen] = useState(false)
 
   if (confirmingFor !== detail.id) {
     setConfirmingFor(detail.id)
     setConfirmingDelete(false)
     setDeleteError(null)
+    setMvpEditorOpen(false)
+    setCapabilityEditorOpen(false)
   }
+
+  const canEditMvp = Boolean(onSetMvpLinks && mvpOptions)
+  const canEditCapabilities = Boolean(onSetCapabilityLinks && capabilityOptions)
 
   const dependentTotal =
     detail.assumptions.length + detail.mvpFeatures.length + detail.capabilityCount
@@ -209,35 +219,74 @@ export function FeatureDetailPanel({
         <h3 className="feature-detail__section-title">
           MVP features ({detail.mvpFeatures.length})
         </h3>
-        <ul className="feature-detail__chips">
-          {detail.mvpFeatures.map((mvp) => {
-            const pressed = activeMvpRefs.includes(mvp.ref)
-            return (
-              <li key={`${mvp.ref}-${mvp.scopeOption ?? 'bare'}`}>
-                <button
-                  type="button"
-                  className="feature-detail__chip"
-                  aria-pressed={pressed}
-                  onClick={() => onPivotToMvp(mvp.ref)}
-                  title={mvp.title}
-                >
-                  <span className="feature-detail__chip-ref">{mvp.ref}</span>
-                  {mvp.scopeOption ? <span>Option {mvp.scopeOption}</span> : null}
-                  <span>{mvp.title}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+        {detail.mvpFeatures.length === 0 ? (
+          <p className="feature-detail__note">No MVP feature is mapped to this feature.</p>
+        ) : (
+          <ul className="feature-detail__chips">
+            {detail.mvpFeatures.map((mvp) => {
+              const pressed = activeMvpRefs.includes(mvp.ref)
+              return (
+                <li key={`${mvp.ref}-${mvp.scopeOption ?? 'bare'}`}>
+                  <span className="feature-detail__chip-group">
+                    {/* Tapping the item that is there opens the lookup. */}
+                    <button
+                      type="button"
+                      className="feature-detail__chip"
+                      onClick={
+                        canEditMvp ? () => setMvpEditorOpen((open) => !open) : undefined
+                      }
+                      aria-expanded={canEditMvp ? mvpEditorOpen : undefined}
+                      aria-controls={canEditMvp ? 'mvp-link-editor' : undefined}
+                      title={mvp.title}
+                    >
+                      <span className="feature-detail__chip-ref">{mvp.ref}</span>
+                      {mvp.scopeOption ? <span>Option {mvp.scopeOption}</span> : null}
+                      <span>{mvp.title}</span>
+                    </button>
+                    {/* Pivot keeps its own control rather than sharing the tap
+                        target with editing (R-8.16). */}
+                    <button
+                      type="button"
+                      className="feature-detail__chip-action"
+                      aria-pressed={pressed}
+                      onClick={() => onPivotToMvp(mvp.ref)}
+                      aria-label={`Filter the map to MVP feature ${mvp.ref}`}
+                    >
+                      <Filter aria-hidden="true" size={14} />
+                    </button>
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        )}
 
-        {onSetMvpLinks && mvpOptions ? (
-          <LinkPicker
-            legend="Linked MVP features"
-            options={mvpOptions}
-            selectedIds={linkedMvpIds}
-            onChange={onSetMvpLinks}
-            searchLabel="Search MVP features by ref or title"
-          />
+        {canEditMvp && !mvpEditorOpen ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setMvpEditorOpen(true)}
+            aria-expanded={false}
+            aria-controls="mvp-link-editor"
+          >
+            {detail.mvpFeatures.length === 0 ? 'Link an MVP feature' : 'Change MVP features'}
+          </Button>
+        ) : null}
+
+        {onSetMvpLinks && mvpOptions && mvpEditorOpen ? (
+          <>
+            <LinkPicker
+              id="mvp-link-editor"
+              legend="Linked MVP features"
+              options={mvpOptions}
+              selectedIds={linkedMvpIds}
+              onChange={onSetMvpLinks}
+              searchLabel="Search MVP features by ref or title"
+            />
+            <Button variant="outline" size="sm" onClick={() => setMvpEditorOpen(false)}>
+              Done
+            </Button>
+          </>
         ) : null}
       </div>
 
@@ -260,7 +309,16 @@ export function FeatureDetailPanel({
               <ul className="feature-detail__plain-list">
                 {group.capabilities.map((capability) => (
                   <li key={capability.id}>
-                    <CapabilityRow capability={capability} detail={detail} />
+                    <CapabilityRow
+                      capability={capability}
+                      detail={detail}
+                      onOpenEditor={
+                        canEditCapabilities
+                          ? () => setCapabilityEditorOpen((open) => !open)
+                          : undefined
+                      }
+                      editorOpen={capabilityEditorOpen}
+                    />
                   </li>
                 ))}
               </ul>
@@ -268,14 +326,38 @@ export function FeatureDetailPanel({
           ))
         )}
 
-        {onSetCapabilityLinks && capabilityOptions ? (
-          <LinkPicker
-            legend="Assigned capabilities"
-            options={capabilityOptions}
-            selectedIds={linkedCapabilityIds}
-            onChange={onSetCapabilityLinks}
-            searchLabel="Search capabilities by text or ref"
-          />
+        {canEditCapabilities && !capabilityEditorOpen ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCapabilityEditorOpen(true)}
+            aria-expanded={false}
+            aria-controls="capability-link-editor"
+          >
+            {detail.capabilityCount === 0
+              ? 'Assign capabilities'
+              : 'Change assigned capabilities'}
+          </Button>
+        ) : null}
+
+        {onSetCapabilityLinks && capabilityOptions && capabilityEditorOpen ? (
+          <>
+            <LinkPicker
+              id="capability-link-editor"
+              legend="Assigned capabilities"
+              options={capabilityOptions}
+              selectedIds={linkedCapabilityIds}
+              onChange={onSetCapabilityLinks}
+              searchLabel="Search capabilities by text or ref"
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCapabilityEditorOpen(false)}
+            >
+              Done
+            </Button>
+          </>
         ) : null}
       </div>
 
@@ -381,15 +463,32 @@ export function FeatureDetailPanel({
 function CapabilityRow({
   capability,
   detail,
+  onOpenEditor,
+  editorOpen,
 }: {
   capability: DetailCapability
   detail: FeatureDetail
+  /** Tapping the capability that is there opens the lookup. */
+  onOpenEditor?: () => void
+  editorOpen?: boolean
 }) {
   const differs = capability.releaseDiffers || capability.phaseDiffers
 
   return (
     <div className="feature-detail__capability">
-      <span className="feature-detail__capability-text">{capability.text}</span>
+      {onOpenEditor ? (
+        <button
+          type="button"
+          className="feature-detail__capability-button"
+          onClick={onOpenEditor}
+          aria-expanded={editorOpen}
+          aria-controls="capability-link-editor"
+        >
+          {capability.text}
+        </button>
+      ) : (
+        <span className="feature-detail__capability-text">{capability.text}</span>
+      )}
       <span className="feature-detail__capability-meta">
         {capability.matched
           ? `${capability.releaseLabel ?? 'no release'} · ${

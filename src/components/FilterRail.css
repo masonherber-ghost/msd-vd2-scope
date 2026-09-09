@@ -84,6 +84,9 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-2);
+  /* Same reason as LinkPicker: a scrolling column flex container would
+     otherwise squash these rows into each other. */
+  flex-shrink: 0;
   /* Comfortable target height for a dense list of checkboxes. */
   min-height: var(--spacing-8);
   padding: 0 var(--spacing-2);

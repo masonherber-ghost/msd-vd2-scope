@@ -11,6 +11,7 @@ export type LinkOption = {
 }
 
 export type LinkPickerProps = {
+  id?: string
   legend: string
   options: LinkOption[]
   selectedIds: number[]
@@ -27,6 +28,7 @@ export type LinkPickerProps = {
  * server's message surfaces in place if a change is rejected.
  */
 export function LinkPicker({
+  id,
   legend,
   options,
   selectedIds,
@@ -74,7 +76,7 @@ export function LinkPicker({
   const searchId = `link-picker-${legend.replace(/\s+/g, '-').toLowerCase()}`
 
   return (
-    <fieldset className="link-picker">
+    <fieldset className="link-picker" id={id}>
       <legend className="link-picker__summary">
         {legend} — {selectedIds.length} selected
       </legend>

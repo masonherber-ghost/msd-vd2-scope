@@ -205,6 +205,66 @@
   font-weight: 600;
 }
 
+/* A chip and its pivot control sit together; the chip edits, the icon
+   filters the map (R-8.16). */
+.feature-detail__chip-group {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 1px;
+}
+
+.feature-detail__chip-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--spacing-8);
+  min-height: var(--spacing-8);
+  padding: 0 var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-secondary);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+}
+
+.feature-detail__chip-action:hover {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.feature-detail__chip-action:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+.feature-detail__chip-action[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+/* The capability text doubles as the control that opens the lookup. */
+.feature-detail__capability-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.feature-detail__capability-button:hover {
+  text-decoration: underline;
+}
+
+.feature-detail__capability-button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
 /* ========================================
    CONNECTED FEATURES
    ======================================== */
