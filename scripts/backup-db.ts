@@ -32,7 +32,7 @@ try {
 
 // Prove the snapshot is readable rather than trusting that it is.
 const verify = new Database(target, { readonly: true })
-let tables = 0
+let tables: number
 try {
   const row = verify
     .prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'")

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
@@ -15,6 +15,13 @@ export default defineConfig({
       { find: /^@\/lib\//, replacement: `${src('./src/lib')}/` },
       { find: /^@\//, replacement: `${src('./src')}/` },
     ],
+  },
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
+    restoreMocks: true,
   },
   server: {
     port: 5173,

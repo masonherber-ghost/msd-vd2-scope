@@ -1,8 +1,8 @@
 # MSD VD2 Scope
 
 Task routing for this repository. This file says **which workflow and which rules file applies to
-which kind of task** — it deliberately carries no product description, no design values, and no
-feature requirements. Those belong in `_docs/` and in `src/globals.css` respectively.
+which kind of task**. It deliberately carries no product description, no feature requirements, and
+no design values — those belong in `_docs/` and in `src/globals.css` respectively. Keep it that way.
 
 ## Stack
 
@@ -29,12 +29,10 @@ Inside a custom component, BEM governs the internals. Tailwind utilities are sti
 
 **Tokens have one home.** All design tokens live in `src/globals.css` under `@theme`, in `oklch()`. There is no `tailwind.config.ts`. **`rules-design-tokens.md` is the reference** for naming, the Shadcn colour contract, and how to verify a token compiled. Values live only in the CSS — never restated in docs.
 
-**Palette baseline:** until a design system is supplied, the colour tokens are stock Tailwind — black, white and the default neutral ramp. Do not invent a brand palette. When a design system arrives, extract real values with `/figma-design-system-css` rather than approximating them.
-
 Tailwind v4 emits every `@theme` entry as a real CSS custom property, so BEM files consume the same tokens directly:
 
 ```css
-.summary-card__title {
+.block__element {
   color: var(--color-foreground);
   padding: var(--spacing-4);
   border-radius: var(--radius-md);
@@ -113,15 +111,11 @@ Skill: `/setup-site`
 ### Platform / stack migration
 Skill: `/migration-plan`
 
----
-
-## Planned migration — SQLite → Firebase
-
-SQLite is the **current** database. Firebase is a **future** target, not yet in use.
-
-`rules-firebase.md` and `rules-ai-api-firebase.md` describe that target state. They are **reference-only** and must not be followed for day-to-day work — a data change today follows `rules-database.md`, not `rules-firebase.md`. Read them only when running `/migration-plan` or explicitly asked about the Firebase migration.
-
-Both files live in `.claude/rules/_future/` and carry a `status: future` banner so they cannot be mistaken for active rules.
+### Reference-only rules — do not follow for day-to-day work
+`.claude/rules/_future/` holds rules for target states not yet in use, each carrying a
+`status: future` banner. SQLite via `rules-database.md` is the active data rule; `rules-firebase.md`
+and `rules-ai-api-firebase.md` are read only when running `/migration-plan` or when explicitly
+asked about that migration.
 
 ---
 
@@ -154,10 +148,10 @@ Both files live in `.claude/rules/_future/` and carry a `status: future` banner 
 - Substitute an icon with a visually similar alternative
 - Style a custom component's internals with Tailwind utilities instead of a BEM file
 - Hardcode a color, spacing, or type value — use a token from `@theme`
-- Invent a brand palette or approximate a design value
+- Invent a design value that has no token or design source
 - Use arbitrary breakpoint values
 - Write SQL in a route handler, or concatenate user input into SQL
 - Expose a secret to the client (no API keys in `VITE_` vars)
-- Follow the Firebase rules files for current work
+- Follow a `_future/` rules file for current work
 - Use Bootstrap, Foundation, or other CSS frameworks
 - Commit secrets or database credentials
