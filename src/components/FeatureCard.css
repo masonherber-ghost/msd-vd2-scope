@@ -1,0 +1,161 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.feature-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-card);
+  color: var(--color-card-foreground);
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+
+.feature-card__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.feature-card__id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-muted-foreground);
+}
+
+.feature-card__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 0;
+  /* Long feature names must not widen the column. */
+  overflow-wrap: anywhere;
+}
+
+/* ========================================
+   MVP CHIPS
+   ======================================== */
+
+.feature-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feature-card__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.0625rem var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-secondary);
+  color: var(--color-secondary-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.feature-card__chip-option {
+  font-weight: 700;
+}
+
+/* ========================================
+   ACTOR SUMMARY
+   ======================================== */
+
+.feature-card__actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feature-card__actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem var(--spacing-2);
+  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-foreground);
+}
+
+/* Achromatic by design: R-10.6 requires more than hue, so the label carries
+   the meaning and the tint is only a grouping aid. */
+.feature-card__actor--employer { background-color: var(--color-actor-employer); }
+.feature-card__actor--staff { background-color: var(--color-actor-staff); }
+.feature-card__actor--jobseeker { background-color: var(--color-actor-jobseeker); }
+.feature-card__actor--system { background-color: var(--color-actor-system); }
+
+.feature-card__actor-count {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}
+
+/* ========================================
+   BADGES
+   ======================================== */
+
+.feature-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}
+
+.feature-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem var(--spacing-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+/* The conflict badge is the one place a hue is load-bearing, so it carries a
+   glyph and a text label as well. */
+.feature-card__badge--conflict {
+  border-color: var(--color-destructive);
+  color: var(--color-destructive);
+}
+
+.feature-card__badge--unmatched {
+  border-style: dashed;
+  color: var(--color-muted-foreground);
+}
+
+.feature-card__badge--overridden {
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   MODIFIERS
+   ======================================== */
+
+/* Zoomed out far enough that only the ID stays legible (R-8.7). */
+.feature-card--compact {
+  padding: var(--spacing-2);
+  gap: var(--spacing-1);
+}
+
+.feature-card--compact .feature-card__name,
+.feature-card--compact .feature-card__chips,
+.feature-card--compact .feature-card__actors {
+  display: none;
+}

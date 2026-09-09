@@ -23,7 +23,7 @@ describe('Header', () => {
   it('links to home, contact and an unmatched path', () => {
     renderHeader()
 
-    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Scope map' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact')
     expect(screen.getByRole('link', { name: '404' })).toHaveAttribute('href', '/404-test')
   })
@@ -35,6 +35,8 @@ describe('Header', () => {
       'aria-current',
       'page',
     )
-    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'Scope map' })).not.toHaveAttribute(
+      'aria-current',
+    )
   })
 })

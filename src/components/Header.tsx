@@ -17,7 +17,7 @@ export function Header() {
           <span className="font-semibold">MSD VD2 Scope</span>
           <nav aria-label="Main" className="flex items-center gap-1">
             <NavLink to="/" end className={linkClass}>
-              Home
+              Scope map
             </NavLink>
             <NavLink to="/contact" className={linkClass}>
               Contact
