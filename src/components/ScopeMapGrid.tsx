@@ -11,6 +11,8 @@ export type ScopeMapGridProps = {
   contentRef?: React.Ref<HTMLDivElement>
   selectedId?: string | null
   onSelect?: (featureId: string) => void
+  /** Starts a create pre-filled with this cell's release and phase (R-9.7). */
+  onAddToCell?: (releaseId: string, phaseId: string) => void
 }
 
 export function ScopeMapGrid({
@@ -21,6 +23,7 @@ export function ScopeMapGrid({
   contentRef,
   selectedId = null,
   onSelect,
+  onAddToCell,
 }: ScopeMapGridProps) {
   const compact = zoom < compactBelow
 
@@ -69,6 +72,7 @@ export function ScopeMapGrid({
               compact={compact}
               selectedId={selectedId}
               onSelect={onSelect}
+              onAddToCell={onAddToCell}
             />
           ))}
         </div>
@@ -83,12 +87,14 @@ function ScopeMapRow({
   compact,
   selectedId,
   onSelect,
+  onAddToCell,
 }: {
   model: ScopeMapModel
   phase: ScopeMapModel['phases'][number]
   compact: boolean
   selectedId: string | null
   onSelect?: (featureId: string) => void
+  onAddToCell?: (releaseId: string, phaseId: string) => void
 }) {
   return (
     <>
@@ -116,13 +122,25 @@ function ScopeMapRow({
             }`}
           >
             {isEmpty ? (
-              <span className="scope-map-grid__empty-note">
-                {capabilityCount > 0
-                  ? `no features · ${capabilityCount} capabilit${
-                      capabilityCount === 1 ? 'y' : 'ies'
-                    }`
-                  : 'no features'}
-              </span>
+              <>
+                <span className="scope-map-grid__empty-note">
+                  {capabilityCount > 0
+                    ? `no features · ${capabilityCount} capabilit${
+                        capabilityCount === 1 ? 'y' : 'ies'
+                      }`
+                    : 'no features'}
+                </span>
+                {onAddToCell ? (
+                  <button
+                    type="button"
+                    className="scope-map-grid__add"
+                    onClick={() => onAddToCell(release.id, phase.id)}
+                    aria-label={`Add a feature to ${phase.name}, ${release.label}`}
+                  >
+                    + Add
+                  </button>
+                ) : null}
+              </>
             ) : (
               <>
                 {features.map((feature) => (
@@ -139,6 +157,16 @@ function ScopeMapRow({
                     {capabilityCount} capabilit{capabilityCount === 1 ? 'y' : 'ies'} in this
                     cell
                   </span>
+                ) : null}
+                {onAddToCell ? (
+                  <button
+                    type="button"
+                    className="scope-map-grid__add"
+                    onClick={() => onAddToCell(release.id, phase.id)}
+                    aria-label={`Add a feature to ${phase.name}, ${release.label}`}
+                  >
+                    + Add
+                  </button>
                 ) : null}
               </>
             )}

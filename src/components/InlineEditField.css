@@ -1,0 +1,64 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.inline-edit {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2);
+}
+
+.inline-edit__value {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* ========================================
+   EDITING
+   ======================================== */
+
+.inline-edit--editing {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-2);
+}
+
+.inline-edit__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+}
+
+.inline-edit__input {
+  width: 100%;
+  min-height: var(--spacing-8);
+  padding: var(--spacing-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.inline-edit__input:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+/* Errors are never colour-only: the message states the problem (R-10.6). */
+.inline-edit__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-destructive);
+}
+
+.inline-edit__actions {
+  display: flex;
+  gap: var(--spacing-2);
+}

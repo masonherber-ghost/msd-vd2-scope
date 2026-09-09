@@ -29,9 +29,15 @@ const { upsertImportedCapability, getAllCapabilities, findCapability } = await i
 const { findMvpFeature, getAllMvpFeatures, upsertImportedMvpFeature, countMvpFeatureDependents } =
   await import('./mvp-feature-repository.js')
 const { upsertImportedPhase } = await import('./phase-repository.js')
-const { upsertImportedPwcFeature, countPwcFeatureDependents } = await import(
-  './pwc-feature-repository.js'
-)
+const {
+  upsertImportedPwcFeature,
+  countPwcFeatureDependents,
+  createPwcFeature,
+  deletePwcFeature,
+  getPwcFeature,
+  nextFreeFeatureId,
+  updatePwcFeature,
+} = await import('./pwc-feature-repository.js')
 const { upsertImportedRelease, getAllReleases } = await import('./release-repository.js')
 const { upsertImportedFeatureMvpLink, upsertImportedFeatureCapabilityLink } = await import(
   './feature-link-repository.js'
@@ -391,5 +397,116 @@ describe('provenance survives editing (R-9.9)', () => {
         )
         .run(),
     ).toThrow(/CHECK constraint failed/)
+  })
+})
+
+describe('feature writes', () => {
+  const base = {
+    name: 'New feature',
+    foundational_build: 'Something.',
+    release_id: '1.1',
+    phase_id: 'manage-vacancies',
+    capability_note: null,
+  }
+
+  it('creates a feature marked manual, with timestamps', () => {
+    const created = createPwcFeature({ id: 'F-100', ...base })
+    expect(created).toMatchObject({ id: 'F-100', name: 'New feature', source: 'manual' })
+    expect(created.created_at).toBeTruthy()
+    expect(created.updated_at).toBeTruthy()
+  })
+
+  it('sorts a created feature after the existing ones', () => {
+    const created = createPwcFeature({ id: 'F-100', ...base })
+    // F-001 was seeded with display_order 1.
+    expect(created.display_order).toBe(2)
+  })
+
+  it('rejects a duplicate id at the database level', () => {
+    createPwcFeature({ id: 'F-100', ...base })
+    expect(() => createPwcFeature({ id: 'F-100', ...base })).toThrow(
+      /UNIQUE constraint failed/,
+    )
+  })
+
+  it('rejects an id that is not F-nnn', () => {
+    expect(() => createPwcFeature({ id: 'FEATURE-1', ...base })).toThrow(
+      /CHECK constraint failed/,
+    )
+  })
+
+  describe('nextFreeFeatureId', () => {
+    it('fills the lowest gap rather than continuing past the maximum', () => {
+      // F-001 is seeded, so the first gap is F-002.
+      expect(nextFreeFeatureId()).toBe('F-002')
+
+      createPwcFeature({ id: 'F-002', ...base })
+      createPwcFeature({ id: 'F-004', ...base })
+      // F-003 is now the lowest gap, even though F-004 exists.
+      expect(nextFreeFeatureId()).toBe('F-003')
+    })
+
+    it('pads to three digits', () => {
+      expect(nextFreeFeatureId()).toMatch(/^F-\d{3}$/)
+    })
+  })
+
+  describe('updatePwcFeature', () => {
+    it('patches only the supplied columns', () => {
+      updatePwcFeature('F-001', { name: 'Renamed' })
+      const row = getPwcFeature('F-001')!
+      expect(row.name).toBe('Renamed')
+      // Untouched.
+      expect(row.release_id).toBe('1.1')
+      expect(row.phase_id).toBe('manage-vacancies')
+    })
+
+    it('marks an edited imported row manual, so a re-import cannot undo it', () => {
+      expect(getPwcFeature('F-001')!.source).toBe('mapping')
+      updatePwcFeature('F-001', { name: 'Renamed' })
+      expect(getPwcFeature('F-001')!.source).toBe('manual')
+    })
+
+    it('returns undefined for a feature that does not exist', () => {
+      expect(updatePwcFeature('F-999', { name: 'x' })).toBeUndefined()
+    })
+
+    it('is a no-op for an empty patch', () => {
+      const before = getPwcFeature('F-001')!
+      expect(updatePwcFeature('F-001', {})).toEqual(before)
+    })
+
+    it('refuses to move a feature to a release that does not exist', () => {
+      expect(() => updatePwcFeature('F-001', { release_id: 'nope' })).toThrow(
+        /FOREIGN KEY constraint failed/,
+      )
+    })
+  })
+
+  describe('deletePwcFeature', () => {
+    it('removes the feature and reports one change', () => {
+      expect(deletePwcFeature('F-001')).toBe(1)
+      expect(getPwcFeature('F-001')).toBeUndefined()
+    })
+
+    it('reports zero changes for a feature that does not exist', () => {
+      expect(deletePwcFeature('F-999')).toBe(0)
+    })
+
+    it('cascades assumptions and join rows, and nothing else', () => {
+      createAssumption({ pwc_feature_id: 'F-001', position: 1, text: 'a', source: 'mapping' })
+      upsertImportedMvpFeature({ ref: 938, scope_option: null, title: 'A', source: 'mapping' })
+      const mvp = findMvpFeature(938, null)!
+      upsertImportedFeatureMvpLink({ pwc_feature_id: 'F-001', mvp_feature_id: mvp.id })
+
+      deletePwcFeature('F-001')
+
+      expect(getAssumptionsForFeature('F-001')).toHaveLength(0)
+      expect(
+        db.prepare('SELECT COUNT(*) AS n FROM pwc_feature_mvp_features').get(),
+      ).toEqual({ n: 0 })
+      // The MVP feature itself survives — other features use it.
+      expect(getAllMvpFeatures()).toHaveLength(1)
+    })
   })
 })

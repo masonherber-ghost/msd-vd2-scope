@@ -270,3 +270,13 @@
     overflow-y: auto;
   }
 }
+
+/* ========================================
+   ACTIONS
+   ======================================== */
+
+.feature-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+}

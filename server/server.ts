@@ -17,6 +17,7 @@ dotenv.config({ path: path.join(here, '.env'), quiet: true })
 const { runMigrations } = await import('./migrate.js')
 const { scopeRouter } = await import('./routes/scope.js')
 const { importRouter } = await import('./routes/import.js')
+const { featuresRouter } = await import('./routes/features.js')
 const { errorHandler, notFoundHandler } = await import('./middleware/error-handler.js')
 const { isScopeEmpty } = await import('./repositories/scope-repository.js')
 const { importScopeFromSources } = await import('./services/importer.js')
@@ -88,6 +89,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/scope', scopeRouter)
 app.use('/api/import', importRouter)
+app.use('/api/features', featuresRouter)
 
 app.use('/api', notFoundHandler)
 

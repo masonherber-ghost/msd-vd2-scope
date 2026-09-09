@@ -143,6 +143,30 @@
   color: var(--color-muted-foreground);
 }
 
+/* Pre-fills a create with this cell's release and phase (R-9.7). */
+.scope-map-grid__add {
+  align-self: flex-start;
+  min-height: var(--spacing-6);
+  padding: 0 var(--spacing-2);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--color-muted-foreground);
+  font-size: 0.6875rem;
+  cursor: pointer;
+}
+
+.scope-map-grid__add:hover {
+  border-style: solid;
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+}
+
+.scope-map-grid__add:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
 /* ========================================
    RESPONSIVE ADJUSTMENTS
    ======================================== */

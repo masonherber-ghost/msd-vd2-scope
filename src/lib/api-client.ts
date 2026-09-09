@@ -178,6 +178,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T
 }
 
+export type CreateFeatureBody = {
+  id: string
+  name: string
+  foundational_build: string
+  release_id: string
+  phase_id: string
+}
+
+export type UpdateFeatureBody = Partial<Omit<CreateFeatureBody, 'id'>> & {
+  capability_note?: string | null
+}
+
+export type DeleteFeatureResult = {
+  deleted: number
+  cascaded: { assumptions: number; mvpLinks: number; capabilityLinks: number }
+}
+
 export const apiClient = {
   health: () => request<{ status: string; uptime: number }>('/api/health'),
 
@@ -188,5 +205,27 @@ export const apiClient = {
   import: {
     run: () =>
       request<{ status: string; summary: ImportSummary }>('/api/import', { method: 'POST' }),
+  },
+
+  features: {
+    nextId: () => request<{ id: string }>('/api/features/next-id'),
+
+    create: (body: CreateFeatureBody) =>
+      request<PwcFeatureRow>('/api/features', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    update: (id: string, body: UpdateFeatureBody) =>
+      request<PwcFeatureRow>(`/api/features/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      }),
+
+    remove: (id: string, cascade = false) =>
+      request<DeleteFeatureResult>(
+        `/api/features/${encodeURIComponent(id)}?cascade=${cascade ? 'true' : 'false'}`,
+        { method: 'DELETE' },
+      ),
   },
 }

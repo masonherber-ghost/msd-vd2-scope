@@ -7,11 +7,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ScopeGraph } from '@/lib/api-client'
 
 const { state } = await vi.hoisted(async () => ({
-  state: { graph: null as ScopeGraph | null, fail: null as string | null },
+  state: {
+    graph: null as ScopeGraph | null,
+    fail: null as string | null,
+    /** Makes the next feature write fail, as a rejecting server would. */
+    writeFail: null as string | null,
+    nextId: 'F-004',
+    created: [] as unknown[],
+    patched: [] as unknown[],
+    deleted: [] as unknown[],
+  },
 }))
 
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-client')>()
+  const failWrite = () => {
+    if (state.writeFail) throw new actual.ApiError(409, state.writeFail)
+  }
   return {
     ...actual,
     apiClient: {
@@ -22,6 +34,27 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
         },
       },
       import: { run: async () => ({ status: 'ok', summary: {} as never }) },
+      features: {
+        nextId: async () => ({ id: state.nextId }),
+        create: async (body: Record<string, unknown>) => {
+          failWrite()
+          state.created.push(body)
+          return { ...body, source: 'manual' }
+        },
+        update: async (id: string, patch: Record<string, unknown>) => {
+          failWrite()
+          state.patched.push({ id, patch })
+          return { id, ...patch, source: 'manual' }
+        },
+        remove: async (id: string, cascade: boolean) => {
+          failWrite()
+          state.deleted.push({ id, cascade })
+          return {
+            deleted: 1,
+            cascaded: { assumptions: 0, mvpLinks: 0, capabilityLinks: 0 },
+          }
+        },
+      },
     },
   }
 })
@@ -62,6 +95,12 @@ const url = () => screen.getByTestId('url').textContent ?? ''
 beforeEach(() => {
   state.graph = makeScopeGraph()
   state.fail = null
+  state.writeFail = null
+  state.nextId = 'F-004'
+  state.created = []
+  state.patched = []
+  state.deleted = []
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
 describe('ScopeMap page', () => {
@@ -362,5 +401,249 @@ describe('ScopeMap selection and detail panel', () => {
 
     await waitFor(() => expect(url()).toContain('selected=F-002'))
     expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap create (R-9.7)', () => {
+  it('pre-fills the release and phase from the cell the create started in', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+    )
+
+    expect(screen.getByRole('form', { name: /new pwc feature/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Release')).toHaveValue('1.4')
+    expect(screen.getByLabelText('Phase')).toHaveValue('manage-vacancies')
+  })
+
+  it('offers the next free id as an overridable default', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+    )
+
+    await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
+
+    await user.clear(screen.getByLabelText('Feature id'))
+    await user.type(screen.getByLabelText('Feature id'), 'F-050')
+    expect(screen.getByLabelText('Feature id')).toHaveValue('F-050')
+  })
+
+  it('sends the create and selects the new feature', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
+    await user.type(screen.getByLabelText('Name'), 'Brand new feature')
+    await user.click(screen.getByRole('button', { name: /create feature/i }))
+
+    await waitFor(() => expect(state.created).toHaveLength(1))
+    expect(state.created[0]).toMatchObject({
+      id: 'F-004',
+      name: 'Brand new feature',
+      release_id: '1.4',
+      phase_id: 'manage-vacancies',
+    })
+    await waitFor(() => expect(url()).toContain('selected=F-004'))
+  })
+
+  it('blocks submission client-side when a field is invalid', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
+    // No name.
+    await user.click(screen.getByRole('button', { name: /create feature/i }))
+
+    expect(screen.getByText(/give the feature a name/i)).toBeInTheDocument()
+    expect(state.created).toHaveLength(0)
+  })
+
+  it("surfaces the server's own message when the create is rejected", async () => {
+    const user = userEvent.setup()
+    state.writeFail = 'Feature F-004 already exists.'
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(
+      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+    )
+    await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
+    await user.type(screen.getByLabelText('Name'), 'Duplicate')
+    await user.click(screen.getByRole('button', { name: /create feature/i }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Feature F-004 already exists.'),
+    )
+  })
+})
+
+describe('ScopeMap inline edit', () => {
+  it('saves a name change and sends only that field', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    const input = screen.getByLabelText('Name')
+    await user.clear(input)
+    await user.type(input, 'Verify employer (renamed)')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(state.patched).toHaveLength(1))
+    expect(state.patched[0]).toEqual({
+      id: 'F-002',
+      patch: { name: 'Verify employer (renamed)' },
+    })
+  })
+
+  it('cancels without sending anything', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    await user.type(screen.getByLabelText('Name'), ' extra')
+    await user.click(screen.getByRole('button', { name: /cancel/i }))
+
+    expect(state.patched).toHaveLength(0)
+  })
+
+  it("keeps the draft and shows the server's message when the save fails (R-9.6)", async () => {
+    const user = userEvent.setup()
+    state.writeFail = 'Feature id must look like F-001.'
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    const input = screen.getByLabelText('Name')
+    await user.clear(input)
+    await user.type(input, 'Rejected name')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Feature id must look like F-001.',
+      ),
+    )
+    // The typing is not lost, and the map still shows the stored value.
+    expect(screen.getByLabelText('Name')).toHaveValue('Rejected name')
+    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap delete (R-9.4, R-9.5)', () => {
+  it('states exactly what will be removed before deleting', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /delete F-002/i }))
+
+    expect(screen.getByText(/This also removes/i)).toBeInTheDocument()
+    expect(screen.getByText(/capabilities and MVP features themselves are kept/i)).toBeInTheDocument()
+  })
+
+  it('cascades only after the explicit confirmation', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /delete F-002/i }))
+    expect(state.deleted).toHaveLength(0)
+
+    await user.click(screen.getByRole('button', { name: /delete and remove those rows/i }))
+
+    await waitFor(() => expect(state.deleted).toHaveLength(1))
+    expect(state.deleted[0]).toEqual({ id: 'F-002', cascade: true })
+  })
+
+  it('closes the panel after a successful delete', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /delete F-002/i }))
+    await user.click(screen.getByRole('button', { name: /delete and remove those rows/i }))
+
+    await waitFor(() => expect(url()).not.toContain('selected'))
+  })
+
+  it("surfaces the server's refusal and keeps the feature", async () => {
+    const user = userEvent.setup()
+    state.writeFail =
+      'Cannot delete F-002 — 1 capability link references it. Confirm the cascade to remove them too.'
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /delete F-002/i }))
+    await user.click(screen.getByRole('button', { name: /delete and remove those rows/i }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/Cannot delete F-002/),
+    )
+    // Rolled back — the card is still on the map.
+    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap unsaved-change protection (R-10.8)', () => {
+  it('warns before discarding an in-progress edit', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    await user.type(screen.getByLabelText('Name'), ' changed')
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+
+    expect(confirmSpy).toHaveBeenCalledWith('You have unsaved changes. Discard them?')
+    // Declined, so the panel stays open.
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+
+  it('does not warn when nothing is dirty', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
   })
 })

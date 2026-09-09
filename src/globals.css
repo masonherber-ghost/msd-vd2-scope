@@ -14,6 +14,8 @@
 @import "./components/FeatureCard.css";
 @import "./components/FilterRail.css";
 @import "./components/FeatureDetailPanel.css";
+@import "./components/InlineEditField.css";
+@import "./components/FeatureForm.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values

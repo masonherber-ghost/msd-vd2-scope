@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { InlineEditField } from '@/components/InlineEditField'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
 
@@ -17,6 +18,10 @@ export type FeatureDetailPanelProps = {
   onSelectFeature: (featureId: string) => void
   /** MVP refs currently pivoted to, so the chips can show as pressed. */
   activeMvpRefs: number[]
+  /** Rejects with the server's message so the field can surface it. */
+  onSaveField?: (patch: { name?: string; foundational_build?: string }) => Promise<unknown>
+  onDelete?: (cascade: boolean) => Promise<unknown>
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export function FeatureDetailPanel({
@@ -25,8 +30,41 @@ export function FeatureDetailPanel({
   onPivotToMvp,
   onSelectFeature,
   activeMvpRefs,
+  onSaveField,
+  onDelete,
+  onDirtyChange,
 }: FeatureDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  // A different feature arriving abandons any pending confirmation. Tracked
+  // during render rather than in an effect.
+  const [confirmingFor, setConfirmingFor] = useState(detail.id)
+
+  if (confirmingFor !== detail.id) {
+    setConfirmingFor(detail.id)
+    setConfirmingDelete(false)
+    setDeleteError(null)
+  }
+
+  const dependentTotal =
+    detail.assumptions.length + detail.mvpFeatures.length + detail.capabilityCount
+
+  const runDelete = async (cascade: boolean) => {
+    if (!onDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await onDelete(cascade)
+    } catch (caught) {
+      setDeleteError(
+        caught instanceof Error ? caught.message : 'Could not delete that feature.',
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   // Escape closes, and the panel takes focus so it is keyboard reachable
   // without hunting for it (R-10.3, R-10.4).
@@ -77,8 +115,32 @@ export function FeatureDetailPanel({
       ) : null}
 
       <div className="feature-detail__section">
+        <h3 className="feature-detail__section-title">Name</h3>
+        {onSaveField ? (
+          <InlineEditField
+            label="Name"
+            value={detail.name}
+            onSave={(name) => onSaveField({ name })}
+            onDirtyChange={onDirtyChange}
+          />
+        ) : (
+          <p className="feature-detail__prose">{detail.name}</p>
+        )}
+      </div>
+
+      <div className="feature-detail__section">
         <h3 className="feature-detail__section-title">Included in foundational build</h3>
-        <p className="feature-detail__prose">{detail.foundationalBuild}</p>
+        {onSaveField ? (
+          <InlineEditField
+            label="Foundational build"
+            value={detail.foundationalBuild}
+            multiline
+            onSave={(foundational_build) => onSaveField({ foundational_build })}
+            onDirtyChange={onDirtyChange}
+          />
+        ) : (
+          <p className="feature-detail__prose">{detail.foundationalBuild}</p>
+        )}
       </div>
 
       <div className="feature-detail__section">
@@ -184,6 +246,63 @@ export function FeatureDetailPanel({
           </ul>
         )}
       </div>
+
+      {onDelete ? (
+        <div className="feature-detail__section">
+          <h3 className="feature-detail__section-title">Delete</h3>
+          {!confirmingDelete ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              Delete {detail.id}
+            </Button>
+          ) : (
+            <div className="feature-detail__section">
+              {/* States exactly what will be removed and how many (R-9.5). */}
+              <p className="feature-detail__prose">
+                Delete {detail.id}?{' '}
+                {dependentTotal > 0
+                  ? `This also removes ${detail.assumptions.length} assumption${
+                      detail.assumptions.length === 1 ? '' : 's'
+                    }, ${detail.mvpFeatures.length} MVP feature link${
+                      detail.mvpFeatures.length === 1 ? '' : 's'
+                    } and ${detail.capabilityCount} capability link${
+                      detail.capabilityCount === 1 ? '' : 's'
+                    }. The capabilities and MVP features themselves are kept — other features use them.`
+                  : 'Nothing else references it.'}
+              </p>
+              {deleteError ? (
+                <p role="alert" className="feature-detail__note">
+                  {deleteError}
+                </p>
+              ) : null}
+              <div className="feature-detail__actions">
+                <Button
+                  size="sm"
+                  onClick={() => void runDelete(dependentTotal > 0)}
+                  disabled={deleting}
+                >
+                  {deleting
+                    ? 'Deleting…'
+                    : dependentTotal > 0
+                      ? 'Delete and remove those rows'
+                      : `Delete ${detail.id}`}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </section>
   )
 }

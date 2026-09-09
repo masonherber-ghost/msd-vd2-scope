@@ -1,9 +1,16 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
+import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
+import {
+  useCreateFeature,
+  useDeleteFeature,
+  useNextFeatureId,
+  useUpdateFeature,
+} from '@/hooks/useFeatureMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
 import { buildScopeMap, projectCells } from '@/lib/scope-derive'
@@ -108,6 +115,66 @@ export default function ScopeMap() {
     [scope.data, selectedId],
   )
 
+  // ---- Create / edit / delete -------------------------------------------
+  const [creatingIn, setCreatingIn] = useState<{
+    releaseId: string
+    phaseId: string
+  } | null>(null)
+  const [dirty, setDirty] = useState(false)
+
+  const createFeature = useCreateFeature()
+  const updateFeature = useUpdateFeature()
+  const deleteFeature = useDeleteFeature()
+  const nextId = useNextFeatureId(creatingIn !== null)
+
+  /** Warns before discarding an in-progress edit (R-10.8). */
+  const confirmDiscard = useCallback(() => {
+    if (!dirty) return true
+    return window.confirm('You have unsaved changes. Discard them?')
+  }, [dirty])
+
+  useEffect(() => {
+    if (!dirty) return
+    const onBeforeUnload = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
+
+  const closePanel = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setSelected(null)
+  }, [confirmDiscard, setSelected])
+
+  const startCreate = useCallback(
+    (releaseId: string, phaseId: string) => {
+      if (!confirmDiscard()) return
+      setDirty(false)
+      setCreatingIn({ releaseId, phaseId })
+    },
+    [confirmDiscard],
+  )
+
+  const cancelCreate = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setCreatingIn(null)
+    createFeature.reset()
+  }, [confirmDiscard, createFeature])
+
+  const submitCreate = useCallback(
+    (values: FeatureFormValues) => {
+      createFeature.mutate(values, {
+        onSuccess: (created) => {
+          setDirty(false)
+          setCreatingIn(null)
+          setSelected(created.id)
+        },
+      })
+    },
+    [createFeature, setSelected],
+  )
+
   /** Scales the grid so its full width fits the viewport (R-8.7). */
   const fitToWidth = useCallback(() => {
     const container = scrollRef.current
@@ -197,6 +264,28 @@ export default function ScopeMap() {
           />
 
           <div className="flex min-w-0 flex-col gap-4">
+            {creatingIn ? (
+              <FeatureForm
+                releases={model.releases}
+                phases={model.phases}
+                initial={{
+                  id: '',
+                  name: '',
+                  foundational_build: '',
+                  release_id: creatingIn.releaseId,
+                  phase_id: creatingIn.phaseId,
+                }}
+                suggestedId={nextId.data?.id}
+                pending={createFeature.isPending}
+                serverError={
+                  createFeature.isError ? createFeature.error.message : null
+                }
+                onSubmit={submitCreate}
+                onCancel={cancelCreate}
+                onDirtyChange={setDirty}
+              />
+            ) : null}
+
             {visible.length === 0 ? (
               <ZeroResults
                 blame={blame}
@@ -220,7 +309,12 @@ export default function ScopeMap() {
                 scrollRef={scrollRef}
                 contentRef={contentRef}
                 selectedId={selectedId}
-                onSelect={toggleSelected}
+                onSelect={(id) => {
+                  if (!confirmDiscard()) return
+                  setDirty(false)
+                  toggleSelected(id)
+                }}
+                onAddToCell={startCreate}
               />
             )}
 
@@ -257,10 +351,22 @@ export default function ScopeMap() {
           {detail ? (
             <FeatureDetailPanel
               detail={detail}
-              onClose={() => setSelected(null)}
+              onClose={closePanel}
               onPivotToMvp={pivotToMvp}
-              onSelectFeature={setSelected}
+              onSelectFeature={(id) => {
+                if (!confirmDiscard()) return
+                setDirty(false)
+                setSelected(id)
+              }}
               activeMvpRefs={filters.mvp}
+              onSaveField={(patch) =>
+                updateFeature.mutateAsync({ id: detail.id, patch })
+              }
+              onDelete={async (cascade) => {
+                await deleteFeature.mutateAsync({ id: detail.id, cascade })
+                setSelected(null)
+              }}
+              onDirtyChange={setDirty}
             />
           ) : null}
         </div>
