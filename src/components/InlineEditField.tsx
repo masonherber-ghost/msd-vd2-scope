@@ -7,6 +7,10 @@ export type InlineEditFieldProps = {
   /** Rejects with the server's message; the caller surfaces it. */
   onSave: (next: string) => Promise<unknown>
   multiline?: boolean
+  /** When present, the field edits as a select rather than a text input. */
+  options?: { value: string; label: string }[]
+  /** Shown instead of the raw value when not editing. */
+  displayValue?: string
   /** Reports whether an edit is in progress, for navigation protection. */
   onDirtyChange?: (dirty: boolean) => void
 }
@@ -21,6 +25,8 @@ export function InlineEditField({
   value,
   onSave,
   multiline = false,
+  options,
+  displayValue,
   onDirtyChange,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
@@ -30,7 +36,7 @@ export function InlineEditField({
   // Tracks which value the draft belongs to, so a different feature arriving
   // resets the editor during render rather than in an effect.
   const [editingValue, setEditingValue] = useState(value)
-  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(null)
 
   if (editingValue !== value) {
     setEditingValue(value)
@@ -77,7 +83,10 @@ export function InlineEditField({
   if (!editing) {
     return (
       <div className="inline-edit">
-        <span className="inline-edit__value">{value || <em>Not set</em>}</span>
+        <span className="inline-edit__value">
+          {displayValue ?? value ?? ''}
+          {!displayValue && !value ? <em>Not set</em> : null}
+        </span>
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
           Edit {label.toLowerCase()}
         </Button>
@@ -92,7 +101,24 @@ export function InlineEditField({
       <label className="inline-edit__label" htmlFor={inputId}>
         {label}
       </label>
-      {multiline ? (
+      {options ? (
+        <select
+          id={inputId}
+          ref={inputRef as React.Ref<HTMLSelectElement>}
+          className="inline-edit__input"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') cancel()
+          }}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      ) : multiline ? (
         <textarea
           id={inputId}
           ref={inputRef as React.Ref<HTMLTextAreaElement>}

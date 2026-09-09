@@ -76,3 +76,22 @@ export function summariseZodError(error: z.ZodError): string {
     )
     .join(' ')
 }
+
+/**
+ * Replace-set bodies for a feature's links. Ids are validated as integers
+ * here; that they exist is checked in the route, which has the database.
+ */
+const idListSchema = z
+  .array(z.number().int().positive())
+  .max(200, 'That is more links than a single feature can hold.')
+
+export const setMvpLinksSchema = z.object({
+  mvpFeatureIds: idListSchema,
+})
+
+export const setCapabilityLinksSchema = z.object({
+  capabilityIds: idListSchema,
+})
+
+export type SetMvpLinksInput = z.infer<typeof setMvpLinksSchema>
+export type SetCapabilityLinksInput = z.infer<typeof setCapabilityLinksSchema>

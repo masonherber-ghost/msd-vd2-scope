@@ -1,6 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -9,11 +6,8 @@ db.pragma('foreign_keys = ON')
 
 vi.mock('../database.js', () => ({ db }))
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-const SCHEMA = fs.readFileSync(
-  path.join(here, '..', 'migrations', '002_create_scope_schema.sql'),
-  'utf8',
-)
+const { resetSchema } = await import('../test-support/apply-migrations.js')
+
 
 const { ImportDriftError, chooseMvpOwner, importScope } = await import('./importer.js')
 const { loadScopeFromSources } = await import('./scope-source.js')
@@ -22,14 +16,7 @@ const { getScopeGraph } = await import('../repositories/scope-repository.js')
 const reconciled = loadScopeFromSources()
 
 function reset() {
-  db.pragma('foreign_keys = OFF')
-  for (const { name } of db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-    .all() as { name: string }[]) {
-    db.exec(`DROP TABLE IF EXISTS "${name}"`)
-  }
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA)
+  resetSchema(db)
 }
 
 beforeEach(reset)

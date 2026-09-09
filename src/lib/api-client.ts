@@ -222,6 +222,18 @@ export const apiClient = {
         body: JSON.stringify(body),
       }),
 
+    setMvpLinks: (id: string, mvpFeatureIds: number[]) =>
+      request<{ pwc_feature_id: string; mvpFeatureIds: number[] }>(
+        `/api/features/${encodeURIComponent(id)}/mvp-features`,
+        { method: 'PUT', body: JSON.stringify({ mvpFeatureIds }) },
+      ),
+
+    setCapabilityLinks: (id: string, capabilityIds: number[]) =>
+      request<{ pwc_feature_id: string; capabilityIds: number[] }>(
+        `/api/features/${encodeURIComponent(id)}/capabilities`,
+        { method: 'PUT', body: JSON.stringify({ capabilityIds }) },
+      ),
+
     remove: (id: string, cascade = false) =>
       request<DeleteFeatureResult>(
         `/api/features/${encodeURIComponent(id)}?cascade=${cascade ? 'true' : 'false'}`,

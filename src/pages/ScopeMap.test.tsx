@@ -16,6 +16,8 @@ const { state } = await vi.hoisted(async () => ({
     created: [] as unknown[],
     patched: [] as unknown[],
     deleted: [] as unknown[],
+    mvpLinkCalls: [] as { id: string; mvpFeatureIds: number[] }[],
+    capabilityLinkCalls: [] as { id: string; capabilityIds: number[] }[],
   },
 }))
 
@@ -45,6 +47,16 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
           failWrite()
           state.patched.push({ id, patch })
           return { id, ...patch, source: 'manual' }
+        },
+        setMvpLinks: async (id: string, mvpFeatureIds: number[]) => {
+          failWrite()
+          state.mvpLinkCalls.push({ id, mvpFeatureIds })
+          return { pwc_feature_id: id, mvpFeatureIds }
+        },
+        setCapabilityLinks: async (id: string, capabilityIds: number[]) => {
+          failWrite()
+          state.capabilityLinkCalls.push({ id, capabilityIds })
+          return { pwc_feature_id: id, capabilityIds }
         },
         remove: async (id: string, cascade: boolean) => {
           failWrite()
@@ -100,6 +112,8 @@ beforeEach(() => {
   state.created = []
   state.patched = []
   state.deleted = []
+  state.mvpLinkCalls = []
+  state.capabilityLinkCalls = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -645,5 +659,204 @@ describe('ScopeMap unsaved-change protection (R-10.8)', () => {
     await user.click(screen.getByRole('button', { name: /^close$/i }))
 
     expect(confirmSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('ScopeMap placement editing', () => {
+  it('changes the release a feature sits in', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit release/i }))
+    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(state.patched).toHaveLength(1))
+    expect(state.patched[0]).toEqual({ id: 'F-002', patch: { release_id: '1.4' } })
+  })
+
+  it('changes the phase a feature sits in', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit phase/i }))
+    await user.selectOptions(screen.getByLabelText('Phase'), 'manage-vacancies')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(state.patched).toHaveLength(1))
+    expect(state.patched[0]).toEqual({
+      id: 'F-002',
+      patch: { phase_id: 'manage-vacancies' },
+    })
+  })
+
+  it('offers every release and phase as a choice', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit release/i }))
+    const select = screen.getByLabelText('Release')
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Release 1.1',
+      'Release 1.4',
+    ])
+  })
+})
+
+describe('ScopeMap MVP link editing', () => {
+  it('lists every MVP record with its ref and option', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    expect(within(picker).getByText('938')).toBeInTheDocument()
+    expect(within(picker).getByText('938 · Option 1A')).toBeInTheDocument()
+    expect(within(picker).getByText('948 · Option 1B')).toBeInTheDocument()
+  })
+
+  it('shows the feature\'s current links as checked', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    // F-002 links to record 3 (ref 948 / 1B).
+    expect(within(picker).getByRole('checkbox', { name: /948/ })).toBeChecked()
+    expect(within(picker).getByRole('checkbox', { name: /938 · Option 1A/ })).not.toBeChecked()
+  })
+
+  it('adds an MVP feature, sending the complete new set', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    await user.click(within(picker).getByRole('checkbox', { name: /938 · Option 1A/ }))
+
+    await waitFor(() => expect(state.mvpLinkCalls).toHaveLength(1))
+    expect(state.mvpLinkCalls[0]).toEqual({ id: 'F-002', mvpFeatureIds: [3, 1] })
+  })
+
+  it('removes an MVP feature', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    await user.click(within(picker).getByRole('checkbox', { name: /948/ }))
+
+    await waitFor(() => expect(state.mvpLinkCalls).toHaveLength(1))
+    expect(state.mvpLinkCalls[0]).toEqual({ id: 'F-002', mvpFeatureIds: [] })
+  })
+
+  it('can be searched by ref or title', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /linked MVP features/i })
+    await user.type(
+      within(picker).getByLabelText(/search MVP features/i),
+      'Verification',
+    )
+
+    expect(within(picker).getByText('948 · Option 1B')).toBeInTheDocument()
+    expect(within(picker).queryByText('938 · Option 1A')).not.toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap capability link editing', () => {
+  it('lists capabilities with their ref, actor and release', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    expect(within(picker).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
+    expect(within(picker).getByText(/948 · employer/)).toBeInTheDocument()
+    expect(within(picker).getAllByText('Release 1.4').length).toBeGreaterThan(0)
+  })
+
+  it('shows the current assignment as checked', async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    expect(
+      within(picker).getByRole('checkbox', { name: /Electronic T&Cs acceptance/ }),
+    ).toBeChecked()
+  })
+
+  it('assigns a capability from another MVP ref, sending the new set', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    await user.click(
+      within(picker).getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+
+    await waitFor(() => expect(state.capabilityLinkCalls).toHaveLength(1))
+    expect(state.capabilityLinkCalls[0]).toEqual({ id: 'F-002', capabilityIds: [12, 10] })
+  })
+
+  it('unassigns a capability', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    await user.click(
+      within(picker).getByRole('checkbox', { name: /Electronic T&Cs acceptance/ }),
+    )
+
+    await waitFor(() => expect(state.capabilityLinkCalls).toHaveLength(1))
+    expect(state.capabilityLinkCalls[0]).toEqual({ id: 'F-002', capabilityIds: [] })
+  })
+
+  it("surfaces the server's message when a link change is rejected", async () => {
+    const user = userEvent.setup()
+    state.writeFail = 'No capability with id 99999.'
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const picker = screen.getByRole('group', { name: /assigned capabilities/i })
+    await user.click(
+      within(picker).getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+
+    await waitFor(() =>
+      expect(within(picker).getByRole('alert')).toHaveTextContent(
+        'No capability with id 99999.',
+      ),
+    )
   })
 })

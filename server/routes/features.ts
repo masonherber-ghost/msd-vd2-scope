@@ -2,10 +2,20 @@ import { Router } from 'express'
 import { z } from 'zod'
 import {
   createFeatureSchema,
+  setCapabilityLinksSchema,
+  setMvpLinksSchema,
   summariseZodError,
   updateFeatureSchema,
 } from '../../src/lib/validators.js'
 import { HttpError } from '../middleware/error-handler.js'
+import { getAllCapabilities } from '../repositories/capability-repository.js'
+import {
+  getCapabilityIdsFor,
+  getMvpFeatureIdsFor,
+  setCapabilityLinks,
+  setMvpFeatureLinks,
+} from '../repositories/feature-link-repository.js'
+import { getAllMvpFeatures } from '../repositories/mvp-feature-repository.js'
 import { getAllPhases } from '../repositories/phase-repository.js'
 import {
   countPwcFeatureDependents,
@@ -110,4 +120,46 @@ featuresRouter.delete('/:id', (req, res) => {
 
   const changes = deletePwcFeature(id)
   res.json({ deleted: changes, cascaded: dependents })
+})
+
+/**
+ * Replaces the feature's MVP feature links with exactly this set. Removals are
+ * tombstoned, so a re-import will not put them back (R-9.10).
+ */
+featuresRouter.put('/:id/mvp-features', (req, res) => {
+  const id = req.params.id
+  if (!getPwcFeature(id)) throw new HttpError(404, `There is no feature ${id}.`)
+
+  const parsed = setMvpLinksSchema.safeParse(req.body)
+  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
+
+  const known = new Set(getAllMvpFeatures().map((m) => m.id))
+  const unknown = parsed.data.mvpFeatureIds.filter((mvpId) => !known.has(mvpId))
+  if (unknown.length > 0) {
+    throw new HttpError(
+      422,
+      `No MVP feature with id ${unknown.join(', ')}.`,
+    )
+  }
+
+  setMvpFeatureLinks(id, parsed.data.mvpFeatureIds)
+  res.json({ pwc_feature_id: id, mvpFeatureIds: getMvpFeatureIdsFor(id) })
+})
+
+/** Replaces the feature's capability links with exactly this set. */
+featuresRouter.put('/:id/capabilities', (req, res) => {
+  const id = req.params.id
+  if (!getPwcFeature(id)) throw new HttpError(404, `There is no feature ${id}.`)
+
+  const parsed = setCapabilityLinksSchema.safeParse(req.body)
+  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
+
+  const known = new Set(getAllCapabilities().map((c) => c.id))
+  const unknown = parsed.data.capabilityIds.filter((capId) => !known.has(capId))
+  if (unknown.length > 0) {
+    throw new HttpError(422, `No capability with id ${unknown.join(', ')}.`)
+  }
+
+  setCapabilityLinks(id, parsed.data.capabilityIds)
+  res.json({ pwc_feature_id: id, capabilityIds: getCapabilityIdsFor(id) })
 })

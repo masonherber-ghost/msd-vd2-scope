@@ -1,6 +1,3 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import Database from 'better-sqlite3'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -11,11 +8,8 @@ db.pragma('foreign_keys = ON')
 
 vi.mock('../database.js', () => ({ db }))
 
-const here = path.dirname(fileURLToPath(import.meta.url))
-const SCHEMA = fs.readFileSync(
-  path.join(here, '..', 'migrations', '002_create_scope_schema.sql'),
-  'utf8',
-)
+const { applyAllMigrations, resetSchema } = await import('../test-support/apply-migrations.js')
+
 
 const {
   createAssumption,
@@ -39,20 +33,19 @@ const {
   updatePwcFeature,
 } = await import('./pwc-feature-repository.js')
 const { upsertImportedRelease, getAllReleases } = await import('./release-repository.js')
-const { upsertImportedFeatureMvpLink, upsertImportedFeatureCapabilityLink } = await import(
-  './feature-link-repository.js'
-)
+const {
+  upsertImportedFeatureMvpLink,
+  upsertImportedFeatureCapabilityLink,
+  getAllFeatureMvpLinks,
+  getAllFeatureCapabilityLinks,
+  getCapabilityIdsFor,
+  getMvpFeatureIdsFor,
+  setCapabilityLinks,
+  setMvpFeatureLinks,
+} = await import('./feature-link-repository.js')
 
 function reset() {
-  db.pragma('foreign_keys = OFF')
-  // sqlite_sequence is internal to AUTOINCREMENT and cannot be dropped.
-  for (const { name } of db
-    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
-    .all() as { name: string }[]) {
-    db.exec(`DROP TABLE IF EXISTS "${name}"`)
-  }
-  db.pragma('foreign_keys = ON')
-  db.exec(SCHEMA)
+  resetSchema(db)
 
   upsertImportedRelease({
     id: '1.1',
@@ -85,9 +78,13 @@ function reset() {
 
 beforeEach(reset)
 
-describe('the migration is idempotent', () => {
-  it('can be applied twice without error', () => {
-    expect(() => db.exec(SCHEMA)).not.toThrow()
+describe('the migrations are idempotent', () => {
+  it('the whole chain can be applied twice without error', () => {
+    // 004 uses ALTER TABLE ADD COLUMN, which SQLite cannot guard with
+    // IF NOT EXISTS — so re-applying it must fail loudly rather than
+    // silently, and the runner's migrations table is what prevents a
+    // second run in production.
+    expect(() => applyAllMigrations(db)).toThrow(/duplicate column name/)
   })
 })
 
@@ -508,5 +505,163 @@ describe('feature writes', () => {
       // The MVP feature itself survives — other features use it.
       expect(getAllMvpFeatures()).toHaveLength(1)
     })
+  })
+})
+
+describe('editing a feature\'s links', () => {
+  const seedMvp = (ref: number, option: '1A' | '1B' | null) => {
+    upsertImportedMvpFeature({ ref, scope_option: option, title: `MVP ${ref}`, source: 'mapping' })
+    return findMvpFeature(ref, option)!.id
+  }
+
+  const seedCapability = (ref: number, text: string) => {
+    upsertImportedCapability({
+      mvp_feature_id: null,
+      mvp_ref: ref,
+      mvp_owner_ambiguous: 0,
+      text,
+      actor: 'staff',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+      source_phase_label: 'Manage Vacancies',
+      source: 'sequencing',
+    })
+    return findCapability(ref, text)!.id
+  }
+
+  it('replaces the MVP link set with exactly what is asked for', () => {
+    const a = seedMvp(938, '1A')
+    const b = seedMvp(946, '1A')
+    setMvpFeatureLinks('F-001', [a, b])
+    expect(getMvpFeatureIdsFor('F-001').sort()).toEqual([a, b].sort())
+
+    setMvpFeatureLinks('F-001', [b])
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([b])
+  })
+
+  it('replaces the capability link set', () => {
+    const a = seedCapability(938, 'Invite employer')
+    const b = seedCapability(938, 'Search and find employer')
+    setCapabilityLinks('F-001', [a, b])
+    expect(getCapabilityIdsFor('F-001').sort()).toEqual([a, b].sort())
+
+    setCapabilityLinks('F-001', [])
+    expect(getCapabilityIdsFor('F-001')).toEqual([])
+  })
+
+  it('tombstones a removal rather than deleting the row', () => {
+    const a = seedMvp(938, '1A')
+    setMvpFeatureLinks('F-001', [a])
+    setMvpFeatureLinks('F-001', [])
+
+    const row = db
+      .prepare(
+        `SELECT removed_at FROM pwc_feature_mvp_features
+          WHERE pwc_feature_id = 'F-001' AND mvp_feature_id = ?`,
+      )
+      .get(a) as { removed_at: string | null }
+    expect(row.removed_at).toBeTruthy()
+  })
+
+  /**
+   * The reason tombstones exist: a hard DELETE would be undone by the
+   * importer's INSERT on the next run, destroying manual work (R-9.10).
+   */
+  it('keeps a removed link removed across a re-import', () => {
+    const a = seedMvp(938, '1A')
+    upsertImportedFeatureMvpLink({ pwc_feature_id: 'F-001', mvp_feature_id: a })
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([a])
+
+    setMvpFeatureLinks('F-001', [])
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([])
+
+    // The importer runs again and tries to re-add the same link.
+    upsertImportedFeatureMvpLink({ pwc_feature_id: 'F-001', mvp_feature_id: a })
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([])
+  })
+
+  it('keeps a removed capability link removed across a re-import', () => {
+    const a = seedCapability(938, 'Invite employer')
+    upsertImportedFeatureCapabilityLink({
+      pwc_feature_id: 'F-001',
+      capability_id: a,
+      source_citations: 1,
+      matched: 1,
+      release_conflict: 0,
+      phase_conflict: 0,
+      feature_release_id: null,
+      capability_release_id: null,
+      feature_phase_label: null,
+      capability_phase_label: null,
+      phase_conflict_merged: 0,
+    })
+    setCapabilityLinks('F-001', [])
+
+    upsertImportedFeatureCapabilityLink({
+      pwc_feature_id: 'F-001',
+      capability_id: a,
+      source_citations: 1,
+      matched: 1,
+      release_conflict: 0,
+      phase_conflict: 0,
+      feature_release_id: null,
+      capability_release_id: null,
+      feature_phase_label: null,
+      capability_phase_label: null,
+      phase_conflict_merged: 0,
+    })
+    expect(getCapabilityIdsFor('F-001')).toEqual([])
+  })
+
+  it('revives a link the user removed and then re-added', () => {
+    const a = seedMvp(938, '1A')
+    setMvpFeatureLinks('F-001', [a])
+    setMvpFeatureLinks('F-001', [])
+    setMvpFeatureLinks('F-001', [a])
+
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([a])
+    const row = db
+      .prepare(
+        `SELECT removed_at, source FROM pwc_feature_mvp_features
+          WHERE pwc_feature_id = 'F-001' AND mvp_feature_id = ?`,
+      )
+      .get(a) as { removed_at: string | null; source: string }
+    expect(row.removed_at).toBeNull()
+    expect(row.source).toBe('manual')
+  })
+
+  it('hides tombstoned links from the graph read', () => {
+    const a = seedMvp(938, '1A')
+    const c = seedCapability(938, 'Invite employer')
+    setMvpFeatureLinks('F-001', [a])
+    setCapabilityLinks('F-001', [c])
+    expect(getAllFeatureMvpLinks()).toHaveLength(1)
+    expect(getAllFeatureCapabilityLinks()).toHaveLength(1)
+
+    setMvpFeatureLinks('F-001', [])
+    setCapabilityLinks('F-001', [])
+    expect(getAllFeatureMvpLinks()).toHaveLength(0)
+    expect(getAllFeatureCapabilityLinks()).toHaveLength(0)
+  })
+
+  it('does not touch another feature\'s links', () => {
+    upsertImportedPwcFeature({
+      id: 'F-002',
+      name: 'Other',
+      foundational_build: '',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+      source_phase_label: null,
+      capability_note: null,
+      display_order: 2,
+    })
+    const a = seedMvp(938, '1A')
+    setMvpFeatureLinks('F-001', [a])
+    setMvpFeatureLinks('F-002', [a])
+
+    setMvpFeatureLinks('F-001', [])
+
+    expect(getMvpFeatureIdsFor('F-001')).toEqual([])
+    expect(getMvpFeatureIdsFor('F-002')).toEqual([a])
   })
 })

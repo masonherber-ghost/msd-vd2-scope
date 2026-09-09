@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { InlineEditField } from '@/components/InlineEditField'
+import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
 
@@ -19,9 +20,25 @@ export type FeatureDetailPanelProps = {
   /** MVP refs currently pivoted to, so the chips can show as pressed. */
   activeMvpRefs: number[]
   /** Rejects with the server's message so the field can surface it. */
-  onSaveField?: (patch: { name?: string; foundational_build?: string }) => Promise<unknown>
+  onSaveField?: (patch: {
+    name?: string
+    foundational_build?: string
+    release_id?: string
+    phase_id?: string
+  }) => Promise<unknown>
   onDelete?: (cascade: boolean) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
+  /** Release and phase choices, for editing the feature's placement. */
+  releaseOptions?: { value: string; label: string }[]
+  phaseOptions?: { value: string; label: string }[]
+  /** Every MVP record and capability, for the link editors. */
+  mvpOptions?: LinkOption[]
+  capabilityOptions?: LinkOption[]
+  onSetMvpLinks?: (mvpFeatureIds: number[]) => Promise<unknown>
+  onSetCapabilityLinks?: (capabilityIds: number[]) => Promise<unknown>
+  /** The feature's current link ids. */
+  linkedMvpIds?: number[]
+  linkedCapabilityIds?: number[]
 }
 
 export function FeatureDetailPanel({
@@ -33,6 +50,14 @@ export function FeatureDetailPanel({
   onSaveField,
   onDelete,
   onDirtyChange,
+  releaseOptions,
+  phaseOptions,
+  mvpOptions,
+  capabilityOptions,
+  onSetMvpLinks,
+  onSetCapabilityLinks,
+  linkedMvpIds = [],
+  linkedCapabilityIds = [],
 }: FeatureDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -114,6 +139,28 @@ export function FeatureDetailPanel({
         </div>
       ) : null}
 
+      {onSaveField && releaseOptions && phaseOptions ? (
+        <div className="feature-detail__section">
+          <h3 className="feature-detail__section-title">Placement</h3>
+          <InlineEditField
+            label="Release"
+            value={detail.releaseId}
+            displayValue={detail.releaseLabel}
+            options={releaseOptions}
+            onSave={(release_id) => onSaveField({ release_id })}
+            onDirtyChange={onDirtyChange}
+          />
+          <InlineEditField
+            label="Phase"
+            value={detail.phaseId}
+            displayValue={`${detail.phaseName} · epic ${detail.epicRef}`}
+            options={phaseOptions}
+            onSave={(phase_id) => onSaveField({ phase_id })}
+            onDirtyChange={onDirtyChange}
+          />
+        </div>
+      ) : null}
+
       <div className="feature-detail__section">
         <h3 className="feature-detail__section-title">Name</h3>
         {onSaveField ? (
@@ -182,6 +229,16 @@ export function FeatureDetailPanel({
             )
           })}
         </ul>
+
+        {onSetMvpLinks && mvpOptions ? (
+          <LinkPicker
+            legend="Linked MVP features"
+            options={mvpOptions}
+            selectedIds={linkedMvpIds}
+            onChange={onSetMvpLinks}
+            searchLabel="Search MVP features by ref or title"
+          />
+        ) : null}
       </div>
 
       <div className="feature-detail__section">
@@ -210,6 +267,16 @@ export function FeatureDetailPanel({
             </div>
           ))
         )}
+
+        {onSetCapabilityLinks && capabilityOptions ? (
+          <LinkPicker
+            legend="Assigned capabilities"
+            options={capabilityOptions}
+            selectedIds={linkedCapabilityIds}
+            onChange={onSetCapabilityLinks}
+            searchLabel="Search capabilities by text or ref"
+          />
+        ) : null}
       </div>
 
       <div className="feature-detail__section">

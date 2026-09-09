@@ -134,3 +134,73 @@ export function useDeleteFeature() {
       }),
   })
 }
+
+/**
+ * Replaces a feature's MVP feature links. The optimistic patch mirrors what
+ * the server does, so the panel and the map agree immediately.
+ */
+export function useSetMvpLinks() {
+  return useOptimisticScopeMutation<
+    { id: string; mvpFeatureIds: number[] },
+    Awaited<ReturnType<typeof apiClient.features.setMvpLinks>>
+  >({
+    mutationFn: ({ id, mvpFeatureIds }) => apiClient.features.setMvpLinks(id, mvpFeatureIds),
+    optimistic: (graph, { id, mvpFeatureIds }) => ({
+      ...graph,
+      featureMvpLinks: [
+        ...graph.featureMvpLinks.filter((link) => link.pwc_feature_id !== id),
+        ...mvpFeatureIds.map((mvpFeatureId) => ({
+          pwc_feature_id: id,
+          mvp_feature_id: mvpFeatureId,
+          source: 'manual',
+        })),
+      ],
+    }),
+  })
+}
+
+export function useSetCapabilityLinks() {
+  return useOptimisticScopeMutation<
+    { id: string; capabilityIds: number[] },
+    Awaited<ReturnType<typeof apiClient.features.setCapabilityLinks>>
+  >({
+    mutationFn: ({ id, capabilityIds }) =>
+      apiClient.features.setCapabilityLinks(id, capabilityIds),
+    optimistic: (graph, { id, capabilityIds }) => {
+      const existing = new Map(
+        graph.featureCapabilityLinks
+          .filter((link) => link.pwc_feature_id === id)
+          .map((link) => [link.capability_id, link]),
+      )
+      return {
+        ...graph,
+        featureCapabilityLinks: [
+          ...graph.featureCapabilityLinks.filter((link) => link.pwc_feature_id !== id),
+          ...capabilityIds.map(
+            (capabilityId) =>
+              existing.get(capabilityId) ?? {
+                // A newly linked capability has no conflict history yet; the
+                // refetch after settle fills in what the server derives.
+                id: -capabilityId,
+                pwc_feature_id: id,
+                capability_id: capabilityId,
+                source_citations: 1,
+                matched: 1,
+                release_conflict: 0,
+                phase_conflict: 0,
+                feature_release_id: null,
+                capability_release_id: null,
+                feature_phase_label: null,
+                capability_phase_label: null,
+                phase_conflict_merged: 0,
+                resolution_state: 'unreviewed' as const,
+                resolution_note: null,
+                resolved_at: null,
+                source: 'manual',
+              },
+          ),
+        ],
+      }
+    },
+  })
+}

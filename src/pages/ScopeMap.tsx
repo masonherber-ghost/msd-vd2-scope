@@ -9,6 +9,8 @@ import {
   useCreateFeature,
   useDeleteFeature,
   useNextFeatureId,
+  useSetCapabilityLinks,
+  useSetMvpLinks,
   useUpdateFeature,
 } from '@/hooks/useFeatureMutations'
 import { useScope } from '@/hooks/useScope'
@@ -125,7 +127,87 @@ export default function ScopeMap() {
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
   const deleteFeature = useDeleteFeature()
+  const setMvpLinks = useSetMvpLinks()
+  const setCapabilityLinks = useSetCapabilityLinks()
   const nextId = useNextFeatureId(creatingIn !== null)
+
+  // ---- Options for the panel's editors ----------------------------------
+  const releaseOptions = useMemo(
+    () => (model ? model.releases.map((r) => ({ value: r.id, label: r.label })) : []),
+    [model],
+  )
+
+  const phaseOptions = useMemo(
+    () =>
+      model
+        ? model.phases.map((p) => ({
+            value: p.id,
+            label: `${p.display_order}. ${p.name} · epic ${p.epic_ref}`,
+          }))
+        : [],
+    [model],
+  )
+
+  const mvpOptions = useMemo(
+    () =>
+      scope.data
+        ? scope.data.mvpFeatures
+            .slice()
+            .sort(
+              (a, b) =>
+                a.ref - b.ref || (a.scope_option ?? '').localeCompare(b.scope_option ?? ''),
+            )
+            .map((mvp) => ({
+              id: mvp.id,
+              label: `${mvp.ref}${mvp.scope_option ? ` · Option ${mvp.scope_option}` : ''}`,
+              hint: mvp.title,
+            }))
+        : [],
+    [scope.data],
+  )
+
+  /**
+   * Every capability is selectable, but the ones under this feature's own MVP
+   * refs are marked related — assigning a capability from an unrelated ref is
+   * allowed and visible rather than blocked.
+   */
+  const capabilityOptions = useMemo(() => {
+    if (!scope.data || !detail) return []
+    const ownRefs = new Set(detail.mvpFeatures.map((m) => m.ref))
+    const releaseLabel = new Map(scope.data.releases.map((r) => [r.id, r.label]))
+    return scope.data.capabilities
+      .slice()
+      .sort((a, b) => a.mvp_ref - b.mvp_ref || a.text.localeCompare(b.text))
+      .map((capability) => ({
+        id: capability.id,
+        label: capability.text,
+        hint: `${capability.mvp_ref} · ${capability.actor}`,
+        badge: capability.release_id
+          ? (releaseLabel.get(capability.release_id) ?? capability.release_id)
+          : 'unplaced',
+        related: ownRefs.has(capability.mvp_ref),
+      }))
+  }, [scope.data, detail])
+
+  const linkedMvpIds = useMemo(
+    () =>
+      scope.data && selectedId
+        ? scope.data.featureMvpLinks
+            .filter((link) => link.pwc_feature_id === selectedId)
+            .map((link) => link.mvp_feature_id)
+        : [],
+    [scope.data, selectedId],
+  )
+
+  const linkedCapabilityIds = useMemo(
+    () =>
+      scope.data && selectedId
+        ? scope.data.featureCapabilityLinks
+            .filter((link) => link.pwc_feature_id === selectedId)
+            .map((link) => link.capability_id)
+        : [],
+    [scope.data, selectedId],
+  )
 
   /** Warns before discarding an in-progress edit (R-10.8). */
   const confirmDiscard = useCallback(() => {
@@ -367,6 +449,18 @@ export default function ScopeMap() {
                 setSelected(null)
               }}
               onDirtyChange={setDirty}
+              releaseOptions={releaseOptions}
+              phaseOptions={phaseOptions}
+              mvpOptions={mvpOptions}
+              capabilityOptions={capabilityOptions}
+              linkedMvpIds={linkedMvpIds}
+              linkedCapabilityIds={linkedCapabilityIds}
+              onSetMvpLinks={(mvpFeatureIds) =>
+                setMvpLinks.mutateAsync({ id: detail.id, mvpFeatureIds })
+              }
+              onSetCapabilityLinks={(capabilityIds) =>
+                setCapabilityLinks.mutateAsync({ id: detail.id, capabilityIds })
+              }
             />
           ) : null}
         </div>
