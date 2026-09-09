@@ -1,10 +1,33 @@
+import { NavLink } from 'react-router-dom'
 import { ThemeToggle } from '@/components/ThemeToggle'
+
+const linkClass = ({ isActive }: { isActive: boolean }) =>
+  [
+    'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+    isActive
+      ? 'bg-accent text-accent-foreground'
+      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
+  ].join(' ')
 
 export function Header() {
   return (
     <header className="border-b border-border">
       <div className="app-main-inner--fixed flex items-center justify-between gap-4 px-4 py-3">
-        <span className="font-semibold">MSD VD2 Scope</span>
+        <div className="flex items-center gap-4">
+          <span className="font-semibold">MSD VD2 Scope</span>
+          <nav aria-label="Main" className="flex items-center gap-1">
+            <NavLink to="/" end className={linkClass}>
+              Home
+            </NavLink>
+            <NavLink to="/contact" className={linkClass}>
+              Contact
+            </NavLink>
+            {/* No matching route — always renders NotFound. */}
+            <NavLink to="/404-test" className={linkClass}>
+              404
+            </NavLink>
+          </nav>
+        </div>
         <ThemeToggle />
       </div>
     </header>

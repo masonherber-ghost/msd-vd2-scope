@@ -39,6 +39,19 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/notes', notesRouter)
 
 app.use('/api', notFoundHandler)
+
+// Production: serve the built SPA and hand every non-API path to index.html
+// so a refresh on a client-side route works. In dev, Vite serves the client.
+if (process.env.NODE_ENV === 'production') {
+  const DIST_DIR = path.join(here, '..', 'dist')
+  app.use(express.static(DIST_DIR))
+  // Express 5 uses path-to-regexp v8: a bare '*' is invalid and throws at
+  // registration. The wildcard must be named.
+  app.get('/*splat', (_req, res) => {
+    res.sendFile(path.join(DIST_DIR, 'index.html'))
+  })
+}
+
 app.use(errorHandler)
 
 app.listen(PORT, () => {
