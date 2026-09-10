@@ -1,0 +1,142 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.coverage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-6);
+}
+
+.coverage__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.coverage__title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.coverage__note {
+  font-size: 0.75rem;
+  color: var(--color-muted-foreground);
+  margin: 0;
+}
+
+/* ========================================
+   TABLE
+   ======================================== */
+
+.coverage__scroll {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.coverage__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.coverage__table th,
+.coverage__table td {
+  text-align: left;
+  padding: var(--spacing-2) var(--spacing-3);
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: top;
+}
+
+.coverage__table th {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-muted-foreground);
+  background-color: var(--color-card);
+}
+
+.coverage__table tr:last-child td {
+  border-bottom: 0;
+}
+
+.coverage__mono {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.coverage__muted {
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   RANK BAR
+   ======================================== */
+
+/* A width beside the number, never instead of it (R-10.6). */
+.coverage__rank {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.coverage__rank-bar {
+  display: inline-block;
+  height: 0.375rem;
+  min-width: 0.25rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-edge);
+}
+
+/* ========================================
+   LISTS
+   ======================================== */
+
+.coverage__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.coverage__chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+}
+
+.coverage__chip-label {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+/* ========================================
+   NEAR DUPLICATES
+   ======================================== */
+
+.coverage__duplicate {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: var(--spacing-3);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 0.8125rem;
+}
+
+.coverage__duplicate-text {
+  overflow-wrap: anywhere;
+}
+
+.coverage__duplicate-reason {
+  font-size: 0.6875rem;
+  color: var(--color-muted-foreground);
+}

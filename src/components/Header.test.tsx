@@ -20,7 +20,7 @@ describe('Header', () => {
     expect(screen.getByRole('navigation', { name: /main/i })).toBeInTheDocument()
   })
 
-  it('links to the three real destinations', () => {
+  it('links to every real destination', () => {
     renderHeader()
 
     expect(screen.getByRole('link', { name: 'Scope map' })).toHaveAttribute('href', '/')
@@ -28,13 +28,14 @@ describe('Header', () => {
       'href',
       '/reconciliation',
     )
+    expect(screen.getByRole('link', { name: 'Coverage' })).toHaveAttribute('href', '/coverage')
     expect(screen.getByRole('link', { name: 'Manage' })).toHaveAttribute('href', '/manage')
   })
 
   it('offers nothing else', () => {
     renderHeader()
     // Contact and the 404 probe were scaffolding and are gone.
-    expect(screen.getAllByRole('link')).toHaveLength(3)
+    expect(screen.getAllByRole('link')).toHaveLength(4)
     expect(screen.queryByRole('link', { name: 'Contact' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '404' })).not.toBeInTheDocument()
   })

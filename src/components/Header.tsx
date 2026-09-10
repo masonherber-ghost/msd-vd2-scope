@@ -22,6 +22,9 @@ export function Header() {
             <NavLink to="/reconciliation" className={linkClass}>
               Reconciliation
             </NavLink>
+            <NavLink to="/coverage" className={linkClass}>
+              Coverage
+            </NavLink>
             <NavLink to="/manage" className={linkClass}>
               Manage
             </NavLink>
