@@ -4,13 +4,28 @@
 
 @import "tailwindcss";
 
-/* Tailwind v4's built-in `dark` variant keys off prefers-color-scheme.
-   This override switches it to class-based. `:where(.dark, .dark *)`
-   matches the root element itself as well as its descendants. */
-@custom-variant dark (&:where(.dark, .dark *));
+/* Self-hosted so the map renders the same offline and with no
+   third-party request. Atkinson Hyperlegible is the MSD design
+   system's face, chosen for low-vision legibility. */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/atkinson-hyperlegible-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/atkinson-hyperlegible-700.woff2") format("woff2");
+}
 
 /* BEM component CSS. One file per component, per rules-css-bem.md. */
 @import "./components/ScopeMapGrid.css";
+@import "./components/ScopeMapChrome.css";
 @import "./components/FeatureCard.css";
 @import "./components/FilterRail.css";
 @import "./components/FeatureDetailPanel.css";
@@ -27,56 +42,88 @@
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values
+
+   The MSD design system, converted from its published sRGB values
+   to oklch. Source: the VD2 Scope Map design file's :root block.
    ============================================================ */
 
-@theme {
-  /* ---- Colour: stock Tailwind neutral. Achromatic (chroma 0) by
-     design — black, white and greys only. No brand palette until a
-     design system is supplied. ---- */
-  --color-background: oklch(1 0 0);
-  --color-foreground: oklch(0.145 0 0);
+/* `static` because several tokens are only referenced through a var() name
+   composed at runtime — var(--color-release-${suffix}) — which Tailwind's
+   scanner cannot see. Without it those tokens are tree-shaken out and the
+   colour silently resolves to nothing. */
+@theme static {
+  /* ---- MSD brand ramp ---- */
+  --color-primary-900: oklch(37.8% 0.102 254.0);
+  --color-primary-700: oklch(46.7% 0.128 267.3);
+  --color-primary-500: oklch(56.5% 0.151 247.7);
+  --color-primary-400: oklch(53.5% 0.143 247.7);
+  --color-primary-300: oklch(72.6% 0.101 239.4);
+  --color-primary-200: oklch(88.4% 0.042 234.9);
+  --color-primary-100: oklch(93.0% 0.025 236.8);
+  --color-primary-75: oklch(91.7% 0.022 226.1);
+  --color-primary-50: oklch(95.5% 0.017 236.7);
+  --color-primary-25: oklch(98.2% 0.007 233.6);
 
-  --color-card: oklch(1 0 0);
-  --color-card-foreground: oklch(0.145 0 0);
+  /* ---- MSD accents ---- */
+  --color-teal: oklch(73.5% 0.115 190.6);
+  --color-coral: oklch(67.8% 0.191 25.1);
+  --color-amber: oklch(81.4% 0.169 78.1);
+  --color-purple: oklch(56.1% 0.257 296.7);
 
-  --color-popover: oklch(1 0 0);
-  --color-popover-foreground: oklch(0.145 0 0);
+  /* ---- MSD neutrals ---- */
+  --color-ink-900: oklch(28.8% 0.054 252.9);
+  --color-ink-700: oklch(32.1% 0 0);
+  --color-ink-500: oklch(51.0% 0 0);
+  --color-ink-300: oklch(76.0% 0.036 252.3);
+  --color-ink-250: oklch(63.6% 0.057 250.4);
+  --color-line: oklch(88.2% 0.018 253.4);
+  --color-line-2: oklch(88.5% 0 0);
 
-  --color-primary: oklch(0.205 0 0);
-  --color-primary-foreground: oklch(0.985 0 0);
+  /* ---- Shadcn contract, mapped onto the MSD ramp ----
+     These names are required by the Shadcn primitives; the values
+     are MSD's. See rules-design-tokens.md. */
+  --color-background: oklch(98.2% 0.007 233.6);
+  --color-foreground: oklch(32.1% 0 0);
 
-  --color-secondary: oklch(0.97 0 0);
-  --color-secondary-foreground: oklch(0.205 0 0);
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(32.1% 0 0);
 
-  --color-muted: oklch(0.97 0 0);
-  --color-muted-foreground: oklch(0.556 0 0);
+  --color-popover: oklch(100% 0 0);
+  --color-popover-foreground: oklch(32.1% 0 0);
 
-  --color-accent: oklch(0.97 0 0);
-  --color-accent-foreground: oklch(0.205 0 0);
+  --color-primary: oklch(37.8% 0.102 254.0);
+  --color-primary-foreground: oklch(100% 0 0);
 
-  /* The one chromatic token: a destructive action must read as danger. */
-  --color-destructive: oklch(0.577 0.245 27.325);
-  --color-destructive-foreground: oklch(0.985 0 0);
+  --color-secondary: oklch(95.5% 0.017 236.7);
+  --color-secondary-foreground: oklch(37.8% 0.102 254.0);
 
-  --color-border: oklch(0.922 0 0);
-  --color-input: oklch(0.922 0 0);
-  --color-ring: oklch(0.708 0 0);
+  --color-muted: oklch(95.5% 0.017 236.7);
+  --color-muted-foreground: oklch(51.0% 0 0);
+
+  --color-accent: oklch(93.0% 0.025 236.8);
+  --color-accent-foreground: oklch(37.8% 0.102 254.0);
+
+  --color-destructive: oklch(67.8% 0.191 25.1);
+  --color-destructive-foreground: oklch(100% 0 0);
+
+  --color-border: oklch(88.2% 0.018 253.4);
+  --color-input: oklch(88.2% 0.018 253.4);
+  --color-ring: oklch(56.5% 0.151 247.7);
 
   /* ---- Typography ---- */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji";
+  --font-sans: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     "Liberation Mono", "Courier New", monospace;
 
-  /* ---- Radius ---- */
+  /* ---- Radius: MSD uses 4 / 8 / 16 / pill ---- */
   --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1rem;
+  --radius-pill: 999px;
 
-  /* ---- Spacing: stock Tailwind 0.25rem scale, declared explicitly so
-     BEM files can consume var(--spacing-4) directly. ---- */
+  /* ---- Spacing: MSD's 4px scale ---- */
   --spacing-0: 0rem;
   --spacing-1: 0.25rem;
   --spacing-2: 0.5rem;
@@ -91,6 +138,37 @@
   --spacing-20: 5rem;
   --spacing-24: 6rem;
 
+  /* ---- Elevation ---- */
+  --shadow-card: 0 4px 8px oklch(28.8% 0.054 252.9 / 0.2);
+  --shadow-header: 0 2px 8px oklch(28.8% 0.054 252.9 / 0.2);
+  --shadow-menu: 0 8px 24px oklch(28.8% 0.054 252.9 / 0.18);
+
+  /* ---- Scope map: actors ----
+     MSD's actor palette. R-10.6 still applies: every card names its
+     actor in words, so the colour is a scanning aid, never the signal. */
+  --color-actor-employer: oklch(46.7% 0.128 267.3);
+  --color-actor-staff: oklch(72.4% 0.180 52.6);
+  --color-actor-jobseeker: oklch(67.8% 0.191 25.1);
+  --color-actor-system: oklch(56.5% 0.151 247.7);
+  --color-actor-none: oklch(63.6% 0.057 250.4);
+
+  /* ---- Scope map: release accents ---- */
+  --color-release-1-1: oklch(37.8% 0.102 254.0);
+  --color-release-1-2: oklch(56.5% 0.151 247.7);
+  --color-release-1-3: oklch(73.5% 0.115 190.6);
+  --color-release-1-4: oklch(46.7% 0.128 267.3);
+  --color-release-1-9: oklch(81.4% 0.169 78.1);
+  --color-release-2: oklch(56.1% 0.257 296.7);
+
+  /* ---- Scope map: structure ---- */
+  --color-cell-empty: oklch(100% 0 0 / 0.55);
+  --color-cell-empty-border: oklch(88.4% 0.042 234.9);
+  --color-cell-empty-note: oklch(71.3% 0.042 249.6);
+
+  /* ---- Scope map: connection edges ---- */
+  --color-edge: oklch(63.6% 0.057 250.4);
+  --color-edge-cross-release: oklch(67.8% 0.191 25.1);
+
   /* ---- Breakpoints: these exact names, or Tailwind generates no
      responsive modifiers. In px so BEM media queries can copy them. ---- */
   --breakpoint-sm: 640px;
@@ -100,97 +178,14 @@
   /* Remove Tailwind's default 2xl so the scale is exactly these four. */
   --breakpoint-2xl: initial;
 
-  /* ---- Scope map: release column accents ----
-     Deliberately achromatic. R-10.6 requires release, actor and conflict
-     state to encode by more than hue, so the ramp is a legibility aid only
-     and every value is also labelled. Swap these for the design system's
-     release hues when one arrives — nothing reads them but the BEM files. */
-  --color-release-1-1: oklch(0.93 0 0);
-  --color-release-1-2: oklch(0.89 0 0);
-  --color-release-1-3: oklch(0.85 0 0);
-  --color-release-1-4: oklch(0.81 0 0);
-  --color-release-1-9: oklch(0.77 0 0);
-  --color-release-2: oklch(0.73 0 0);
-
-  /* ---- Scope map: actor chips ---- */
-  --color-actor-employer: oklch(0.95 0 0);
-  --color-actor-staff: oklch(0.90 0 0);
-  --color-actor-jobseeker: oklch(0.85 0 0);
-  --color-actor-system: oklch(0.80 0 0);
-
-  /* ---- Scope map: connection edges ----
-     Cross-release edges also differ by dash pattern, so hue is never the only
-     signal (R-8.4, R-10.6). */
-  --color-edge: oklch(0.55 0 0);
-  --color-edge-cross-release: oklch(0.577 0.245 27.325);
-
-  /* ---- Scope map: structure ---- */
-  --color-cell-empty: oklch(0.975 0 0);
-  --color-cell-empty-border: oklch(0.93 0 0);
-
   /* ---- Layout ---- */
-  --content-max-width: 1280px;
-  --scope-card-min-width: 13rem;
+  --content-max-width: 2080px;
+  --scope-card-min-width: 13.75rem;
   --scope-row-min-height: 6rem;
 }
 
 /* ============================================================
-   3. DARK MODE — only the tokens that change
-   Plain `.dark` selector: unlayered CSS outranks the @layer theme
-   block that @theme compiles into, so these win on specificity alone.
-   ============================================================ */
-
-.dark {
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.985 0 0);
-
-  --color-card: oklch(0.205 0 0);
-  --color-card-foreground: oklch(0.985 0 0);
-
-  --color-popover: oklch(0.269 0 0);
-  --color-popover-foreground: oklch(0.985 0 0);
-
-  --color-primary: oklch(0.922 0 0);
-  --color-primary-foreground: oklch(0.205 0 0);
-
-  --color-secondary: oklch(0.269 0 0);
-  --color-secondary-foreground: oklch(0.985 0 0);
-
-  --color-muted: oklch(0.269 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-
-  --color-accent: oklch(0.371 0 0);
-  --color-accent-foreground: oklch(0.985 0 0);
-
-  --color-destructive: oklch(0.704 0.191 22.216);
-  --color-destructive-foreground: oklch(0.985 0 0);
-
-  --color-border: oklch(1 0 0 / 10%);
-  --color-input: oklch(1 0 0 / 15%);
-  --color-ring: oklch(0.556 0 0);
-
-  /* The release and actor ramps invert: darker surfaces, same ordering. */
-  --color-release-1-1: oklch(0.30 0 0);
-  --color-release-1-2: oklch(0.34 0 0);
-  --color-release-1-3: oklch(0.38 0 0);
-  --color-release-1-4: oklch(0.42 0 0);
-  --color-release-1-9: oklch(0.46 0 0);
-  --color-release-2: oklch(0.50 0 0);
-
-  --color-actor-employer: oklch(0.30 0 0);
-  --color-actor-staff: oklch(0.35 0 0);
-  --color-actor-jobseeker: oklch(0.40 0 0);
-  --color-actor-system: oklch(0.45 0 0);
-
-  --color-edge: oklch(0.72 0 0);
-  --color-edge-cross-release: oklch(0.704 0.191 22.216);
-
-  --color-cell-empty: oklch(0.19 0 0);
-  --color-cell-empty-border: oklch(0.26 0 0);
-}
-
-/* ============================================================
-   4. BASE — element resets only
+   3. BASE — element resets only
    ============================================================ */
 
 @layer base {
@@ -209,6 +204,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   :focus-visible {

@@ -1,5 +1,6 @@
+import type { CSSProperties } from 'react'
 import { ConflictBadge } from '@/components/ConflictBadge'
-import type { FeatureCardModel } from '@/lib/scope-derive'
+import { releaseTokenSuffix, type FeatureCardModel } from '@/lib/scope-derive'
 import { densityBand } from '@/lib/scope-edges'
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -21,6 +22,10 @@ export type FeatureCardProps = {
   onActivate?: (featureId: string | null) => void
   /** True when at least one of this feature's conflicts is still unreviewed. */
   hasUnreviewedConflict?: boolean
+  /** The release label shown on the card's pill. */
+  releaseLabel?: string
+  /** Token name for the card's leading edge. */
+  accentToken?: string
 }
 
 export function FeatureCard({
@@ -31,8 +36,16 @@ export function FeatureCard({
   density = 0,
   onActivate,
   hasUnreviewedConflict = true,
+  releaseLabel,
+  accentToken,
 }: FeatureCardProps) {
   const conflicts = feature.conflicts.release + feature.conflicts.phase
+  const releaseSuffix = releaseTokenSuffix(feature.releaseId)
+  const style = {
+    '--card-accent': `var(${accentToken ?? `--color-release-${releaseSuffix}`})`,
+    '--release-pill-bg': `var(--color-release-${releaseSuffix})`,
+    '--release-pill-fg': 'var(--color-primary-foreground)',
+  } as CSSProperties
 
   return (
     <article
@@ -46,6 +59,7 @@ export function FeatureCard({
       // Labelled here only when there is no select button, so the card and
       // its button never carry the same name twice.
       aria-label={onSelect ? undefined : `${feature.id} ${feature.name}`}
+      style={style}
       data-feature-id={feature.id}
       onMouseEnter={onActivate ? () => onActivate(feature.id) : undefined}
       onMouseLeave={onActivate ? () => onActivate(null) : undefined}
@@ -71,6 +85,9 @@ export function FeatureCard({
           <span className="feature-card__id">{feature.id}</span>
         )}
         <span className="feature-card__meta">
+          {releaseLabel ? (
+            <span className="feature-card__release">{releaseLabel}</span>
+          ) : null}
           {density > 0 ? (
             // Shown passively so load-bearing features read as important
             // before any interaction (R-8.3). The count carries the meaning;

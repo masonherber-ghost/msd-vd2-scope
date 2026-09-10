@@ -161,7 +161,9 @@ describe('ScopeMap page', () => {
   it('explains that an empty cell is information', async () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
-    expect(screen.getByText(/an empty cell means nothing in that phase/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/an empty cell is information: nothing in that phase lands there/i),
+    ).toBeInTheDocument()
   })
 })
 
@@ -544,7 +546,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
     )
 
     expect(screen.getByRole('form', { name: /new pwc feature/i })).toBeInTheDocument()
@@ -558,7 +560,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
     )
 
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
@@ -574,7 +576,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Brand new feature')
@@ -596,7 +598,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     // No name.
@@ -613,7 +615,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Manage Vacancies, Release 1.4' }),
+      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Duplicate')
@@ -1306,5 +1308,149 @@ describe('ScopeMap search (R-8.11 – R-8.13)', () => {
     )
     const panel = screen.getByRole('region', { name: 'Verify employer' })
     expect(panel.querySelector('mark')).toBeNull()
+  })
+})
+
+describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
+  it('defaults to grouping rows by release', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const rows = screen.getAllByRole('rowheader')
+    expect(rows[0]).toHaveTextContent('Release 1.1')
+    expect(screen.getByRole('button', { name: 'By release' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('renders phases across the top as stages', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const headers = screen.getAllByRole('columnheader')
+    expect(headers[1]).toHaveTextContent('Stage 1')
+    expect(headers[1]).toHaveTextContent('Access & Onboarding')
+  })
+
+  it('switches to actor rows', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'By actor' }))
+
+    const rows = screen.getAllByRole('rowheader')
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Employers'),
+      expect.stringContaining('MSD staff'),
+      expect.stringContaining('Jobseekers'),
+      expect.stringContaining('Systems'),
+      expect.stringContaining('No actor recorded'),
+    ])
+  })
+
+  it('shows a multi-actor feature in every row it belongs to', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'By actor' }))
+
+    // F-001 cites a staff and an employer capability.
+    expect(screen.getAllByRole('button', { name: 'F-001 Invite employer' })).toHaveLength(2)
+  })
+
+  it('loses no feature when the view changes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const inRelease = new Set(
+      screen.getAllByRole('button', { name: /^F-\d{3} / }).map((b) => b.getAttribute('aria-label')),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'By actor' }))
+    const inActor = new Set(
+      screen.getAllByRole('button', { name: /^F-\d{3} / }).map((b) => b.getAttribute('aria-label')),
+    )
+
+    expect(inActor).toEqual(inRelease)
+  })
+
+  it('keeps selection and filters across a view change', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002&actor=employer')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'By actor' }))
+
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+    expect(url()).toContain('actor=employer')
+  })
+})
+
+describe('ScopeMap chrome from the design', () => {
+  it('offers a release chip per release, with counts', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const chips = screen.getByRole('list', { name: /filter by release/i })
+    expect(within(chips).getByRole('button', { name: /Release 1\.1/ })).toHaveTextContent(
+      '2 features · 2 capabilities',
+    )
+    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveTextContent(
+      '0 features · 1 capabilities',
+    )
+  })
+
+  it('a release chip drives the release filter', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const chips = screen.getByRole('list', { name: /filter by release/i })
+    await user.click(within(chips).getByRole('button', { name: /Release 1\.4/ }))
+
+    await waitFor(() => expect(url()).toContain('release=1.4'))
+    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('names every actor in the legend', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const legend = screen.getByRole('list', { name: 'Actors' })
+    for (const name of ['Employers', 'MSD staff', 'Jobseekers', 'Systems']) {
+      expect(within(legend).getByText(name)).toBeInTheDocument()
+    }
+  })
+
+  it('closes with a release horizon per release', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      releases: base.releases.map((r) =>
+        r.id === '1.1' ? { ...r, description: 'Invitation access for a trusted cohort.' } : r,
+      ),
+    }
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    const horizons = screen.getByRole('region', { name: /release horizons/i })
+    expect(within(horizons).getAllByRole('listitem')).toHaveLength(2)
+    expect(within(horizons).getByText('Pilot')).toBeInTheDocument()
+    expect(
+      within(horizons).getByText('Invitation access for a trusted cohort.'),
+    ).toBeInTheDocument()
+    // 1.4 exists only in the sequencing table, so it has no description.
+    expect(
+      within(horizons).getByText(/appears only in the sequencing table/i),
+    ).toBeInTheDocument()
   })
 })

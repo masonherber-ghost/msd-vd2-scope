@@ -6,6 +6,7 @@ import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
+import { ReleaseHorizons, ScopeMapChrome } from '@/components/ScopeMapChrome'
 import { ScopeSearch } from '@/components/ScopeSearch'
 import {
   useCreateFeature,
@@ -23,7 +24,7 @@ import {
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
-import { buildScopeMap, projectCells } from '@/lib/scope-derive'
+import { buildScopeMap, projectCells, rowsFor, type RowMode } from '@/lib/scope-derive'
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
@@ -32,6 +33,7 @@ import {
   GROUP_LABEL,
   activeGroups,
   applyFilters,
+  toggleValue,
   blameGroups,
   isEmpty,
   parseFilters,
@@ -50,6 +52,9 @@ export default function ScopeMap() {
   const scope = useScope()
   const [zoom, setZoom] = useState(1)
   const [query, setQuery] = useState('')
+  // Rows group by release by default, which keeps every cell addressable by
+  // the release + phase pair the create flow pre-fills from.
+  const [rowMode, setRowMode] = useState<RowMode>('release')
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -117,9 +122,11 @@ export default function ScopeMap() {
   )
 
   const projected = useMemo(
-    () => (model ? projectCells(model, visible) : null),
-    [model, visible],
+    () => (model ? projectCells(model, visible, rowMode) : null),
+    [model, visible, rowMode],
   )
+
+  const rows = useMemo(() => (model ? rowsFor(model, rowMode) : []), [model, rowMode])
 
   const blame = useMemo(
     () => (model ? blameGroups(model.features, filters) : []),
@@ -290,12 +297,15 @@ export default function ScopeMap() {
   }, [confirmDiscard, setSelected])
 
   const startCreate = useCallback(
-    (releaseId: string, phaseId: string) => {
+    (rowKey: string, phaseId: string) => {
       if (!confirmDiscard()) return
       setDirty(false)
+      // In actor view the row is an actor, which is not a feature property —
+      // only the phase can be pre-filled, and the form asks for the release.
+      const releaseId = rowMode === 'release' ? rowKey : ''
       setCreatingIn({ releaseId, phaseId })
     },
-    [confirmDiscard],
+    [confirmDiscard, rowMode],
   )
 
   const cancelCreate = useCallback(() => {
@@ -337,13 +347,22 @@ export default function ScopeMap() {
 
   return (
     <div className="flex flex-col gap-4">
+      {model ? (
+        <ScopeMapChrome
+          rowMode={rowMode}
+          onRowModeChange={setRowMode}
+          releases={model.releases}
+          featuresByRelease={model.totals.featuresByRelease}
+          capabilitiesByRelease={model.totals.capabilitiesByRelease}
+          activeReleases={filters.release}
+          onToggleRelease={(releaseId) =>
+            setFilters({ ...filters, release: toggleValue(filters.release, releaseId) })
+          }
+        />
+      ) : null}
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">Scope map</h1>
-          <p className="text-sm text-muted-foreground">
-            Releases across, canonical phases down. An empty cell means nothing in that phase
-            lands in that release.
-          </p>
           <div className="max-w-md">
             <ScopeSearch
               value={query}
@@ -477,6 +496,8 @@ export default function ScopeMap() {
             ) : (
               <ScopeMapGrid
                 model={{ ...model, ...projected }}
+                rows={rows}
+                rowMode={rowMode}
                 zoom={zoom}
                 scrollRef={scrollRef}
                 contentRef={(node) => {
@@ -523,6 +544,12 @@ export default function ScopeMap() {
                 </dd>
               </div>
             </dl>
+
+            <ReleaseHorizons
+              releases={model.releases}
+              featuresByRelease={model.totals.featuresByRelease}
+              capabilitiesByRelease={model.totals.capabilitiesByRelease}
+            />
           </div>
 
           {detail ? (

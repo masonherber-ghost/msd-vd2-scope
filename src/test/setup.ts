@@ -6,8 +6,7 @@ afterEach(() => {
   cleanup()
 })
 
-// jsdom implements neither matchMedia nor scrollIntoView; the theme script
-// and Radix primitives both reach for them.
+// jsdom implements no matchMedia; Radix primitives reach for it.
 if (!window.matchMedia) {
   window.matchMedia = ((query: string) => ({
     matches: false,

@@ -2,14 +2,11 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { Header } from '@/components/Header'
-import { ThemeProvider } from '@/hooks/ThemeContext'
 
 function renderHeader(initialPath = '/') {
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
-      <ThemeProvider>
         <Header />
-      </ThemeProvider>
     </MemoryRouter>,
   )
 }

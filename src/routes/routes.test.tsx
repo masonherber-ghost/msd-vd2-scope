@@ -35,17 +35,12 @@ async function renderAt(path: string) {
     { initialEntries: [path] },
   )
 
-  const { ThemeProvider } = await import('@/hooks/ThemeContext')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  // Layout renders the header, whose theme toggle needs the provider that
-  // main.tsx supplies around the router.
   return render(
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider>
         <Suspense fallback={null}>
           <RouterProvider router={router} />
         </Suspense>
-      </ThemeProvider>
     </QueryClientProvider>,
   )
 }

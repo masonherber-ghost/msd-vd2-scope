@@ -35,7 +35,7 @@ export type FeatureCardModel = {
 }
 
 export type ScopeCell = {
-  releaseId: string
+  rowKey: string
   phaseId: string
   features: FeatureCardModel[]
   /** Capabilities the sequencing table places in this cell. */
@@ -50,8 +50,13 @@ export type ScopeMapModel = {
   /** All MVP records, for the searchable MVP filter. */
   mvpFeatures: MvpFeatureRow[]
   cells: ScopeCell[]
-  /** Keyed `${phaseId}|${releaseId}` for O(1) lookup while rendering. */
+  /** Keyed `${rowKey}|${phaseId}` for O(1) lookup while rendering. */
   cellIndex: Map<string, ScopeCell>
+  /**
+   * Capability counts for every cell key in BOTH row modes, so switching
+   * view does not lose them — cellIndex only ever holds one mode's cells.
+   */
+  capabilityCellCounts: Map<string, number>
   totals: {
     features: number
     populatedCells: number
@@ -61,7 +66,83 @@ export type ScopeMapModel = {
   }
 }
 
-export const cellKey = (phaseId: string, releaseId: string) => `${phaseId}|${releaseId}`
+/**
+ * The map is a grid of phases (across) by rows (down). A row is either an
+ * actor or a release — the two views the design supports.
+ */
+export type RowMode = 'actor' | 'release'
+
+export type ScopeRow = {
+  key: string
+  label: string
+  blurb: string
+  /** Token suffix for the row's accent colour. */
+  tokenSuffix: string
+}
+
+/** Features with no capabilities have no actor; they still need a home. */
+export const NO_ACTOR_ROW = 'no-actor'
+
+export const ACTOR_ROWS: readonly ScopeRow[] = [
+  {
+    key: 'employer',
+    label: 'Employers',
+    blurb: 'Employer actions and capabilities',
+    tokenSuffix: 'employer',
+  },
+  {
+    key: 'staff',
+    label: 'MSD staff',
+    blurb: 'Staff review, verification and support',
+    tokenSuffix: 'staff',
+  },
+  {
+    key: 'jobseeker',
+    label: 'Jobseekers',
+    blurb: 'Jobseeker actions and open decisions',
+    tokenSuffix: 'jobseeker',
+  },
+  {
+    key: 'system',
+    label: 'Systems',
+    blurb: 'Core behaviours and integrations',
+    tokenSuffix: 'system',
+  },
+  {
+    key: NO_ACTOR_ROW,
+    label: 'No actor recorded',
+    blurb: 'Features whose capabilities the sources never mapped',
+    tokenSuffix: 'none',
+  },
+]
+
+export const cellKey = (rowKey: string, phaseId: string) => `${rowKey}|${phaseId}`
+
+/**
+ * Which rows a feature belongs in.
+ *
+ * In release view a feature has exactly one row. In actor view it has one
+ * per distinct actor across its capabilities — the design does the same,
+ * putting F-001 in both the employer and system rows. A feature with no
+ * capabilities has no actor at all, so it falls to the no-actor row rather
+ * than disappearing off the map.
+ */
+export function rowsForFeature(feature: FeatureCardModel, mode: RowMode): string[] {
+  if (mode === 'release') return [feature.releaseId]
+  if (feature.actors.size === 0) return [NO_ACTOR_ROW]
+  return ACTOR_ROWS.filter((row) => feature.actors.has(row.key as Actor)).map((r) => r.key)
+}
+
+/** The rows to render, in order, for a given mode. */
+export function rowsFor(model: ScopeMapModel, mode: RowMode): ScopeRow[] {
+  if (mode === 'actor') return [...ACTOR_ROWS]
+  return model.releases.map((release) => ({
+    key: release.id,
+    label: release.label,
+    blurb: release.name || 'No description recorded',
+    tokenSuffix: releaseTokenSuffix(release.id),
+  }))
+}
 
 function buildFeatureCard(
   feature: PwcFeatureRow,
@@ -157,40 +238,65 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
   )
 
   // Capability counts per cell come from the table's own placement, which is
-  // why release 1.4 and 2 are not empty even with no features (R-8.5).
-  const capabilityCellCounts = new Map<string, number>()
+  // why release 1.4 and 2 are not empty even with no features (R-8.5). In
+  // release view a cell is a release × phase, so the table's counts land
+  // directly; in actor view they are counted per actor × phase instead.
   const capabilitiesByRelease = new Map<string, number>()
+  const capabilityCellCounts = new Map<string, number>()
   for (const capability of graph.capabilities) {
     if (!capability.release_id || !capability.phase_id) continue
-    const key = cellKey(capability.phase_id, capability.release_id)
-    capabilityCellCounts.set(key, (capabilityCellCounts.get(key) ?? 0) + 1)
     capabilitiesByRelease.set(
       capability.release_id,
       (capabilitiesByRelease.get(capability.release_id) ?? 0) + 1,
     )
-  }
-
-  const cells: ScopeCell[] = []
-  const cellIndex = new Map<string, ScopeCell>()
-  let populatedCells = 0
-
-  for (const phase of graph.phases) {
-    for (const release of graph.releases) {
-      const key = cellKey(phase.id, release.id)
-      const features = cards.filter(
-        (c) => c.phaseId === phase.id && c.releaseId === release.id,
-      )
-      if (features.length > 0) populatedCells += 1
-      const cell: ScopeCell = {
-        releaseId: release.id,
-        phaseId: phase.id,
-        features,
-        capabilityCount: capabilityCellCounts.get(key) ?? 0,
-      }
-      cells.push(cell)
-      cellIndex.set(key, cell)
+    for (const rowKey of [capability.release_id, capability.actor]) {
+      const key = cellKey(rowKey, capability.phase_id)
+      capabilityCellCounts.set(key, (capabilityCellCounts.get(key) ?? 0) + 1)
     }
   }
+
+  const buildCells = (mode: RowMode, visible: FeatureCardModel[]) => {
+    const cells: ScopeCell[] = []
+    const index = new Map<string, ScopeCell>()
+    let populated = 0
+
+    const byCell = new Map<string, FeatureCardModel[]>()
+    for (const card of visible) {
+      for (const rowKey of rowsForFeature(card, mode)) {
+        const key = cellKey(rowKey, card.phaseId)
+        const list = byCell.get(key) ?? []
+        list.push(card)
+        byCell.set(key, list)
+      }
+    }
+
+    for (const row of mode === 'actor'
+      ? ACTOR_ROWS.map((r) => r.key)
+      : graph.releases.map((r) => r.id)) {
+      for (const phase of graph.phases) {
+        const key = cellKey(row, phase.id)
+        const features = byCell.get(key) ?? []
+        if (features.length > 0) populated += 1
+        const cell: ScopeCell = {
+          rowKey: row,
+          phaseId: phase.id,
+          features,
+          capabilityCount: capabilityCellCounts.get(key) ?? 0,
+        }
+        cells.push(cell)
+        index.set(key, cell)
+      }
+    }
+
+    return { cells, index, populated }
+  }
+
+  // The default view is by release, which keeps every cell addressable by
+  // the release + phase pair the create flow needs.
+  const built = buildCells('release', cards)
+  const cells = built.cells
+  const cellIndex = built.index
+  const populatedCells = built.populated
 
   const featuresByRelease = new Map<string, number>()
   for (const card of cards) {
@@ -202,6 +308,7 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
     phases: graph.phases,
     features: cards,
     mvpFeatures: graph.mvpFeatures,
+    capabilityCellCounts,
     cells,
     cellIndex,
     totals: {
@@ -228,29 +335,35 @@ export const releaseTokenSuffix = (releaseId: string) => releaseId.replace(/\./g
 export function projectCells(
   model: ScopeMapModel,
   visible: FeatureCardModel[],
+  mode: RowMode = 'release',
 ): Pick<ScopeMapModel, 'cells' | 'cellIndex' | 'totals'> {
   const byCell = new Map<string, FeatureCardModel[]>()
   for (const card of visible) {
-    const key = cellKey(card.phaseId, card.releaseId)
-    const list = byCell.get(key) ?? []
-    list.push(card)
-    byCell.set(key, list)
+    for (const rowKey of rowsForFeature(card, mode)) {
+      const key = cellKey(rowKey, card.phaseId)
+      const list = byCell.get(key) ?? []
+      list.push(card)
+      byCell.set(key, list)
+    }
   }
 
   const cells: ScopeCell[] = []
   const cellIndex = new Map<string, ScopeCell>()
   let populatedCells = 0
 
-  for (const phase of model.phases) {
-    for (const release of model.releases) {
-      const key = cellKey(phase.id, release.id)
+  const rowKeys =
+    mode === 'actor' ? ACTOR_ROWS.map((r) => r.key) : model.releases.map((r) => r.id)
+
+  for (const rowKey of rowKeys) {
+    for (const phase of model.phases) {
+      const key = cellKey(rowKey, phase.id)
       const features = byCell.get(key) ?? []
       if (features.length > 0) populatedCells += 1
       const cell: ScopeCell = {
-        releaseId: release.id,
+        rowKey,
         phaseId: phase.id,
         features,
-        capabilityCount: model.cellIndex.get(key)?.capabilityCount ?? 0,
+        capabilityCount: model.capabilityCellCounts.get(key) ?? 0,
       }
       cells.push(cell)
       cellIndex.set(key, cell)

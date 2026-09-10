@@ -1,5 +1,4 @@
 import { NavLink } from 'react-router-dom'
-import { ThemeToggle } from '@/components/ThemeToggle'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   [
@@ -30,7 +29,6 @@ export function Header() {
             </NavLink>
           </nav>
         </div>
-        <ThemeToggle />
       </div>
     </header>
   )

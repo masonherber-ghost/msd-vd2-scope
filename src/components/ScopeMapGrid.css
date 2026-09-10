@@ -6,9 +6,7 @@
   /* The grid is wider than most viewports; it scrolls inside its own box
      rather than making the page scroll sideways. */
   overflow: auto;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background-color: var(--color-background);
+  padding-bottom: var(--spacing-2);
 }
 
 .scope-map-grid__scaler {
@@ -23,10 +21,12 @@
      offsetLeft/offsetTop relative to it. */
   position: relative;
   display: grid;
-  /* One sticky row-header column, then one column per release. */
-  grid-template-columns: 14rem repeat(var(--scope-release-count, 6), var(--scope-card-min-width));
-  gap: 1px;
-  background-color: var(--color-border);
+  /* One row-header column, then one column per canonical phase. */
+  grid-template-columns: 12.5rem repeat(
+      var(--scope-phase-count, 7),
+      minmax(var(--scope-card-min-width), 1fr)
+    );
+  gap: var(--spacing-3);
   width: max-content;
 }
 
@@ -34,81 +34,88 @@
    AXIS HEADERS
    ======================================== */
 
-.scope-map-grid__corner,
-.scope-map-grid__col-header,
-.scope-map-grid__row-header {
-  background-color: var(--color-card);
-  padding: var(--spacing-3);
-}
-
 .scope-map-grid__corner {
-  position: sticky;
-  top: 0;
-  left: 0;
-  z-index: 3;
+  display: flex;
+  align-items: flex-end;
+  padding: var(--spacing-2);
 }
 
+/* Phases run across the top as filled brand blocks. */
 .scope-map-grid__col-header {
-  position: sticky;
-  top: 0;
-  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--spacing-1);
+  padding: var(--spacing-3) var(--spacing-4);
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary-900);
+  color: var(--color-primary-foreground);
 }
 
-.scope-map-grid__row-header {
-  position: sticky;
-  left: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
+.scope-map-grid__axis-label,
+.scope-map-grid__stage-label {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .scope-map-grid__axis-label {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-muted-foreground);
+  color: var(--color-ink-500);
 }
 
-.scope-map-grid__release-label {
-  font-size: 0.875rem;
+.scope-map-grid__stage-label {
+  opacity: 0.75;
+}
+
+.scope-map-grid__stage-name {
+  font-size: 1.25rem;
+  line-height: 1.25;
   font-weight: 700;
-}
-
-.scope-map-grid__release-name,
-.scope-map-grid__phase-meta {
-  font-size: 0.6875rem;
-  color: var(--color-muted-foreground);
   overflow-wrap: anywhere;
 }
 
-/* A thin achromatic band per release; the label above it carries the meaning. */
-.scope-map-grid__release-band {
-  height: 0.25rem;
-  border-radius: var(--radius-sm);
-  margin-top: var(--spacing-1);
+.scope-map-grid__stage-meta {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  opacity: 0.75;
 }
 
-.scope-map-grid__release-band--1-1 { background-color: var(--color-release-1-1); }
-.scope-map-grid__release-band--1-2 { background-color: var(--color-release-1-2); }
-.scope-map-grid__release-band--1-3 { background-color: var(--color-release-1-3); }
-.scope-map-grid__release-band--1-4 { background-color: var(--color-release-1-4); }
-.scope-map-grid__release-band--1-9 { background-color: var(--color-release-1-9); }
-.scope-map-grid__release-band--2 { background-color: var(--color-release-2); }
-
-.scope-map-grid__phase-order {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  color: var(--color-muted-foreground);
+/* A row header is a card with the row's colour on its leading edge. */
+.scope-map-grid__row-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  justify-content: center;
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  border-left: 6px solid var(--row-accent, var(--color-primary-900));
+  background-color: var(--color-card);
+  box-shadow: var(--shadow-card);
 }
 
-.scope-map-grid__phase-name {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  line-height: 1.3;
+.scope-map-grid__row-name {
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--color-primary-900);
+  overflow-wrap: anywhere;
+}
+
+.scope-map-grid__row-blurb {
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--color-ink-500);
+  overflow-wrap: anywhere;
+}
+
+.scope-map-grid__row-count {
+  font-size: 0.75rem;
+  line-height: 1.6;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--row-accent, var(--color-primary-900));
 }
 
 /* ========================================
@@ -120,49 +127,52 @@
   flex-direction: column;
   gap: var(--spacing-2);
   padding: var(--spacing-2);
-  background-color: var(--color-background);
   min-height: var(--scope-row-min-height);
-}
-
-/* An empty cell is information: nothing in that phase lands in that release.
-   It stays visible rather than collapsing (R-8.1). */
-.scope-map-grid__cell--empty {
+  border-radius: var(--radius-md);
   background-color: var(--color-cell-empty);
   border: 1px dashed var(--color-cell-empty-border);
-  align-items: center;
+}
+
+/* An empty cell is information: nothing in that phase lands in that row.
+   It stays visible rather than collapsing (R-8.1). */
+.scope-map-grid__cell--empty {
+  align-items: flex-start;
   justify-content: center;
 }
 
 .scope-map-grid__empty-note {
-  font-size: 0.6875rem;
-  color: var(--color-muted-foreground);
-  text-align: center;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--color-cell-empty-note);
+  padding: var(--spacing-1) var(--spacing-1);
 }
 
 /* Release 1.4 and 2 hold capabilities but no features, so a bare "empty"
    would misrepresent them (R-8.5). */
 .scope-map-grid__capability-note {
-  font-size: 0.6875rem;
-  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--color-ink-250);
 }
 
-/* Pre-fills a create with this cell's release and phase (R-9.7). */
+/* Pre-fills a create with this cell's row and phase (R-9.7). */
 .scope-map-grid__add {
   align-self: flex-start;
   min-height: var(--spacing-6);
   padding: 0 var(--spacing-2);
-  border: 1px dashed var(--color-border);
+  border: 1px dashed var(--color-primary-200);
   border-radius: var(--radius-sm);
   background: none;
-  color: var(--color-muted-foreground);
-  font-size: 0.6875rem;
+  color: var(--color-primary-500);
+  font-size: 0.75rem;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .scope-map-grid__add:hover {
   border-style: solid;
-  background-color: var(--color-accent);
-  color: var(--color-accent-foreground);
+  background-color: var(--color-primary-50);
+  color: var(--color-primary-900);
 }
 
 .scope-map-grid__add:focus-visible {
@@ -178,9 +188,9 @@
    used inside a media query, so the raw value is copied here. */
 @media (min-width: 1024px) {
   .scope-map-grid__table {
-    grid-template-columns: 15rem repeat(
-      var(--scope-release-count, 6),
-      minmax(var(--scope-card-min-width), 1fr)
-    );
+    grid-template-columns: 13.75rem repeat(
+        var(--scope-phase-count, 7),
+        minmax(var(--scope-card-min-width), 1fr)
+      );
   }
 }

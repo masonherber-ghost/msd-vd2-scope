@@ -2,13 +2,21 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
-import { buildScopeMap } from '@/lib/scope-derive'
+import { buildScopeMap, rowsFor } from '@/lib/scope-derive'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { makeScopeGraph } from '@/test/scope-fixture'
 
 const model = buildScopeMap(makeScopeGraph())
 
-const renderGrid = (zoom = 1) => render(<ScopeMapGrid model={model} zoom={zoom} />)
+const renderGrid = (zoom = 1) =>
+  render(
+    <ScopeMapGrid
+      model={model}
+      rows={rowsFor(model, 'release')}
+      rowMode="release"
+      zoom={zoom}
+    />,
+  )
 
 /** Two features sharing ref 938, so there is exactly one edge to draw. */
 const sharedModel = buildScopeMap(
@@ -26,6 +34,8 @@ const renderConnected = (props: Partial<Parameters<typeof ScopeMapGrid>[0]> = {}
   render(
     <ScopeMapGrid
       model={sharedModel}
+      rows={rowsFor(sharedModel, 'release')}
+      rowMode="release"
       zoom={1}
       edges={sharedEdges}
       density={sharedDensity}
@@ -38,27 +48,32 @@ const edgeLines = (container: HTMLElement) =>
   container.querySelectorAll('.scope-edges__line')
 
 describe('ScopeMapGrid — axes', () => {
-  it('renders one column header per release, including ones with no features', () => {
+  it('renders phases across the top, numbered as stages', () => {
     renderGrid()
-    expect(screen.getByText('Release 1.1')).toBeInTheDocument()
+    const headers = screen.getAllByRole('columnheader')
+    // The corner, then one per phase.
+    expect(headers).toHaveLength(3)
+    expect(headers[1]).toHaveTextContent('Stage 1')
+    expect(headers[1]).toHaveTextContent('Access & Onboarding')
+    expect(headers[1]).toHaveTextContent('epic 179')
+    expect(headers[2]).toHaveTextContent('Manage Vacancies')
+    expect(headers[2]).toHaveTextContent('epic 177')
+  })
+
+  it('renders one row per release, including ones with no features', () => {
+    renderGrid()
+    const rows = screen.getAllByRole('rowheader')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveTextContent('Release 1.1')
     // 1.4 has capabilities but no features and must still appear (R-8.5).
-    expect(screen.getByText('Release 1.4')).toBeInTheDocument()
+    expect(rows[1]).toHaveTextContent('Release 1.4')
   })
 
-  it('renders phases in canonical order with their epic refs', () => {
+  it('counts what each row shows', () => {
     renderGrid()
-    const headers = screen.getAllByRole('rowheader')
-    expect(headers).toHaveLength(2)
-    expect(headers[0]).toHaveTextContent('Access & Onboarding')
-    expect(headers[0]).toHaveTextContent('epic 179')
-    expect(headers[1]).toHaveTextContent('Manage Vacancies')
-    expect(headers[1]).toHaveTextContent('epic 177')
-  })
-
-  it('summarises features and capabilities per release in the header', () => {
-    renderGrid()
-    expect(screen.getByText(/2 features · 2 capabilities/)).toBeInTheDocument()
-    expect(screen.getByText(/0 features · 1 capability/)).toBeInTheDocument()
+    const rows = screen.getAllByRole('rowheader')
+    expect(rows[0]).toHaveTextContent('2 shown')
+    expect(rows[1]).toHaveTextContent('0 shown')
   })
 })
 
@@ -72,7 +87,7 @@ describe('ScopeMapGrid — cells', () => {
     renderGrid()
     expect(
       screen.getByRole('cell', {
-        name: 'Access & Onboarding, Release 1.1: 2 features, 2 capabilities',
+        name: 'Release 1.1, Access & Onboarding: 2 features, 2 capabilities',
       }),
     ).toBeInTheDocument()
   })
@@ -80,18 +95,18 @@ describe('ScopeMapGrid — cells', () => {
   it('keeps an empty cell visible rather than collapsing it', () => {
     renderGrid()
     const empty = screen.getByRole('cell', {
-      name: 'Access & Onboarding, Release 1.4: 0 features, 0 capabilities',
+      name: 'Release 1.4, Access & Onboarding: 0 features, 0 capabilities',
     })
     expect(empty).toBeInTheDocument()
-    expect(empty).toHaveTextContent('no features')
+    expect(empty).toHaveTextContent('No capability')
   })
 
   it('says a featureless cell still holds capabilities (R-8.5)', () => {
     renderGrid()
     const cell = screen.getByRole('cell', {
-      name: 'Manage Vacancies, Release 1.4: 0 features, 1 capabilities',
+      name: 'Release 1.4, Manage Vacancies: 0 features, 1 capabilities',
     })
-    expect(cell).toHaveTextContent('no features · 1 capability')
+    expect(cell).toHaveTextContent('No feature · 1 capability')
   })
 })
 
@@ -224,7 +239,14 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
     )
     const edges = buildEdges(crossing.features)
     const { container } = render(
-      <ScopeMapGrid model={crossing} zoom={1} edges={edges} selectedId="F-001" />,
+      <ScopeMapGrid
+        model={crossing}
+        rows={rowsFor(crossing, 'release')}
+        rowMode="release"
+        zoom={1}
+        edges={edges}
+        selectedId="F-001"
+      />,
     )
 
     const line = container.querySelector('.scope-edges__line')

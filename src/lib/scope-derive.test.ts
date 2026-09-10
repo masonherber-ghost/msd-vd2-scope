@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { buildScopeMap, cellKey, releaseTokenSuffix } from '@/lib/scope-derive'
+import {
+  NO_ACTOR_ROW,
+  buildScopeMap,
+  cellKey,
+  projectCells,
+  releaseTokenSuffix,
+  rowsFor,
+  rowsForFeature,
+} from '@/lib/scope-derive'
 import { makeScopeGraph } from '@/test/scope-fixture'
 
 const model = buildScopeMap(makeScopeGraph())
@@ -20,18 +28,18 @@ describe('buildScopeMap — grid shape', () => {
   })
 
   it('indexes cells for O(1) lookup', () => {
-    const cell = model.cellIndex.get(cellKey('access-and-onboarding', '1.1'))
+    const cell = model.cellIndex.get(cellKey('1.1', 'access-and-onboarding'))
     expect(cell?.features.map((f) => f.id)).toEqual(['F-001', 'F-002'])
   })
 
   it('leaves a genuinely empty cell empty', () => {
-    const cell = model.cellIndex.get(cellKey('access-and-onboarding', '1.4'))
+    const cell = model.cellIndex.get(cellKey('1.4', 'access-and-onboarding'))
     expect(cell?.features).toEqual([])
     expect(cell?.capabilityCount).toBe(0)
   })
 
   it('reports capabilities in a cell that has no features (R-8.5)', () => {
-    const cell = model.cellIndex.get(cellKey('manage-vacancies', '1.4'))
+    const cell = model.cellIndex.get(cellKey('1.4', 'manage-vacancies'))
     expect(cell?.features).toEqual([])
     expect(cell?.capabilityCount).toBe(1)
   })
@@ -133,5 +141,91 @@ describe('releaseTokenSuffix', () => {
   it('makes a release id safe for a CSS class and token name', () => {
     expect(releaseTokenSuffix('1.1')).toBe('1-1')
     expect(releaseTokenSuffix('2')).toBe('2')
+  })
+})
+
+describe('row modes (the design\'s transposed grid)', () => {
+  const model = buildScopeMap(makeScopeGraph())
+
+  it('gives a feature one row in release view', () => {
+    const card = model.features.find((f) => f.id === 'F-001')!
+    expect(rowsForFeature(card, 'release')).toEqual(['1.1'])
+  })
+
+  it('gives a feature one row per distinct actor in actor view', () => {
+    // F-001 cites a staff and an employer capability, so it appears twice —
+    // the design puts F-001 in both rows too.
+    const card = model.features.find((f) => f.id === 'F-001')!
+    expect(rowsForFeature(card, 'actor').sort()).toEqual(['employer', 'staff'])
+  })
+
+  it('puts a feature with no capabilities in the no-actor row', () => {
+    const noCaps = buildScopeMap(
+      makeScopeGraph({ featureCapabilityLinks: [] }),
+    ).features.find((f) => f.id === 'F-001')!
+    expect(rowsForFeature(noCaps, 'actor')).toEqual([NO_ACTOR_ROW])
+  })
+
+  it('lists actor rows in a fixed order, with no-actor last', () => {
+    expect(rowsFor(model, 'actor').map((r) => r.key)).toEqual([
+      'employer',
+      'staff',
+      'jobseeker',
+      'system',
+      NO_ACTOR_ROW,
+    ])
+  })
+
+  it('lists release rows in release order', () => {
+    expect(rowsFor(model, 'release').map((r) => r.key)).toEqual(['1.1', '1.4'])
+  })
+})
+
+describe('projectCells across row modes', () => {
+  const model = buildScopeMap(makeScopeGraph())
+
+  it('keys cells by row and phase in release view', () => {
+    const projected = projectCells(model, model.features, 'release')
+    const cell = projected.cellIndex.get(cellKey('1.1', 'access-and-onboarding'))
+    expect(cell?.features.map((f) => f.id)).toEqual(['F-001', 'F-002'])
+  })
+
+  it('places a multi-actor feature in each of its actor rows', () => {
+    const projected = projectCells(model, model.features, 'actor')
+    const staff = projected.cellIndex.get(cellKey('staff', 'access-and-onboarding'))
+    const employer = projected.cellIndex.get(cellKey('employer', 'access-and-onboarding'))
+
+    expect(staff?.features.map((f) => f.id)).toEqual(['F-001'])
+    expect(employer?.features.map((f) => f.id)).toEqual(['F-001', 'F-002'])
+  })
+
+  it('never loses a feature when switching view', () => {
+    const byRelease = projectCells(model, model.features, 'release')
+    const byActor = projectCells(model, model.features, 'actor')
+
+    const seen = (p: typeof byRelease) =>
+      new Set(p.cells.flatMap((c) => c.features.map((f) => f.id)))
+
+    expect(seen(byActor)).toEqual(seen(byRelease))
+  })
+
+  it('carries capability counts in both views', () => {
+    const byRelease = projectCells(model, model.features, 'release')
+    const byActor = projectCells(model, model.features, 'actor')
+
+    expect(
+      byRelease.cellIndex.get(cellKey('1.4', 'manage-vacancies'))?.capabilityCount,
+    ).toBe(1)
+    // The same capability, counted against its actor row instead.
+    expect(
+      byActor.cellIndex.get(cellKey('employer', 'manage-vacancies'))?.capabilityCount,
+    ).toBe(1)
+  })
+
+  it('counts a duplicated feature once per row it appears in', () => {
+    const projected = projectCells(model, model.features, 'actor')
+    const total = projected.cells.reduce((n, c) => n + c.features.length, 0)
+    // F-001 in two actor rows plus F-002 in one.
+    expect(total).toBe(3)
   })
 })
