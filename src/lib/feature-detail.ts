@@ -3,6 +3,8 @@ import { ACTOR_ORDER, type Actor } from '@/lib/scope-derive'
 
 export type DetailCapability = {
   id: number
+  /** `pwc_feature_capabilities.id` — what a resolution is recorded against. */
+  linkId: number
   text: string
   actor: Actor
   /** The capability's own placement, per the sequencing table. */
@@ -19,6 +21,7 @@ export type DetailCapability = {
   phaseConflictMerged: boolean
   matched: boolean
   resolutionState: string
+  resolutionNote: string | null
   /** Both recorded placements, so neither source is hidden (R-7.1). */
   featureReleaseId: string | null
   capabilityReleaseId: string | null
@@ -120,6 +123,7 @@ export function buildFeatureDetail(
 
     capabilities.push({
       id: capability.id,
+      linkId: link.id,
       text: capability.text,
       actor: capability.actor,
       releaseId: capability.release_id,
@@ -135,6 +139,7 @@ export function buildFeatureDetail(
       phaseConflictMerged: link.phase_conflict_merged === 1,
       matched: link.matched === 1,
       resolutionState: link.resolution_state,
+      resolutionNote: link.resolution_note,
       featureReleaseId: link.feature_release_id,
       capabilityReleaseId: link.capability_release_id,
       featurePhaseLabel: link.feature_phase_label,

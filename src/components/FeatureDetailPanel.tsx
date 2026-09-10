@@ -3,9 +3,15 @@ import { useEffect, useRef, useState } from 'react'
 import { AssumptionList } from '@/components/AssumptionList'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
+import { ConflictBadge } from '@/components/ConflictBadge'
 import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
+import {
+  RESOLUTION_LABEL,
+  RESOLUTION_STATES,
+  type ResolutionState,
+} from '@/lib/validators'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -44,6 +50,15 @@ export type FeatureDetailPanelProps = {
   /** The feature's current link ids. */
   linkedMvpIds?: number[]
   linkedCapabilityIds?: number[]
+  /**
+   * Records a decision on one capability link, without leaving the panel
+   * (R-7.3). Omitted when the panel is read-only.
+   */
+  onResolveConflict?: (
+    linkId: number,
+    state: ResolutionState,
+    note: string | null,
+  ) => Promise<unknown>
   /** Assumption editing, including explicit reordering (R-9.8). */
   onAddAssumption?: (text: string) => Promise<unknown>
   onEditAssumption?: (id: number, text: string) => Promise<unknown>
@@ -69,6 +84,7 @@ export function FeatureDetailPanel({
   onSetCapabilityLinks,
   linkedMvpIds = [],
   linkedCapabilityIds = [],
+  onResolveConflict,
   onAddAssumption,
   onEditAssumption,
   onMoveAssumption,
@@ -346,6 +362,7 @@ export function FeatureDetailPanel({
                           : undefined
                       }
                       editorOpen={capabilityEditorOpen}
+                      onResolveConflict={onResolveConflict}
                     />
                   </li>
                 ))}
@@ -493,14 +510,26 @@ function CapabilityRow({
   detail,
   onOpenEditor,
   editorOpen,
+  onResolveConflict,
 }: {
   capability: DetailCapability
   detail: FeatureDetail
   /** Tapping the capability that is there opens the lookup. */
   onOpenEditor?: () => void
   editorOpen?: boolean
+  onResolveConflict?: (
+    linkId: number,
+    state: ResolutionState,
+    note: string | null,
+  ) => Promise<unknown>
 }) {
   const differs = capability.releaseDiffers || capability.phaseDiffers
+  // Exactly what the reconciliation queue lists, so the same set of findings
+  // is decidable in both places.
+  const resolvable =
+    capability.releaseConflict ||
+    (capability.phaseConflict && !capability.phaseConflictMerged) ||
+    !capability.matched
 
   return (
     <div className="feature-detail__capability">
@@ -573,6 +602,118 @@ function CapabilityRow({
             prefix — a human confirms it.
           </span>
         </div>
+      ) : null}
+
+      {onResolveConflict && resolvable ? (
+        <CapabilityResolution
+          capability={capability}
+          onResolve={onResolveConflict}
+        />
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * The decision on one capability link, made where the disagreement is shown
+ * rather than only in the reconciliation queue (R-7.3). Same states and the
+ * same note as the queue — one decision, two places to reach it.
+ *
+ * A phase disagreement the canonical merge already settles is not offered:
+ * both sides mean the same phase, so there is nothing to decide.
+ */
+function CapabilityResolution({
+  capability,
+  onResolve,
+}: {
+  capability: DetailCapability
+  onResolve: (
+    linkId: number,
+    state: ResolutionState,
+    note: string | null,
+  ) => Promise<unknown>
+}) {
+  const [note, setNote] = useState(capability.resolutionNote ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const save = async (state: ResolutionState, nextNote: string | null) => {
+    setSaving(true)
+    setError(null)
+    try {
+      await onResolve(capability.linkId, state, nextNote)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not save that decision.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const state = capability.resolutionState as ResolutionState
+  const resolved = state !== 'unreviewed'
+  const selectId = `detail-resolution-${capability.linkId}`
+  const noteId = `detail-resolution-note-${capability.linkId}`
+
+  return (
+    <div className="feature-detail__resolution">
+      <div className="feature-detail__resolution-head">
+        <ConflictBadge
+          count={1}
+          state={state}
+          kind={capability.matched ? 'conflict' : 'unmatched'}
+        />
+      </div>
+
+      {error ? (
+        <p role="alert" className="feature-detail__resolution-error">
+          {error}
+        </p>
+      ) : null}
+
+      <label className="sr-only" htmlFor={selectId}>
+        Resolution for {capability.text}
+      </label>
+      <select
+        id={selectId}
+        className="feature-detail__resolution-select"
+        value={state}
+        disabled={saving}
+        onChange={(event) =>
+          void save(event.target.value as ResolutionState, note.trim() || null)
+        }
+      >
+        {RESOLUTION_STATES.map((option) => (
+          <option key={option} value={option}>
+            {RESOLUTION_LABEL[option]}
+          </option>
+        ))}
+      </select>
+
+      <label className="sr-only" htmlFor={noteId}>
+        Note for {capability.text}
+      </label>
+      <input
+        id={noteId}
+        className="feature-detail__resolution-note"
+        placeholder="Add a note"
+        value={note}
+        disabled={saving}
+        onChange={(event) => setNote(event.target.value)}
+        onBlur={() => {
+          if ((capability.resolutionNote ?? '') === note.trim()) return
+          void save(state, note.trim() || null)
+        }}
+      />
+
+      {resolved ? (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={saving}
+          onClick={() => void save('unreviewed', note.trim() || null)}
+        >
+          Reopen
+        </Button>
       ) : null}
     </div>
   )

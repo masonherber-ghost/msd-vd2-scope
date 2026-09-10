@@ -18,6 +18,7 @@ const { state } = await vi.hoisted(async () => ({
     deleted: [] as unknown[],
     mvpLinkCalls: [] as { id: string; mvpFeatureIds: number[] }[],
     capabilityLinkCalls: [] as { id: string; capabilityIds: number[] }[],
+    resolved: [] as { id: number; body: unknown }[],
   },
 }))
 
@@ -65,6 +66,29 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
             deleted: 1,
             cascaded: { assumptions: 0, mvpLinks: 0, capabilityLinks: 0 },
           }
+        },
+      },
+      conflicts: {
+        resolve: async (id: number, body: unknown) => {
+          failWrite()
+          state.resolved.push({ id, body })
+          // Mirror the write so a refetch shows the new state.
+          state.graph = {
+            ...(state.graph as ScopeGraph),
+            featureCapabilityLinks: (state.graph as ScopeGraph).featureCapabilityLinks.map(
+              (link) =>
+                link.id === id
+                  ? {
+                      ...link,
+                      ...(body as {
+                        resolution_state: string
+                        resolution_note: string | null
+                      }),
+                    }
+                  : link,
+            ),
+          } as ScopeGraph
+          return {} as never
         },
       },
     },
@@ -133,6 +157,7 @@ beforeEach(() => {
   state.deleted = []
   state.mvpLinkCalls = []
   state.capabilityLinkCalls = []
+  state.resolved = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -1635,5 +1660,151 @@ describe('ScopeMap — an empty MSD view names the right filter', () => {
     expect(
       screen.getByRole('button', { name: 'Drop Actor filter' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap — resolving a conflict from the feature detail panel', () => {
+  /** F-002 cites capability 12, whose link (id 102) carries both conflicts. */
+  const openF002 = async () => {
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+    return screen.getByRole('region', { name: 'Verify employer' })
+  }
+
+  it('offers a decision on a capability that conflicts', async () => {
+    const panel = await openF002()
+    expect(
+      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
+    ).toBeInTheDocument()
+  })
+
+  it('offers none on a capability that agrees', async () => {
+    renderPage('/?selected=F-001')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
+    )
+    const panel = screen.getByRole('region', { name: 'Invite employer' })
+    // F-001's link 100 has no conflict at all, so there is nothing to decide.
+    expect(
+      within(panel).queryByLabelText(/Resolution for Invite employer to register/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers none where the canonical merge already settled the phase', async () => {
+    renderPage('/?selected=F-001')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
+    )
+    const panel = screen.getByRole('region', { name: 'Invite employer' })
+    // Link 101 is a merged phase conflict: both sides mean the same phase.
+    expect(
+      within(panel).getByText(/Labelled differently:/i),
+    ).toBeInTheDocument()
+    expect(
+      within(panel).queryByLabelText(/Resolution for Receive secure email invite/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('records the decision against the link, not the capability', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+
+    await user.selectOptions(
+      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
+      'table_wins',
+    )
+
+    await waitFor(() => expect(state.resolved).toHaveLength(1))
+    // 102 is the link id; 12 is the capability. Resolving the capability
+    // would decide it for every feature citing it.
+    expect(state.resolved[0]).toEqual({
+      id: 102,
+      body: { resolution_state: 'table_wins', resolution_note: null },
+    })
+  })
+
+  it('saves a note against the decision', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+
+    const note = within(panel).getByLabelText(/Note for Electronic T&Cs acceptance/i)
+    await user.type(note, 'Confirmed with the delivery lead')
+    await user.tab()
+
+    await waitFor(() => expect(state.resolved).toHaveLength(1))
+    expect(state.resolved[0].body).toEqual({
+      resolution_state: 'unreviewed',
+      resolution_note: 'Confirmed with the delivery lead',
+    })
+  })
+
+  it('does not write when the note has not changed', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+    await user.click(within(panel).getByLabelText(/Note for Electronic T&Cs acceptance/i))
+    await user.tab()
+    expect(state.resolved).toHaveLength(0)
+  })
+
+  it('offers to reopen once resolved, and does', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+
+    await user.selectOptions(
+      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
+      'both_correct',
+    )
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Reopen' }))
+    await waitFor(() => expect(state.resolved).toHaveLength(2))
+    expect(state.resolved[1].body).toMatchObject({ resolution_state: 'unreviewed' })
+  })
+
+  it('surfaces a rejected decision without losing the panel', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+    state.writeFail = 'That conflict was already resolved by someone else.'
+
+    await user.selectOptions(
+      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
+      'mapping_wins',
+    )
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'That conflict was already resolved by someone else.',
+      ),
+    )
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+
+  it('clears the unreviewed badge on the card once decided', async () => {
+    const user = userEvent.setup()
+    const panel = await openF002()
+
+    // The card carries no aria-label of its own — its select button does —
+    // so reach the card through the button.
+    const card = () =>
+      screen.getByRole('button', { name: /^F-002 / }).closest('article') as HTMLElement
+
+    // F-002's link carries a release and an unmerged phase conflict.
+    expect(within(card()).getByTitle('Not yet reviewed')).toHaveTextContent('2 conflicts')
+
+    await user.selectOptions(
+      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
+      'table_wins',
+    )
+
+    // The map badge reads the same resolution state, so deciding here has to
+    // reach the card without a reload.
+    await waitFor(() =>
+      expect(within(card()).queryByTitle('Not yet reviewed')).not.toBeInTheDocument(),
+    )
+    expect(within(card()).getByText(/2 conflicts · reviewed/)).toBeInTheDocument()
   })
 })

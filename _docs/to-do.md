@@ -2,6 +2,10 @@ Filters:
 
 Add source filter back - check and ensure works how I need it to
 
+Detail panel:
+- ~~Add ability to resolve conflicts in the feature detail view~~ — **done.** Same states and
+  note as the reconciliation queue, recorded against the link. PRD R-8.22.
+
 Tabs:
 - ~~Add option for By 'MSD feature'~~ — **done.** Third tab on the scope map; cards are MVP
   records, the panel lists the citing PwC features (F-numbers) and the capabilities the

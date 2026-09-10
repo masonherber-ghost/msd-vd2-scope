@@ -21,6 +21,7 @@ import {
   useCreateAssumption,
   useDeleteAssumption,
   useMoveAssumption,
+  useResolveConflict,
   useUpdateAssumption,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
@@ -296,6 +297,7 @@ export default function ScopeMap() {
   const editAssumption = useUpdateAssumption()
   const moveAssumption = useMoveAssumption()
   const removeAssumption = useDeleteAssumption()
+  const resolveConflict = useResolveConflict()
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
   const nextId = useNextFeatureId(creatingIn !== null)
@@ -748,6 +750,9 @@ export default function ScopeMap() {
               }
               onSetCapabilityLinks={(capabilityIds) =>
                 setCapabilityLinks.mutateAsync({ id: detail.id, capabilityIds })
+              }
+              onResolveConflict={(linkId, state, note) =>
+                resolveConflict.mutateAsync({ id: linkId, state, note })
               }
               onAddAssumption={(text) =>
                 addAssumption.mutateAsync({ featureId: detail.id, text })

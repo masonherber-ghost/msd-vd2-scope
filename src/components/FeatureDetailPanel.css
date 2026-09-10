@@ -340,3 +340,51 @@
   flex-wrap: wrap;
   gap: var(--spacing-2);
 }
+
+/* ========================================
+   INLINE CONFLICT RESOLUTION
+   ======================================== */
+
+/* The decision sits under the mismatch that prompted it, indented onto the
+   same rule as the capability it belongs to. */
+.feature-detail__resolution {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-2);
+  padding: var(--spacing-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-muted);
+}
+
+.feature-detail__resolution-head {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+}
+
+.feature-detail__resolution-select,
+.feature-detail__resolution-note {
+  width: 100%;
+  min-height: var(--spacing-8);
+  padding: var(--spacing-2);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font: inherit;
+  font-size: 0.75rem;
+}
+
+.feature-detail__resolution-select:focus-visible,
+.feature-detail__resolution-note:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+}
+
+.feature-detail__resolution-error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-destructive);
+}

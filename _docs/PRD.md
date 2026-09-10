@@ -412,6 +412,12 @@ Opens beside the map — never over it, never as a route change that loses map s
 - **R-8.18** Where a feature has no mapped capabilities (F-008, F-029), state the source's
   own qualifier rather than rendering an empty section.
 - **R-8.19** Inline edit affordances on every field, per [§9](#9-crud-and-forms).
+- **R-8.22** **A conflict is decidable where it is shown.** Every capability the panel marks
+  as disagreeing carries the same resolution states and note as the reconciliation queue,
+  recorded against the *link* rather than the capability — a capability cited by several
+  features is decided once per feature, not once for all of them. A phase disagreement the
+  canonical merge already settles offers no control: both sides mean the same phase. The
+  decision reaches the map badge without a reload.
 
 ### 8.5 Reconciliation view (`/reconciliation`)
 
