@@ -13,7 +13,7 @@ const renderGrid = (zoom = 1) =>
     <ScopeMapGrid
       model={model}
       rows={rowsFor(model, 'release')}
-      rowMode="release"
+      view="release"
       zoom={zoom}
     />,
   )
@@ -35,7 +35,7 @@ const renderConnected = (props: Partial<Parameters<typeof ScopeMapGrid>[0]> = {}
     <ScopeMapGrid
       model={sharedModel}
       rows={rowsFor(sharedModel, 'release')}
-      rowMode="release"
+      view="release"
       zoom={1}
       edges={sharedEdges}
       density={sharedDensity}
@@ -242,7 +242,7 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
       <ScopeMapGrid
         model={crossing}
         rows={rowsFor(crossing, 'release')}
-        rowMode="release"
+        view="release"
         zoom={1}
         edges={edges}
         selectedId="F-001"

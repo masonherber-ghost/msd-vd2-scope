@@ -1454,3 +1454,186 @@ describe('ScopeMap chrome from the design', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('ScopeMap — the MSD feature view', () => {
+  const openMsdView = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'By MSD feature' }))
+  }
+
+  it('offers the view as a third tab', async () => {
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By release' })).toBeInTheDocument(),
+    )
+    const tabs = screen.getByRole('group', { name: 'Map view' })
+    expect(
+      within(tabs)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['By release', 'By actor', 'By MSD feature'])
+  })
+
+  it('swaps PwC cards for MSD feature cards', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^F-\d{3} / }).length).toBeGreaterThan(0),
+    )
+
+    await openMsdView(user)
+
+    expect(screen.queryAllByRole('button', { name: /^F-\d{3} / })).toHaveLength(0)
+    const cards = screen.getAllByRole('button', { name: /^MSD feature / })
+    // One card per MVP record, including both records under ref 938.
+    expect(cards.map((c) => c.getAttribute('aria-label'))).toEqual([
+      'MSD feature 938 Additional users',
+      'MSD feature 938 · 1A Additional users',
+      'MSD feature 948 · 1B Verification methods',
+    ])
+  })
+
+  it('puts a card where the table schedules its capability, not where its feature sits', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By MSD feature' })).toBeInTheDocument(),
+    )
+    await openMsdView(user)
+
+    // 948 is cited by F-002 in 1.1, but its capability is scheduled in 1.4.
+    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    expect(
+      within(cell).getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+    ).toBeInTheDocument()
+  })
+
+  it('carries the view in the URL so a link reproduces the tab', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By MSD feature' })).toBeInTheDocument(),
+    )
+    await openMsdView(user)
+    expect(url()).toContain('view=mvp')
+
+    await user.click(screen.getByRole('button', { name: 'By release' }))
+    expect(url()).not.toContain('view=mvp')
+  })
+
+  it('restores the view from the URL', async () => {
+    renderPage('/?view=mvp')
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^MSD feature / }).length).toBe(3),
+    )
+  })
+
+  it('opens a detail panel naming the PwC features and capabilities', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+      ).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    expect(within(panel).getByText('PwC features citing this (1)')).toBeInTheDocument()
+    expect(within(panel).getByText('F-001')).toBeInTheDocument()
+    expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
+    expect(within(panel).getByText('Invite employer to register')).toBeInTheDocument()
+    expect(within(panel).getByText('Receive secure email invite')).toBeInTheDocument()
+    expect(url()).toContain('selectedMvp=2')
+  })
+
+  it('says when a card was placed by its PwC feature rather than the table', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+      ).toBeInTheDocument(),
+    )
+
+    await user.click(
+      screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+    )
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938 · 1A' })
+    expect(within(panel).getByText(/placed by the PwC features that cite it/i)).toBeInTheDocument()
+    expect(within(panel).getByText(/owns no capability/i)).toBeInTheDocument()
+  })
+
+  it('jumps from an MSD card to the PwC feature that cites it', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+      ).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    await user.click(within(panel).getByRole('button', { name: /F-001/ }))
+
+    // Back in the feature view, with that feature's panel open.
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
+    )
+    expect(url()).not.toContain('view=mvp')
+    expect(url()).toContain('selected=F-001')
+  })
+
+  it('keeps each view its own selection', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await openMsdView(user)
+    // The PwC panel cannot render here, and no MSD card is selected yet.
+    expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'By release' }))
+    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+  })
+
+  it('filters MSD cards with the same rail', async () => {
+    renderPage('/?view=mvp&release=1.4')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByRole('button', { name: /^MSD feature / })).toHaveLength(1)
+  })
+
+  it('does not offer to add a PwC feature from an MSD cell', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^Add a feature to/ }).length).toBeGreaterThan(0),
+    )
+    await openMsdView(user)
+    // The cell would have to invent a release and phase the sources never
+    // state for the MSD feature it was opened from.
+    expect(screen.queryAllByRole('button', { name: /^Add a feature to/ })).toHaveLength(0)
+  })
+})
+
+describe('ScopeMap — an empty MSD view names the right filter', () => {
+  it('blames the group that emptied this view, not the feature view', async () => {
+    // actor=jobseeker matches no capability in the fixture, so no MSD card
+    // survives — and the message has to say MSD features, not features.
+    renderPage('/?view=mvp&actor=jobseeker')
+    await waitFor(() =>
+      expect(screen.getByText('No MSD features match these filters.')).toBeInTheDocument(),
+    )
+    expect(
+      screen.getByRole('button', { name: 'Drop Actor filter' }),
+    ).toBeInTheDocument()
+  })
+})

@@ -1,13 +1,17 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { FeatureCard } from '@/components/FeatureCard'
+import { MvpCard } from '@/components/MvpCard'
 import { ScopeEdgeOverlay } from '@/components/ScopeEdgeOverlay'
+import type { MvpCardModel } from '@/lib/mvp-derive'
 import {
   ACTOR_ROWS,
   cellKey,
   releaseTokenSuffix,
+  rowModeFor,
   type RowMode,
   type ScopeMapModel,
   type ScopeRow,
+  type ViewMode,
 } from '@/lib/scope-derive'
 import { edgesFor, type ScopeEdge } from '@/lib/scope-edges'
 
@@ -15,8 +19,12 @@ export type ScopeMapGridProps = {
   model: ScopeMapModel
   /** Rows are actors or releases; phases always run across the top. */
   rows: ScopeRow[]
-  rowMode: RowMode
+  view: ViewMode
   zoom: number
+  /** MSD-feature cards per cell. Only read when `view` is `mvp`. */
+  mvpCellIndex?: Map<string, MvpCardModel[]>
+  selectedMvpId?: number | null
+  onSelectMvp?: (mvpId: number) => void
   /** Below this zoom, cards drop to ID-only so the map stays legible (R-8.7). */
   compactBelow?: number
   scrollRef?: React.Ref<HTMLDivElement>
@@ -37,8 +45,11 @@ export type ScopeMapGridProps = {
 export function ScopeMapGrid({
   model,
   rows,
-  rowMode,
+  view,
   zoom,
+  mvpCellIndex,
+  selectedMvpId = null,
+  onSelectMvp,
   compactBelow = 0.7,
   scrollRef,
   contentRef,
@@ -49,6 +60,8 @@ export function ScopeMapGrid({
   density,
   unreviewedIds,
 }: ScopeMapGridProps) {
+  const rowMode = rowModeFor(view)
+  const isMvpView = view === 'mvp'
   const compact = zoom < compactBelow
   // Edges are off until a card is selected, hovered or focused — 27 drawn at
   // once is noise, not insight (R-8.2). Hover is a shortcut; selection and
@@ -65,6 +78,14 @@ export function ScopeMapGrid({
     () => new Map(model.releases.map((release) => [release.id, release.label])),
     [model.releases],
   )
+
+  /** Cards in a cell, counting whichever kind the current view renders. */
+  const countIn = useMemo(() => {
+    if (!isMvpView) {
+      return (key: string) => model.cellIndex.get(key)?.features.length ?? 0
+    }
+    return (key: string) => mvpCellIndex?.get(key)?.length ?? 0
+  }, [isMvpView, model.cellIndex, mvpCellIndex])
 
   const style = {
     '--scope-zoom': zoom,
@@ -91,9 +112,8 @@ export function ScopeMapGrid({
           {model.phases.map((phase) => {
             // Summed from the visible rows, so the header agrees with the
             // column beneath it in whichever view is showing.
-            const features = rows.reduce(
-              (total, row) =>
-                total + (model.cellIndex.get(cellKey(row.key, phase.id))?.features.length ?? 0),
+            const shown = rows.reduce(
+              (total, row) => total + countIn(cellKey(row.key, phase.id)),
               0,
             )
             return (
@@ -107,7 +127,7 @@ export function ScopeMapGrid({
                 </span>
                 <span className="scope-map-grid__stage-name">{phase.name}</span>
                 <span className="scope-map-grid__stage-meta">
-                  epic {phase.epic_ref} · {features} shown
+                  epic {phase.epic_ref} · {shown} shown
                 </span>
               </div>
             )
@@ -127,13 +147,18 @@ export function ScopeMapGrid({
               unreviewedIds={unreviewedIds}
               rowMode={rowMode}
               releaseLabels={releaseLabels}
+              isMvpView={isMvpView}
+              mvpCellIndex={mvpCellIndex}
+              selectedMvpId={selectedMvpId}
+              onSelectMvp={onSelectMvp}
+              countIn={countIn}
             />
           ))}
 
           <ScopeEdgeOverlay
             container={table}
             edges={shownEdges}
-            layoutKey={`${rowMode}:${model.cells.length}:${zoom}:${compact}:${shownEdges.length}`}
+            layoutKey={`${view}:${model.cells.length}:${zoom}:${compact}:${shownEdges.length}`}
           />
         </div>
       </div>
@@ -163,6 +188,11 @@ function ScopeMapRow({
   unreviewedIds,
   rowMode,
   releaseLabels,
+  isMvpView,
+  mvpCellIndex,
+  selectedMvpId,
+  onSelectMvp,
+  countIn,
 }: {
   model: ScopeMapModel
   row: ScopeRow
@@ -175,9 +205,14 @@ function ScopeMapRow({
   unreviewedIds?: Set<string>
   rowMode: RowMode
   releaseLabels: Map<string, string>
+  isMvpView: boolean
+  mvpCellIndex?: Map<string, MvpCardModel[]>
+  selectedMvpId: number | null
+  onSelectMvp?: (mvpId: number) => void
+  countIn: (key: string) => number
 }) {
   const shown = model.phases.reduce(
-    (total, phase) => total + (model.cellIndex.get(cellKey(row.key, phase.id))?.features.length ?? 0),
+    (total, phase) => total + countIn(cellKey(row.key, phase.id)),
     0,
   )
 
@@ -198,16 +233,24 @@ function ScopeMapRow({
       </div>
 
       {model.phases.map((phase) => {
-        const cell = model.cellIndex.get(cellKey(row.key, phase.id))
+        const key = cellKey(row.key, phase.id)
+        const cell = model.cellIndex.get(key)
         const features = cell?.features ?? []
+        const mvpCards = isMvpView ? (mvpCellIndex?.get(key) ?? []) : []
         const capabilityCount = cell?.capabilityCount ?? 0
-        const isEmpty = features.length === 0
+        const count = isMvpView ? mvpCards.length : features.length
+        const isEmpty = count === 0
+        // Creating a PwC feature from an MSD cell would guess a placement
+        // the sources never state, so the affordance is feature view only.
+        const canAdd = onAddToCell && !isMvpView
 
         return (
           <div
             key={phase.id}
             role="cell"
-            aria-label={`${row.label}, ${phase.name}: ${features.length} features, ${capabilityCount} capabilities`}
+            aria-label={`${row.label}, ${phase.name}: ${count} ${
+              isMvpView ? 'MSD features' : 'features'
+            }, ${capabilityCount} capabilities`}
             className={`scope-map-grid__cell${
               isEmpty ? ' scope-map-grid__cell--empty' : ''
             }`}
@@ -216,12 +259,12 @@ function ScopeMapRow({
               <>
                 <span className="scope-map-grid__empty-note">
                   {capabilityCount > 0
-                    ? `No feature · ${capabilityCount} capabilit${
+                    ? `No ${isMvpView ? 'MSD feature' : 'feature'} · ${capabilityCount} capabilit${
                         capabilityCount === 1 ? 'y' : 'ies'
                       }`
                     : 'No capability'}
                 </span>
-                {onAddToCell ? (
+                {canAdd ? (
                   <button
                     type="button"
                     className="scope-map-grid__add"
@@ -234,26 +277,38 @@ function ScopeMapRow({
               </>
             ) : (
               <>
-                {features.map((feature) => (
-                  <FeatureCard
-                    key={feature.id}
-                    feature={feature}
-                    compact={compact}
-                    selected={feature.id === selectedId}
-                    onSelect={onSelect}
-                    density={density?.get(feature.id) ?? 0}
-                    onActivate={onActivate}
-                    hasUnreviewedConflict={unreviewedIds?.has(feature.id) ?? true}
-                    releaseLabel={releaseLabels.get(feature.releaseId)}
-                    accentToken={accentFor(feature, rowMode)}
-                  />
-                ))}
+                {isMvpView
+                  ? mvpCards.map((card) => (
+                      <MvpCard
+                        key={card.id}
+                        card={card}
+                        releaseId={row.key}
+                        releaseLabel={releaseLabels.get(row.key)}
+                        compact={compact}
+                        selected={card.id === selectedMvpId}
+                        onSelect={onSelectMvp}
+                      />
+                    ))
+                  : features.map((feature) => (
+                      <FeatureCard
+                        key={feature.id}
+                        feature={feature}
+                        compact={compact}
+                        selected={feature.id === selectedId}
+                        onSelect={onSelect}
+                        density={density?.get(feature.id) ?? 0}
+                        onActivate={onActivate}
+                        hasUnreviewedConflict={unreviewedIds?.has(feature.id) ?? true}
+                        releaseLabel={releaseLabels.get(feature.releaseId)}
+                        accentToken={accentFor(feature, rowMode)}
+                      />
+                    ))}
                 {capabilityCount > 0 ? (
                   <span className="scope-map-grid__capability-note">
                     {capabilityCount} capabilit{capabilityCount === 1 ? 'y' : 'ies'} here
                   </span>
                 ) : null}
-                {onAddToCell ? (
+                {canAdd ? (
                   <button
                     type="button"
                     className="scope-map-grid__add"

@@ -1,0 +1,201 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.mvp-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-primary-50);
+  /* The accent is the release cell the card sits in — an MSD feature has no
+     placement of its own, so the cell is the only release it can claim. */
+  border-left: 5px solid var(--card-accent, var(--color-primary-900));
+  border-radius: var(--radius-md);
+  background-color: var(--color-card);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+
+.mvp-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-2);
+}
+
+.mvp-card__ref {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-500);
+}
+
+.mvp-card__title {
+  font-size: 1rem;
+  line-height: 1.4;
+  font-weight: 400;
+  color: var(--color-ink-700);
+  margin: 0;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.mvp-card__release {
+  flex-shrink: 0;
+  padding: 0.3125rem 0.5625rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--release-pill-bg, var(--color-primary-50));
+  color: var(--release-pill-fg, var(--color-primary-900));
+  font-size: 0.75rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* Stretches over the whole card so the card is clickable while the button
+   itself contains only phrasing content. */
+.mvp-card__select {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mvp-card__select::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+.mvp-card__select:focus-visible::after {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   VARIANTS / MODIFIERS
+   ======================================== */
+
+.mvp-card--selected {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px var(--color-primary-300), var(--shadow-card);
+}
+
+.mvp-card--compact {
+  gap: var(--spacing-1);
+  padding: var(--spacing-2) var(--spacing-3);
+}
+
+.mvp-card--compact .mvp-card__title,
+.mvp-card--compact .mvp-card__actors,
+.mvp-card--compact .mvp-card__badges,
+.mvp-card--compact .mvp-card__note {
+  display: none;
+}
+
+/* ========================================
+   PWC FEATURE CHIPS
+   ======================================== */
+
+.mvp-card__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mvp-card__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem var(--spacing-2);
+  border: 1px solid var(--color-primary-100);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-25);
+  color: var(--color-primary-900);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+}
+
+.mvp-card__note {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-ink-500);
+}
+
+/* ========================================
+   ACTOR SUMMARY
+   ======================================== */
+
+.mvp-card__actors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mvp-card__actor {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem var(--spacing-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--actor-accent, var(--color-line));
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-ink-700);
+}
+
+/* The label carries the meaning; the colour is a scanning aid (R-10.6). */
+.mvp-card__actor--employer { --actor-accent: var(--color-actor-employer); }
+.mvp-card__actor--staff { --actor-accent: var(--color-actor-staff); }
+.mvp-card__actor--jobseeker { --actor-accent: var(--color-actor-jobseeker); }
+.mvp-card__actor--system { --actor-accent: var(--color-actor-system); }
+
+.mvp-card__actor-count {
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+/* ========================================
+   BADGES
+   ======================================== */
+
+.mvp-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}
+
+.mvp-card__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem var(--spacing-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-ink-500);
+}
+
+/* Dashed reads as "derived, not stated" — the same cue unmatched uses. */
+.mvp-card__badge--derived {
+  border-style: dashed;
+}

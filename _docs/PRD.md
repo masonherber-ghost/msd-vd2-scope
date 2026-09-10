@@ -347,6 +347,17 @@ release.
 - **R-8.6** Selecting anything sets a URL param, so any view can be linked or shared.
 - **R-8.7** Pan and zoom, plus zoom-to-fit. The full map must fit a 1440px screen legibly at
   default zoom, even if cards collapse to ID-only chips to do it.
+- **R-8.20** **Three views of the one grid**, chosen by tab and carried in the URL:
+  *By release* and *By actor* regroup the rows under PwC feature cards; *By MSD feature*
+  changes what a card **is** — one card per MVP record, naming the PwC features that cite
+  it and the capabilities it owns. The three read the same payload; switching is instant
+  and refetches nothing (R-10.7).
+- **R-8.21** **An MSD feature is placed by what it owns**, because neither source gives it
+  a release or a phase of its own: first by the sequencing table's placement of its
+  capabilities, and only failing that by the PwC features that cite it. A card says which
+  of the two placed it — a fallback placement must never read as a stated one. A record
+  whose capabilities straddle two cells appears in both, and one nothing places is listed
+  below the map rather than dropped.
 
 ### 8.2 Filter rail
 

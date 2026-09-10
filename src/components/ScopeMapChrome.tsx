@@ -1,12 +1,30 @@
 import type { CSSProperties } from 'react'
-import { ACTOR_ROWS, releaseTokenSuffix, type RowMode } from '@/lib/scope-derive'
+import { ACTOR_ROWS, releaseTokenSuffix, type ViewMode } from '@/lib/scope-derive'
 import type { ReleaseRow } from '@/lib/api-client'
 
 const accent = (token: string) => ({ '--chip-accent': `var(${token})` }) as CSSProperties
 
+const VIEW_TABS: { mode: ViewMode; label: string; lede: string }[] = [
+  {
+    mode: 'release',
+    label: 'By release',
+    lede: 'the release they ship in',
+  },
+  {
+    mode: 'actor',
+    label: 'By actor',
+    lede: 'who acts',
+  },
+  {
+    mode: 'mvp',
+    label: "By MSD feature",
+    lede: 'the release their capabilities are scheduled in',
+  },
+]
+
 export type ScopeMapChromeProps = {
-  rowMode: RowMode
-  onRowModeChange: (mode: RowMode) => void
+  view: ViewMode
+  onViewChange: (mode: ViewMode) => void
   releases: ReleaseRow[]
   featuresByRelease: Map<string, number>
   capabilitiesByRelease: Map<string, number>
@@ -18,8 +36,8 @@ export type ScopeMapChromeProps = {
 /** The framing the design puts around the grid: view tabs, release chips
  *  and the actor legend. */
 export function ScopeMapChrome({
-  rowMode,
-  onRowModeChange,
+  view,
+  onViewChange,
   releases,
   featuresByRelease,
   capabilitiesByRelease,
@@ -28,16 +46,16 @@ export function ScopeMapChrome({
 }: ScopeMapChromeProps) {
   return (
     <>
-      <div className="scope-chrome__tabs" role="group" aria-label="Group rows by">
-        {(['release', 'actor'] as const).map((mode) => (
+      <div className="scope-chrome__tabs" role="group" aria-label="Map view">
+        {VIEW_TABS.map((tab) => (
           <button
-            key={mode}
+            key={tab.mode}
             type="button"
             className="scope-chrome__tab"
-            aria-pressed={rowMode === mode}
-            onClick={() => onRowModeChange(mode)}
+            aria-pressed={view === tab.mode}
+            onClick={() => onViewChange(tab.mode)}
           >
-            {mode === 'release' ? 'By release' : 'By actor'}
+            {tab.label}
           </button>
         ))}
       </div>
@@ -47,9 +65,13 @@ export function ScopeMapChrome({
           <span className="scope-chrome__eyebrow">Discovery artefact · Scope map</span>
           <h1 className="scope-chrome__title">VD2 release scope map</h1>
           <p className="scope-chrome__lede">
-            Features plotted across the seven canonical journey phases. Rows group them by{' '}
-            {rowMode === 'release' ? 'the release they ship in' : 'who acts'}. An empty cell
-            is information: nothing in that phase lands there.
+            {view === 'mvp'
+              ? 'MSD features plotted across the seven canonical journey phases, each card '
+              : 'PwC features plotted across the seven canonical journey phases, each card '}
+            naming the {view === 'mvp' ? 'PwC features that cite it' : 'MVP features it cites'}.
+            Rows group them by{' '}
+            {VIEW_TABS.find((t) => t.mode === view)?.lede ?? 'the release they ship in'}. An
+            empty cell is information: nothing in that phase lands there.
           </p>
         </div>
 

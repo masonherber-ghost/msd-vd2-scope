@@ -3,6 +3,7 @@ import { Filter } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
+import { MvpDetailPanel } from '@/components/MvpDetailPanel'
 import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
@@ -24,7 +25,19 @@ import {
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
-import { buildScopeMap, projectCells, rowsFor, type RowMode } from '@/lib/scope-derive'
+import {
+  buildScopeMap,
+  projectCells,
+  rowModeFor,
+  rowsFor,
+  type ViewMode,
+} from '@/lib/scope-derive'
+import {
+  applyMvpFilters,
+  blameMvpGroups,
+  buildMvpCards,
+  projectMvpCells,
+} from '@/lib/mvp-derive'
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
@@ -52,9 +65,6 @@ export default function ScopeMap() {
   const scope = useScope()
   const [zoom, setZoom] = useState(1)
   const [query, setQuery] = useState('')
-  // Rows group by release by default, which keeps every cell addressable by
-  // the release + phase pair the create flow pre-fills from.
-  const [rowMode, setRowMode] = useState<RowMode>('release')
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
 
@@ -70,9 +80,50 @@ export default function ScopeMap() {
     [setSearchParams],
   )
 
+  /**
+   * The view is URL state like everything else, so a link reproduces the tab
+   * the sender was on. Release view is the default: it keeps every cell
+   * addressable by the release + phase pair the create flow pre-fills from.
+   */
+  const viewParam = searchParams.get('view')
+  const view: ViewMode =
+    viewParam === 'actor' || viewParam === 'mvp' ? viewParam : 'release'
+  const rowMode = rowModeFor(view)
+
+  const setView = useCallback(
+    (next: ViewMode) => {
+      setSearchParams((current) => {
+        const params = new URLSearchParams(current)
+        if (next === 'release') params.delete('view')
+        else params.set('view', next)
+        // Both selections stay in the URL. Each view reads only its own id,
+        // so nothing stale renders, and coming back to a view restores the
+        // panel that was open in it.
+        return params
+      })
+    },
+    [setSearchParams],
+  )
+
   // Selection lives in the URL too, so a link reproduces the open panel and
   // the panel survives a reload (R-10.2).
   const selectedId = searchParams.get('selected')
+  const selectedMvpParam = Number(searchParams.get('selectedMvp'))
+  const selectedMvpId = Number.isInteger(selectedMvpParam) && selectedMvpParam > 0
+    ? selectedMvpParam
+    : null
+
+  const setSelectedMvp = useCallback(
+    (mvpId: number | null) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        if (mvpId) next.set('selectedMvp', String(mvpId))
+        else next.delete('selectedMvp')
+        return next
+      })
+    },
+    [setSearchParams],
+  )
 
   const setSelected = useCallback(
     (featureId: string | null) => {
@@ -128,9 +179,52 @@ export default function ScopeMap() {
 
   const rows = useMemo(() => (model ? rowsFor(model, rowMode) : []), [model, rowMode])
 
+  // ---- MSD-feature view --------------------------------------------------
+  // Built unconditionally: it is cheap, pure, and derived from the same
+  // payload, so switching tabs never waits on anything (R-10.7).
+  const mvpCards = useMemo(
+    () => (scope.data ? buildMvpCards(scope.data) : []),
+    [scope.data],
+  )
+
+  const visibleMvpCards = useMemo(
+    () => applyMvpFilters(mvpCards, filters),
+    [mvpCards, filters],
+  )
+
+  const mvpProjection = useMemo(
+    () => projectMvpCells(visibleMvpCards),
+    [visibleMvpCards],
+  )
+
+  const isMvpView = view === 'mvp'
+
+  const selectedMvpCard = useMemo(
+    () => mvpCards.find((card) => card.id === selectedMvpId) ?? null,
+    [mvpCards, selectedMvpId],
+  )
+
+  const releaseLabelMap = useMemo(
+    () => new Map((model?.releases ?? []).map((r) => [r.id, r.label])),
+    [model],
+  )
+
+  const phaseNameMap = useMemo(
+    () => new Map((model?.phases ?? []).map((p) => [p.id, p.name])),
+    [model],
+  )
+
+  // Blame is answered against whichever set the view is actually showing —
+  // naming a group that emptied the other view would send someone after the
+  // wrong filter (R-8.10).
   const blame = useMemo(
-    () => (model ? blameGroups(model.features, filters) : []),
-    [model, filters],
+    () =>
+      isMvpView
+        ? blameMvpGroups(mvpCards, filters)
+        : model
+          ? blameGroups(model.features, filters)
+          : [],
+    [isMvpView, mvpCards, model, filters],
   )
 
   // Edges follow the filtered view, so a hidden feature never anchors one.
@@ -175,9 +269,16 @@ export default function ScopeMap() {
   const activeFilterCount = useMemo(() => activeGroups(filters).length, [filters])
 
   const detail = useMemo(
-    () => (scope.data && selectedId ? buildFeatureDetail(scope.data, selectedId) : null),
-    [scope.data, selectedId],
+    () =>
+      scope.data && selectedId && !isMvpView
+        ? buildFeatureDetail(scope.data, selectedId)
+        : null,
+    [scope.data, selectedId, isMvpView],
   )
+
+  // Each view has its own panel; only one can be open at a time.
+  const mvpDetail = isMvpView ? selectedMvpCard : null
+  const panelOpen = detail !== null || mvpDetail !== null
 
   // ---- Create / edit / delete -------------------------------------------
   const [creatingIn, setCreatingIn] = useState<{
@@ -349,8 +450,8 @@ export default function ScopeMap() {
     <div className="flex flex-col gap-4">
       {model ? (
         <ScopeMapChrome
-          rowMode={rowMode}
-          onRowModeChange={setRowMode}
+          view={view}
+          onViewChange={setView}
           releases={model.releases}
           featuresByRelease={model.totals.featuresByRelease}
           capabilitiesByRelease={model.totals.capabilitiesByRelease}
@@ -443,11 +544,11 @@ export default function ScopeMap() {
       ) : model && projected ? (
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start ${
-            filtersOpen && detail
+            filtersOpen && panelOpen
               ? 'lg:grid-cols-[14rem_minmax(0,1fr)_22rem]'
               : filtersOpen
                 ? 'lg:grid-cols-[16rem_minmax(0,1fr)]'
-                : detail
+                : panelOpen
                   ? 'lg:grid-cols-[minmax(0,1fr)_22rem]'
                   : 'lg:grid-cols-1'
           }`}
@@ -486,8 +587,9 @@ export default function ScopeMap() {
               />
             ) : null}
 
-            {visible.length === 0 ? (
+            {(isMvpView ? visibleMvpCards.length : visible.length) === 0 ? (
               <ZeroResults
+                subject={isMvpView ? 'MSD features' : 'features'}
                 blame={blame}
                 onDrop={(group) => setFilters(withoutGroup(filters, group))}
                 onClearAll={() => setFilters(EMPTY_FILTERS)}
@@ -497,13 +599,16 @@ export default function ScopeMap() {
               <ScopeMapGrid
                 model={{ ...model, ...projected }}
                 rows={rows}
-                rowMode={rowMode}
+                view={view}
                 zoom={zoom}
                 scrollRef={scrollRef}
                 contentRef={(node) => {
                   contentRef.current = node
                 }}
-                edges={edges}
+                // Edges join PwC features through a shared MVP feature. In
+                // MSD view the MVP feature *is* the card, so the edge would
+                // only ever point at itself.
+                edges={isMvpView ? [] : edges}
                 density={density}
                 unreviewedIds={unreviewedIds}
                 selectedId={selectedId}
@@ -513,22 +618,62 @@ export default function ScopeMap() {
                   toggleSelected(id)
                 }}
                 onAddToCell={startCreate}
+                mvpCellIndex={mvpProjection.cellIndex}
+                selectedMvpId={selectedMvpId}
+                onSelectMvp={(id) => {
+                  if (!confirmDiscard()) return
+                  setDirty(false)
+                  setSelectedMvp(id === selectedMvpId ? null : id)
+                }}
               />
             )}
 
+            {isMvpView && mvpProjection.unplaced.length > 0 ? (
+              <section
+                className="rounded-lg border border-border p-4"
+                aria-labelledby="mvp-unplaced"
+              >
+                <h2 className="text-sm font-semibold" id="mvp-unplaced">
+                  Not on the map ({mvpProjection.unplaced.length})
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  These MSD features own no placed capability and no PwC feature cites
+                  them, so neither source puts them anywhere. Listed rather than dropped.
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-2 text-sm">
+                  {mvpProjection.unplaced.map((card) => (
+                    <li
+                      key={card.id}
+                      className="rounded-md border border-border px-2 py-1"
+                    >
+                      <span className="font-medium">{card.ref}</span>{' '}
+                      <span className="text-muted-foreground">{card.title}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
             <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
               <div className="flex gap-2">
-                <dt>Features</dt>
+                <dt>{isMvpView ? 'MSD features' : 'Features'}</dt>
                 <dd className="font-medium text-foreground">
-                  {isEmpty(filters)
-                    ? model.totals.features
-                    : `${visible.length} of ${model.totals.features}`}
+                  {isMvpView
+                    ? isEmpty(filters)
+                      ? mvpCards.length
+                      : `${visibleMvpCards.length} of ${mvpCards.length}`
+                    : isEmpty(filters)
+                      ? model.totals.features
+                      : `${visible.length} of ${model.totals.features}`}
                 </dd>
               </div>
               <div className="flex gap-2">
                 <dt>Populated cells</dt>
                 <dd className="font-medium text-foreground">
-                  {projected.totals.populatedCells} of {model.totals.totalCells}
+                  {isMvpView
+                    ? mvpProjection.totals.populatedCells
+                    : projected.totals.populatedCells}{' '}
+                  of {model.totals.totalCells}
                 </dd>
               </div>
               <div className="flex gap-2">
@@ -551,6 +696,26 @@ export default function ScopeMap() {
               capabilitiesByRelease={model.totals.capabilitiesByRelease}
             />
           </div>
+
+          {mvpDetail ? (
+            <MvpDetailPanel
+              card={mvpDetail}
+              onClose={() => setSelectedMvp(null)}
+              releaseLabels={releaseLabelMap}
+              phaseNames={phaseNameMap}
+              onSelectFeature={(id) => {
+                // Jumping to a PwC feature means leaving this view — the
+                // feature panel only exists in the feature views.
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current)
+                  next.delete('view')
+                  next.delete('selectedMvp')
+                  next.set('selected', id)
+                  return next
+                })
+              }}
+            />
+          ) : null}
 
           {detail ? (
             <FeatureDetailPanel
@@ -602,11 +767,14 @@ export default function ScopeMap() {
 
 /** Never a bare empty panel: name the filter to blame and offer to drop it (R-8.10). */
 function ZeroResults({
+  subject,
   blame,
   onDrop,
   onClearAll,
   onShowFilters,
 }: {
+  /** What the current view is showing, so the message names it. */
+  subject: string
   blame: ReturnType<typeof blameGroups>
   onDrop: (group: ReturnType<typeof blameGroups>[number]) => void
   onClearAll: () => void
@@ -618,7 +786,7 @@ function ZeroResults({
       role="status"
       className="flex flex-col items-start gap-3 rounded-lg border border-border p-6"
     >
-      <p className="text-sm font-medium">No features match these filters.</p>
+      <p className="text-sm font-medium">No {subject} match these filters.</p>
 
       {blame.length > 0 ? (
         <>
