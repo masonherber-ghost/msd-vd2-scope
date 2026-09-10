@@ -106,22 +106,84 @@ describe('the real source documents reconcile to the PRD counts', () => {
   })
 
   it('clears the five 1.9 \u2192 1.4 conflicts without touching the others', () => {
-    // The merge is the only reason the raw 35 drops past the split's 34.
     const raw = new Map(
       EXPECTED_SOURCE_RELEASE_CONFLICTS.map((e) => [`${e.from}->${e.to}`, e.links]),
     )
     expect(raw.get('1.9->1.4')).toBe(5)
+    // Nothing conflicts with itself once the two ids are one release.
     expect(
       result.summary.releaseConflictBreakdown.some(
         (e) => e.from === '1.4' && e.to === '1.4',
       ),
     ).toBe(false)
-    // The other two 1.9 rows survive intact, renamed to 1.4.
     const after = new Map(
       result.summary.releaseConflictBreakdown.map((e) => [`${e.from}->${e.to}`, e.links]),
     )
+    // The 1.9 -> 2 row survives intact, renamed to 1.4. The 1.9 -> 1.1 row
+    // does not: OV-005 moved 948's three links into 1.4, where F-011 already
+    // sat, so they became agreements.
     expect(after.get('1.4->2')).toBe(raw.get('1.9->2'))
-    expect(after.get('1.4->1.1')).toBe(raw.get('1.9->1.1'))
+    expect(after.get('1.4->1.1')).toBe(3)
+  })
+
+  it('leaves release 1.1 holding exactly the twelve approved MSD features', () => {
+    // The whole point of OV-004…OV-006. Asserted on the reconciled model, so
+    // it covers the reallocations and the OV-002 revision together.
+    const APPROVED = [939, 940, 941, 944, 946, 947, 955, 959, 962, 968, 972, 991]
+    const in11 = [
+      ...new Set(
+        result.capabilities.filter((c) => c.releaseId === '1.1').map((c) => c.ref),
+      ),
+    ].sort((a, b) => a - b)
+    expect(in11).toEqual(APPROVED)
+  })
+
+  it('applies the three declared reallocations', () => {
+    expect(
+      result.appliedReallocations.map((a) => [
+        a.reallocation.id,
+        a.reallocation.from,
+        a.reallocation.to,
+        a.moved.reduce((n, m) => n + m.capabilities, 0),
+      ]),
+    ).toEqual([
+      ['OV-004', '1.1', '1.4', 11],
+      ['OV-005', '1.1', '1.2', 7],
+      ['OV-006', '1.2', '1.1', 1],
+    ])
+  })
+
+  it('splits Option A from Option B and labels both (OV-007/OV-008)', () => {
+    expect(result.appliedOptionMerges.map((a) => [a.merge.id, a.merge.ref])).toEqual([
+      ['OV-007', 938],
+      ['OV-008', 946],
+    ])
+    // 51 records before the merges, 49 after — 938 and 946 each lose a bare.
+    expect(result.summary.mvpRecords).toBe(49)
+    expect(result.summary.mvpRefs).toBe(48)
+
+    const optioned = result.mvpFeatures
+      .filter((m) => m.scopeOption)
+      .map((m) => `${m.ref}${m.scopeOption} ${m.title}`)
+      .sort()
+    expect(optioned).toEqual([
+      '9381A Staff can Create and Manage Additional Employer Portal Users (Option A)',
+      '9461A Employer Portal User Access and Permissions (Option A)',
+      '9481B Employer Verification Methods (Option B)',
+      '9511A Register for the Employer Portal - New organisation (Option A)',
+      '9511B Register for the Employer Portal - New organisation (Option B)',
+    ])
+  })
+
+  it('leaves no ref carrying both a bare and an optioned record', () => {
+    const byRef = new Map<number, (string | null)[]>()
+    for (const m of result.mvpFeatures) {
+      byRef.set(m.ref, [...(byRef.get(m.ref) ?? []), m.scopeOption])
+    }
+    for (const [ref, options] of byRef) {
+      if (options.length === 1) continue
+      expect(options, `ref ${ref}`).not.toContain(null)
+    }
   })
 
   it('applies OV-002, splitting F-085 into F-085 and F-093', () => {
@@ -135,7 +197,9 @@ describe('the real source documents reconcile to the PRD counts', () => {
       sourcePhaseLabel: 'Outcomes & Support',
     })
     expect(applied.into).toEqual([
-      { featureId: 'F-085', releaseId: '1.2', phaseId: 'manage-vacancies', capabilities: 1 },
+      // 1.1, not 1.2: OV-006 moved ref 972 into the approved pilot list and
+      // this half is the one that carries it.
+      { featureId: 'F-085', releaseId: '1.1', phaseId: 'manage-vacancies', capabilities: 1 },
       {
         featureId: 'F-093',
         releaseId: '1.3',
@@ -151,7 +215,7 @@ describe('the real source documents reconcile to the PRD counts', () => {
 
     expect(a).toMatchObject({
       name: 'Record vacancy outcome',
-      releaseId: '1.2',
+      releaseId: '1.1',
       phaseId: 'manage-vacancies',
     })
     expect(b).toMatchObject({
@@ -190,13 +254,19 @@ describe('the real source documents reconcile to the PRD counts', () => {
     expect(orders).toEqual(Array.from({ length: orders.length }, (_, i) => i + 1))
   })
 
-  it('sees the single 1.1 → 1.4 conflict on F-014 electronic T&Cs', () => {
-    const one = result.conflicts.release.filter(
+  it('still sees the F-014 electronic T&Cs conflict (PRD §7)', () => {
+    const group = result.conflicts.release.filter(
       (c) => c.featureReleaseId === '1.1' && c.capabilityReleaseId === '1.4',
     )
-    expect(one).toHaveLength(1)
-    expect(one[0]).toMatchObject({ pwcFeatureId: 'F-014', ref: 951 })
-    expect(one[0].capabilityText).toBe('Electronic T&Cs acceptance')
+    // 13 now, not the original 1: OV-004 moved ref 938 to 1.4 while F-001 and
+    // F-002 stayed in the pilot, which is 12 of them. The T&Cs one is the
+    // original and has to survive that intact.
+    expect(group).toHaveLength(13)
+    expect(group.filter((c) => c.ref === 938)).toHaveLength(12)
+    const tcs = group.filter((c) => c.ref === 951)
+    expect(tcs).toHaveLength(1)
+    expect(tcs[0]).toMatchObject({ pwcFeatureId: 'F-014', ref: 951 })
+    expect(tcs[0].capabilityText).toBe('Electronic T&Cs acceptance')
   })
 
   /**
@@ -209,9 +279,10 @@ describe('the real source documents reconcile to the PRD counts', () => {
       byRelease.set(feature.releaseId, (byRelease.get(feature.releaseId) ?? 0) + 1)
     }
     expect(Object.fromEntries(byRelease)).toEqual({
-      '1.1': 20,
-      // 9, not the pre-split 8: OV-002 puts F-085 in 1.2.
-      '1.2': 9,
+      // 21, not 20: OV-002 splits F-085 out and OV-006 puts that half in 1.1
+      // with the MVP ref it carries.
+      '1.1': 21,
+      '1.2': 8,
       '1.3': 5,
       // Was 1.9 until OV-003 declared it and the table's 1.4 to be one release.
       '1.4': 15,

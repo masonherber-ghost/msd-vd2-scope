@@ -75,6 +75,19 @@ function checkAndSeedScope(): void {
     if (summary.removedReleases.length > 0) {
       console.log(`[scope] dropped stale releases: ${summary.removedReleases.join(', ')}`)
     }
+    if (summary.removedMvpFeatures.length > 0) {
+      console.log(
+        `[scope] dropped stale MVP records: ${summary.removedMvpFeatures
+          .map((m) => `${m.ref}${m.scope_option ? `/${m.scope_option}` : ''}`)
+          .join(', ')}`,
+      )
+    }
+    for (const stale of summary.retainedStaleMvpFeatures) {
+      console.warn(
+        `[scope] MVP record ${stale.ref}${stale.scope_option ? `/${stale.scope_option}` : ''} ` +
+          `is no longer produced by the sources but has ${stale.dependents} dependant(s) — kept`,
+      )
+    }
     for (const stale of summary.retainedStaleReleases) {
       console.warn(
         `[scope] release ${stale.id} is no longer in the sources but still has ` +

@@ -652,10 +652,12 @@ now under 1.4. The sources are unedited, so both framings remain recoverable.
 Recruitment). Almost certainly a diagram typo. Stored faithfully and not enforced unique;
 needs confirming with whoever owns the journey diagram.
 
-**D-3 — Are bare `938` and `946` really separate from their Option 1A records?** Option 1A
-and 1B are separate features per the brief, which is unambiguous for `951`. For `938` and
-`946` one variant carries no option, which reads more like loose authoring. Modelled as
-separate records for now; resolving a bare record into `1A` later is a single edit.
+**D-3 — Are bare `938` and `946` really separate from their Option 1A records? — CLOSED.**
+Option 1A and 1B are separate features per the brief, which is unambiguous for `951`. For
+`938` and `946` one variant carries no option, which reads more like loose authoring. It
+was: [OV-007 and OV-008](#ov-007-and-ov-008--option-a-and-option-b-are-two-features) fold
+each bare record onto its Option 1A one, so the ref has a single record and no rule has to
+choose an owner. Records 51 → 49; `ambiguousMvpOwners` 10 → 3, all three now `951`'s.
 
 **D-4 — Are the near-duplicate capabilities under refs 941 and 956 intentional?** Treated as
 distinct and flagged for review. If they are source duplication, the capability count drops
@@ -748,6 +750,11 @@ conflicts are derived from the corrected placement rather than left stale.
 | ~~OV-001~~ | placement | F-085 | Outcomes & Support / 1.3 → Manage Vacancies / 1.1 | superseded by OV-002 |
 | OV-002 | split | F-085 | divided into F-085 + F-093 | features 48 → 49; release conflicts 35 → 34, phase 21 → 18 |
 | OV-003 | release alias | release 1.9 | merged into the table's 1.4 | releases 6 → 5; release conflicts 34 → 29 |
+| OV-004 | reallocation | refs 938, 948, 1052 | 1.1 → 1.4 | descoped from the pilot, placed by their citing PwC feature |
+| OV-005 | reallocation | refs 943, 949, 965, 970, 976 | 1.1 → 1.2 | descoped from the pilot, no evidence of a home |
+| OV-006 | reallocation | ref 972 | 1.2 → 1.1 | approved for the pilot; OV-002 revised to match |
+| OV-007 | option merge | ref 938 | bare record → Option 1A | records 51 → 50; settles D-3 for 938 |
+| OV-008 | option merge | ref 946 | bare record → Option 1A | records 50 → 49; settles D-3 for 946 |
 
 **OV-002 — the F-085 split.** OV-001 moved the whole feature and raised its
 release conflicts from 1 to 3, because two of its three capabilities are
@@ -769,6 +776,76 @@ A split redistributes scope and never adds or drops any: `featureMvpLinks`
 (60), `featureCapabilityLinks` (123) and `assumptions` (92) are all unchanged,
 and every assigned MVP ref and assumption position is validated to appear
 exactly once or the import fails.
+
+### OV-004 to OV-006 — the approved Release 1.1 list
+
+MSD approved **twelve MVP features** for Release 1.1: 939, 940, 941, 944, 946,
+947, 955, 959, 962, 968, 972, 991. The sequencing table had eleven of them
+there already, plus eight it placed in 1.1 that are not on the list. That makes
+the list a programme decision overriding a document fact — the one case where
+the table is not authoritative for placement.
+
+**Where the eight went.** The rule is the release of the PwC features that cite
+them, because that is the only evidence either document offers:
+
+| Ref | Cited by | Moved to | Why |
+|---|---|---|---|
+| 1052 | F-005, F-013 (both 1.4) | **1.4** | every citing feature is already there |
+| 948 | F-011 (1.4) | **1.4** | and its only record is Option 1B, which the mapping file files under scale-up |
+| 938 | F-001, F-002 (1.1), F-003 (1.4) | **1.4** | the pilot is ruled out for it, so 1.4 is the only release any citing feature points at |
+| 943, 949, 965, 970 | F-014, F-027, F-028, F-039, F-046 — all 1.1 | **1.2** | no evidence: every citing feature is itself in the pilot |
+| 976 | nothing | **1.2** | no evidence: nothing cites it |
+
+For the last five, **1.2 is a parking place, not a finding.** Nothing in either
+document argues for it; it is simply the next sequenced release. These five are
+the first thing to revisit when the release plan is next reviewed.
+
+**972 moved the other way**, from 1.2 into the pilot. [OV-002](#p-3--source-documents-are-never-edited)
+is revised in step so the F-085 half that carries 972 moves with it, and the two
+still agree. F-086 also cites 972 and stays in 1.2, which the map now reports as
+a conflict rather than resolving on its own — whether the whole of 972 belongs in
+the pilot is a scope decision, not a reconciliation one.
+
+**The cost, stated plainly.** Release conflicts go 29 → 42. Moving an MSD feature
+out of the pilot does not move the PwC features that deliver it: the mapping
+document still files those under 1.1, so every link between them now straddles
+the pilot boundary. The largest group is F-001 and F-002 citing ref 938 — 12
+links — and it is worth reading as a question about whether those two pilot
+features should be citing a descoped MSD feature at all.
+
+Afterwards, **release 1.1 holds exactly the twelve approved refs** — none missing
+and none extra. That is the assertion `scope-source.test.ts` locks.
+
+### OV-007 and OV-008 — Option A and Option B are two features
+
+Option 1A is the staff-mediated slice and Option 1B the self-service one; the
+mapping file's own description of the scale-up release reads *"new and existing
+employers can self-register digitally (Option 1B)"*. The sequencing table has no
+option notation at all, so options exist only on the mapping side.
+
+The file cites some refs with an `(Option 1A)` suffix and the same ref bare
+elsewhere. A bare citation of a ref that has only one option is that option
+written loosely, not a third variant, so OV-007 and OV-008 fold it in:
+
+| Ref | Before | After |
+|---|---|---|
+| 938 | bare (F-003, 6 capabilities) + 1A (F-001, F-002, none) | one Option A record |
+| 946 | bare (F-006, 1 capability) + 1A (F-007, none) | one Option A record |
+| 948 | 1B only | unchanged — Option B |
+| 951 | 1A + 1B, both real | unchanged — genuinely two features |
+
+Records go 51 → 49 and no link is dropped: no PwC feature cited both the bare
+and the optioned record of one ref.
+
+**This settles [D-3](#15-open-decisions) for 938 and 946.** Once a ref has one
+record, no rule has to choose which one owns its capabilities. `ambiguousMvpOwners`
+falls 10 → 3, and the three that remain are 951's, where an Option A and an
+Option B genuinely compete.
+
+**Every optioned record carries its option in the title** — `(Option A)` /
+`(Option B)` — for traceability. This is not decoration: 951's two records share
+a title in the source, so without the suffix two different features read as one,
+which is the thing the split exists to prevent.
 
 ### OV-003 — release 1.9 is the table's 1.4
 

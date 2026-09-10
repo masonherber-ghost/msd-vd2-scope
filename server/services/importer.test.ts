@@ -62,12 +62,14 @@ describe('importScope writes the whole graph', () => {
       phases: 7,
       pwcFeatures: 49,
       assumptions: 92,
-      mvpFeatures: 51,
+      // 49, not 51: OV-007/OV-008 merge each bare record onto its Option 1A.
+      mvpFeatures: 49,
       capabilities: 107,
       featureMvpLinks: 60,
-      // Post-split figures: OV-002 divides F-085 into F-085 + F-093, and
-      // OV-003 clears the five 1.9 → 1.4 links by making them one release.
-      releaseConflicts: 29,
+      // OV-004…OV-006 enact the approved Release 1.1 list. Moving an MSD
+      // feature out of the pilot leaves the PwC features that deliver it
+      // behind, and every link between them now says so.
+      releaseConflicts: 42,
       phaseConflicts: 18,
       unmatchedLinks: 2,
     })
@@ -88,12 +90,15 @@ describe('importScope writes the whole graph', () => {
 
   it('flags the capabilities whose MVP owner was chosen by rule', () => {
     const summary = importScope(reconciled)
-    expect(summary.ambiguousMvpOwners).toBe(10)
+    // 3, not 10: the option merges leave 938 and 946 with a single record
+    // each, so no rule has to choose. Only 951, which genuinely has both an
+    // Option A and an Option B, is still ambiguous (D-3).
+    expect(summary.ambiguousMvpOwners).toBe(3)
 
     const flagged = db
       .prepare('SELECT DISTINCT mvp_ref FROM capabilities WHERE mvp_owner_ambiguous = 1 ORDER BY mvp_ref')
       .all()
-    expect(flagged).toEqual([{ mvp_ref: 938 }, { mvp_ref: 946 }, { mvp_ref: 951 }])
+    expect(flagged).toEqual([{ mvp_ref: 951 }])
   })
 
   it('records both placements of a release conflict, discarding neither', () => {
@@ -104,7 +109,8 @@ describe('importScope writes the whole graph', () => {
            FROM pwc_feature_capabilities l
            JOIN capabilities c ON c.id = l.capability_id
            JOIN pwc_features f ON f.id = l.pwc_feature_id
-          WHERE l.pwc_feature_id = 'F-014' AND l.release_conflict = 1`,
+          WHERE l.pwc_feature_id = 'F-014' AND l.release_conflict = 1
+            AND c.mvp_ref = 951`,
       )
       .get() as Record<string, string>
 
@@ -143,7 +149,7 @@ describe('importScope writes the whole graph', () => {
       {
         id: 'F-085',
         name: 'Record vacancy outcome',
-        release_id: '1.2',
+        release_id: '1.1',
         phase_id: 'manage-vacancies',
       },
       {
@@ -337,6 +343,152 @@ describe('importScope sweeps releases the sources no longer name', () => {
     const summary = importScope(reconciled)
     expect(summary.removedReleases).toEqual([])
     expect(summary.retainedStaleReleases).toEqual([])
+  })
+})
+
+describe('importScope sweeps MVP records the sources no longer produce', () => {
+  /**
+   * The case OV-007/OV-008 create: an earlier import wrote the bare 938, the
+   * option merge folds it onto 938/1A, and an upsert-only import would leave
+   * the bare record behind — so the split would not actually have happened.
+   */
+  const staleBare = () => {
+    db.prepare(
+      `INSERT INTO mvp_features (ref, scope_option, title, source)
+       VALUES (938, NULL, 'Stale bare record', 'mapping')`,
+    ).run()
+    return db.prepare('SELECT id FROM mvp_features WHERE ref=938 AND scope_option IS NULL')
+      .get() as { id: number }
+  }
+
+  it('drops a stale imported record', () => {
+    importScope(reconciled)
+    staleBare()
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([{ ref: 938, scope_option: null }])
+    expect(summary.mvpFeatures).toBe(49)
+    expect(
+      db.prepare('SELECT COUNT(*) AS n FROM mvp_features').get(),
+    ).toEqual({ n: 49 })
+  })
+
+  it('takes its stale imported links with it, rather than being blocked by them', () => {
+    importScope(reconciled)
+    const { id } = staleBare()
+    // The link an earlier import wrote to the bare record. It is exactly the
+    // row the merge replaced, so it must not keep the record alive.
+    db.prepare(
+      `INSERT INTO pwc_feature_mvp_features (pwc_feature_id, mvp_feature_id, source)
+       VALUES ('F-003', ?, 'mapping')`,
+    ).run(id)
+
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([{ ref: 938, scope_option: null }])
+    expect(
+      db.prepare('SELECT COUNT(*) AS n FROM pwc_feature_mvp_features WHERE mvp_feature_id = ?')
+        .get(id),
+    ).toEqual({ n: 0 })
+  })
+
+  it('keeps a stale record a manual link still points at', () => {
+    importScope(reconciled)
+    const { id } = staleBare()
+    db.prepare(
+      `INSERT INTO pwc_feature_mvp_features (pwc_feature_id, mvp_feature_id, source)
+       VALUES ('F-003', ?, 'manual')`,
+    ).run(id)
+
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([])
+    expect(summary.retainedStaleMvpFeatures).toEqual([
+      { ref: 938, scope_option: null, dependents: 1 },
+    ])
+  })
+
+  it('keeps a stale record a capability still points at', () => {
+    importScope(reconciled)
+    const { id } = staleBare()
+    db.prepare(
+      `INSERT INTO capabilities (mvp_feature_id, mvp_ref, text, actor, source)
+       VALUES (?, 938, 'parked on the stale record', 'staff', 'sequencing')`,
+    ).run(id)
+
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([])
+    expect(summary.retainedStaleMvpFeatures).toEqual([
+      { ref: 938, scope_option: null, dependents: 1 },
+    ])
+  })
+
+  it('never drops a manual record the sources were never going to produce', () => {
+    importScope(reconciled)
+    db.prepare(
+      `INSERT INTO mvp_features (ref, scope_option, title, source)
+       VALUES (9999, NULL, 'Hand-added', 'manual')`,
+    ).run()
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([])
+    expect(
+      db.prepare('SELECT COUNT(*) AS n FROM mvp_features WHERE ref = 9999').get(),
+    ).toEqual({ n: 1 })
+  })
+
+  it('is a no-op when there is nothing stale', () => {
+    importScope(reconciled)
+    const summary = importScope(reconciled)
+    expect(summary.removedMvpFeatures).toEqual([])
+    expect(summary.retainedStaleMvpFeatures).toEqual([])
+  })
+})
+
+describe('importScope writes the approved Release 1.1 list', () => {
+  const APPROVED = [939, 940, 941, 944, 946, 947, 955, 959, 962, 968, 972, 991]
+
+  it('places exactly the twelve approved MSD features in 1.1', () => {
+    importScope(reconciled)
+    const refs = db
+      .prepare(
+        "SELECT DISTINCT mvp_ref AS ref FROM capabilities WHERE release_id = '1.1' ORDER BY mvp_ref",
+      )
+      .all()
+      .map((r) => (r as { ref: number }).ref)
+    expect(refs).toEqual(APPROVED)
+  })
+
+  it('keeps Option A and Option B legible as separate features', () => {
+    importScope(reconciled)
+    const rows = db
+      .prepare(
+        'SELECT ref, scope_option, title FROM mvp_features WHERE scope_option IS NOT NULL ORDER BY ref, scope_option',
+      )
+      .all()
+    expect(rows).toEqual([
+      {
+        ref: 938,
+        scope_option: '1A',
+        title: 'Staff can Create and Manage Additional Employer Portal Users (Option A)',
+      },
+      {
+        ref: 946,
+        scope_option: '1A',
+        title: 'Employer Portal User Access and Permissions (Option A)',
+      },
+      {
+        ref: 948,
+        scope_option: '1B',
+        title: 'Employer Verification Methods (Option B)',
+      },
+      {
+        ref: 951,
+        scope_option: '1A',
+        title: 'Register for the Employer Portal - New organisation (Option A)',
+      },
+      {
+        ref: 951,
+        scope_option: '1B',
+        title: 'Register for the Employer Portal - New organisation (Option B)',
+      },
+    ])
   })
 })
 

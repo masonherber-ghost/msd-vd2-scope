@@ -150,6 +150,14 @@ export type ImportSummary = {
   removedReleases: string[]
   /** Stale releases kept because rows still point at them. */
   retainedStaleReleases: { id: string; features: number; capabilities: number }[]
+  /** Imported MVP records the sources no longer produce, dropped on re-import. */
+  removedMvpFeatures: { ref: number; scope_option: string | null }[]
+  /** Stale MVP records kept because rows still point at them. */
+  retainedStaleMvpFeatures: {
+    ref: number
+    scope_option: string | null
+    dependents: number
+  }[]
   releaseConflicts: number
   phaseConflicts: number
   unmatchedLinks: number

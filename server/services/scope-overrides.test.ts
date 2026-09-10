@@ -1,9 +1,17 @@
 import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { parseMappingDocument } from './mapping-parser.js'
-import { MAPPING_PATH } from './scope-source.js'
+import { parseSequencingTable } from './sequencing-parser.js'
+import { MAPPING_PATH, SEQUENCING_PATH } from './scope-source.js'
 import {
+  MVP_OPTION_MERGES,
+  OPTION_LABEL,
   RELEASE_ALIASES,
+  RELEASE_REALLOCATIONS,
+  applyMvpOptionSplits,
+  applyReleaseReallocations,
+  type MvpOptionMerge,
+  type ReleaseReallocation,
   SCOPE_OVERRIDES,
   SCOPE_SPLITS,
   applyReleaseAliases,
@@ -327,5 +335,178 @@ describe('applyReleaseAliases', () => {
       expect(parsed.releases.some((r) => r.id === declared.from)).toBe(true)
       expect(declared.rationale.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('applyReleaseReallocations', () => {
+  const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
+  const move = (over: Partial<ReleaseReallocation> = {}): ReleaseReallocation => ({
+    id: 'OV-TEST',
+    refs: [938],
+    from: '1.1',
+    to: '1.2',
+    rationale: 'test',
+    decidedOn: '2026-09-11',
+    ...over,
+  })
+
+  it('is a no-op when there is nothing to reallocate', () => {
+    const { sequencing: out, applied } = applyReleaseReallocations(sequencing, [])
+    expect(applied).toEqual([])
+    expect(out).toBe(sequencing)
+  })
+
+  it('moves every capability of the ref out of the release', () => {
+    const before = sequencing.capabilities.filter(
+      (c) => c.ref === 938 && c.releaseId === '1.1',
+    )
+    expect(before.length).toBeGreaterThan(0)
+
+    const { sequencing: out, applied } = applyReleaseReallocations(sequencing, [move()])
+
+    expect(out.capabilities.some((c) => c.ref === 938 && c.releaseId === '1.1')).toBe(false)
+    expect(
+      out.capabilities.filter((c) => c.ref === 938 && c.releaseId === '1.2'),
+    ).toHaveLength(before.length)
+    expect(applied[0].moved).toEqual([{ ref: 938, capabilities: before.length }])
+  })
+
+  it('leaves the phase alone — a release says when, not where', () => {
+    const before = sequencing.capabilities.filter((c) => c.ref === 938)
+    const { sequencing: out } = applyReleaseReallocations(sequencing, [move()])
+    const after = out.capabilities.filter((c) => c.ref === 938)
+    expect(after.map((c) => c.phaseId)).toEqual(before.map((c) => c.phaseId))
+    expect(after.map((c) => c.text)).toEqual(before.map((c) => c.text))
+  })
+
+  it('touches no other ref', () => {
+    const { sequencing: out } = applyReleaseReallocations(sequencing, [move()])
+    const others = (list: typeof sequencing.capabilities) =>
+      list.filter((c) => c.ref !== 938).map((c) => `${c.ref}|${c.text}|${c.releaseId}`)
+    expect(others(out.capabilities)).toEqual(others(sequencing.capabilities))
+  })
+
+  it('does not mutate the input', () => {
+    applyReleaseReallocations(sequencing, [move()])
+    expect(sequencing.capabilities.some((c) => c.ref === 938 && c.releaseId === '1.1')).toBe(
+      true,
+    )
+  })
+
+  it('refuses a reallocation that would move nothing', () => {
+    // A stale declaration is worse than none: it reads as applied.
+    expect(() => applyReleaseReallocations(sequencing, [move({ from: '1.3' })])).toThrow(
+      /938/,
+    )
+  })
+
+  it('refuses a reallocation to the release it is already in', () => {
+    expect(() => applyReleaseReallocations(sequencing, [move({ to: '1.1' })])).toThrow(
+      /its own release/,
+    )
+  })
+
+  it('every declared reallocation moves at least one capability', () => {
+    // Guards against a source change silently emptying one of them.
+    expect(() => applyReleaseReallocations(sequencing, RELEASE_REALLOCATIONS)).not.toThrow()
+  })
+
+  it('leaves release 1.1 holding exactly the twelve approved refs', () => {
+    const APPROVED = [939, 940, 941, 944, 946, 947, 955, 959, 962, 968, 972, 991]
+    const { sequencing: out } = applyReleaseReallocations(sequencing, RELEASE_REALLOCATIONS)
+    const in11 = [
+      ...new Set(out.capabilities.filter((c) => c.releaseId === '1.1').map((c) => c.ref)),
+    ].sort((a, b) => a - b)
+    expect(in11).toEqual(APPROVED)
+  })
+})
+
+describe('applyMvpOptionSplits', () => {
+  const merge = (over: Partial<MvpOptionMerge> = {}): MvpOptionMerge => ({
+    id: 'OV-TEST',
+    ref: 938,
+    into: '1A',
+    rationale: 'test',
+    decidedOn: '2026-09-11',
+    ...over,
+  })
+
+  const citations = (result: typeof parsed, ref: number) =>
+    result.features.flatMap((f) =>
+      f.mvpFeatures.filter((m) => m.ref === ref).map((m) => `${f.id}|${m.scopeOption ?? ''}`),
+    )
+
+  it('resolves a bare citation onto the option it belongs to', () => {
+    expect(citations(parsed, 938)).toContain('F-003|')
+
+    const { mapping, applied } = applyMvpOptionSplits(parsed, [merge()])
+
+    expect(citations(mapping, 938)).not.toContain('F-003|')
+    expect(citations(mapping, 938)).toContain('F-003|1A')
+    expect(applied[0].features).toEqual(['F-003'])
+  })
+
+  it('leaves the ref with one record where it had two', () => {
+    const { mapping } = applyMvpOptionSplits(parsed, [merge()])
+    const options = new Set(
+      mapping.features.flatMap((f) =>
+        f.mvpFeatures.filter((m) => m.ref === 938).map((m) => m.scopeOption),
+      ),
+    )
+    expect([...options]).toEqual(['1A'])
+  })
+
+  it('labels every optioned record so A and B read as different features', () => {
+    const { mapping } = applyMvpOptionSplits(parsed, [merge()])
+    const titles = new Map(
+      mapping.features.flatMap((f) =>
+        f.mvpFeatures.map((m) => [`${m.ref}|${m.scopeOption ?? ''}`, m.title] as const),
+      ),
+    )
+    // 951's two options carry the same title in the source; the label is the
+    // only thing that tells them apart.
+    expect(titles.get('951|1A')).toMatch(/\(Option A\)$/)
+    expect(titles.get('951|1B')).toMatch(/\(Option B\)$/)
+    expect(titles.get('951|1A')).not.toBe(titles.get('951|1B'))
+  })
+
+  it('leaves an unoptioned title untouched', () => {
+    const { mapping } = applyMvpOptionSplits(parsed, [merge()])
+    const bare = mapping.features
+      .flatMap((f) => f.mvpFeatures)
+      .filter((m) => m.scopeOption === null)
+    expect(bare.length).toBeGreaterThan(0)
+    expect(bare.every((m) => !/\(Option [AB]\)$/.test(m.title))).toBe(true)
+  })
+
+  it('is idempotent — a second pass does not double-label', () => {
+    const once = applyMvpOptionSplits(parsed, [merge()]).mapping
+    const twice = applyMvpOptionSplits(once, [merge({ ref: 946 })]).mapping
+    const label951 = twice.features
+      .flatMap((f) => f.mvpFeatures)
+      .find((m) => m.ref === 951 && m.scopeOption === '1B')!
+    expect(label951.title.match(/\(Option B\)/g)).toHaveLength(1)
+  })
+
+  it('uses the labels the UI shows', () => {
+    expect(OPTION_LABEL).toEqual({ '1A': 'Option A', '1B': 'Option B' })
+  })
+
+  it('refuses a merge for a ref the document never cites bare', () => {
+    // 951 has 1A and 1B and no bare citation, so merging it would be a lie.
+    expect(() => applyMvpOptionSplits(parsed, [merge({ ref: 951 })])).toThrow(/951/)
+  })
+
+  it('every declared merge targets a ref that is actually cited bare', () => {
+    expect(() => applyMvpOptionSplits(parsed, MVP_OPTION_MERGES)).not.toThrow()
+  })
+
+  it('never drops a citation', () => {
+    const before = parsed.features.reduce((n, f) => n + f.mvpFeatures.length, 0)
+    const { mapping } = applyMvpOptionSplits(parsed, MVP_OPTION_MERGES)
+    const after = mapping.features.reduce((n, f) => n + f.mvpFeatures.length, 0)
+    // No feature cites both the bare and the optioned record of one ref, so
+    // nothing collapses and the link count is unchanged.
+    expect(after).toBe(before)
   })
 })

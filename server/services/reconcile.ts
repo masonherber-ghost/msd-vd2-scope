@@ -276,8 +276,15 @@ export function reconcile(
   // spurious third, bare record.
   for (const capability of capabilities.values()) {
     if (mappingRefs.has(capability.ref)) {
+      // Normally the bare record is the one both documents describe. A ref
+      // whose bare citation was merged onto its option (OV-007/OV-008) has
+      // none, so fall back to its single record — but only when there is
+      // exactly one, or 951's 1A/1B pair would both claim the table's row.
       const bare = mvpFeatures.get(`${capability.ref}|`)
-      if (bare) bare.source = 'both'
+      const forRef = bare
+        ? [bare]
+        : [...mvpFeatures.values()].filter((m) => m.ref === capability.ref)
+      if (forRef.length === 1) forRef[0].source = 'both'
       continue
     }
     const key = `${capability.ref}|`

@@ -10,6 +10,7 @@ import {
   upsertImportedFeatureMvpLink,
 } from '../repositories/feature-link-repository.js'
 import {
+  deleteImportedMvpFeaturesNotIn,
   findMvpFeature,
   upsertImportedMvpFeature,
 } from '../repositories/mvp-feature-repository.js'
@@ -59,6 +60,14 @@ export type ImportSummary = {
   removedReleases: string[]
   /** Stale releases kept because rows still point at them. */
   retainedStaleReleases: { id: string; features: number; capabilities: number }[]
+  /** Imported MVP records the sources no longer produce, dropped on re-import. */
+  removedMvpFeatures: { ref: number; scope_option: string | null }[]
+  /** Stale MVP records kept because rows still point at them. */
+  retainedStaleMvpFeatures: {
+    ref: number
+    scope_option: string | null
+    dependents: number
+  }[]
 }
 
 /**
@@ -143,6 +152,12 @@ export function importScope(result: ReconcileResult): ImportSummary {
 
   let ambiguousMvpOwners = 0
   let removedReleases: string[] = []
+  let removedMvpFeatures: { ref: number; scope_option: string | null }[] = []
+  let retainedStaleMvpFeatures: {
+    ref: number
+    scope_option: string | null
+    dependents: number
+  }[] = []
   let retainedStaleReleases: {
     id: string
     features: number
@@ -274,6 +289,14 @@ export function importScope(result: ReconcileResult): ImportSummary {
         phase_conflict_merged: phaseConflict?.resolvedByCanonicalMerge ? 1 : 0,
       })
     }
+
+    // Last, so the links and capability owners above have already been
+    // repointed off any record the sources stopped producing.
+    const mvpSweep = deleteImportedMvpFeaturesNotIn(
+      result.mvpFeatures.map((m) => ({ ref: m.ref, scope_option: m.scopeOption })),
+    )
+    removedMvpFeatures = mvpSweep.deleted
+    retainedStaleMvpFeatures = mvpSweep.retained
   })
 
   run()
@@ -292,6 +315,8 @@ export function importScope(result: ReconcileResult): ImportSummary {
     ambiguousMvpOwners,
     removedReleases,
     retainedStaleReleases,
+    removedMvpFeatures,
+    retainedStaleMvpFeatures,
     releaseConflicts: result.conflicts.release.length,
     phaseConflicts: result.conflicts.phase.length,
     unmatchedLinks: result.conflicts.unmatched.length,
