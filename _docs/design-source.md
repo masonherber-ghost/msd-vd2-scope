@@ -21,7 +21,7 @@ database, which is authoritative:
 
 | | Mockup | Database |
 |---|---|---|
-| Releases | 4 (R1–R4 → 1.1–1.4) | 6 (adds 1.9 and 2) |
+| Releases | 4 (R1–R4 → 1.1–1.4) | 5 (adds 2; 1.9 merged into 1.4 by OV-003) |
 | Stages | 8, including "Onboarding via invite" | 7 canonical — PRD §4 folds the invite stage into Access & Onboarding |
 | Feature ids | includes `SVD-993`, `SVD-958`, `—` | `F-nnn` only |
 | Placement | e.g. F-050/F-051 under Manage Vacancies | as the two source documents record them |

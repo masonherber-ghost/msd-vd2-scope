@@ -100,14 +100,14 @@ export type SetCapabilityLinksInput = z.infer<typeof setCapabilityLinksSchema>
 // Releases
 // ---------------------------------------------------------------------------
 
-/** `1.1`, `1.9`, `2` — a major with an optional minor, as both sources write them. */
+/** `1.1`, `1.4`, `2` — a major with an optional minor, as both sources write them. */
 export const RELEASE_ID_PATTERN = /^\d+(\.\d+)?$/
 
 export const createReleaseSchema = z.object({
   id: z
     .string()
     .trim()
-    .regex(RELEASE_ID_PATTERN, 'A release id looks like 1.1, 1.9 or 2.'),
+    .regex(RELEASE_ID_PATTERN, 'A release id looks like 1.1, 1.4 or 2.'),
   label: z.string().trim().min(1, 'Give the release a label.').max(80),
   name: z.string().trim().max(200).default(''),
   description: z.string().trim().max(2000).default(''),

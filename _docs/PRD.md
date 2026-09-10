@@ -32,7 +32,8 @@ collectively contradictory, and jointly unusable as a working tool.
   it in a different phase. Nobody can see this today. See [§7](#7-the-two-sources-disagree).
 - **Release 1.9 does not exist in the sequencing table at all.** Its capabilities decompose
   across table releases 1.1, 1.4 and 2 — so the mapping file's headline release structure
-  is not the delivery sequence.
+  is not the delivery sequence. *Resolved by [OV-003](#ov-003--release-19-is-the-tables-14):
+  1.9 and 1.4 are declared one release.*
 - **The scope has no owner-editable home.** Corrections happen in email and in comments on
   a document, then get hand-merged. There is no way to record that a conflict was
   investigated and resolved.
@@ -128,7 +129,9 @@ merge is auditable and reversible.
 
 ### Feature distribution after the merge
 
-48 features across 7 phases, 13 of 28 release × phase cells populated:
+48 features across 7 phases, 13 of 28 release × phase cells populated. This is the
+sources as written — the 1.9 column is release 1.4 in the app, per
+[OV-003](#ov-003--release-19-is-the-tables-14), and F-085 has since been split in two:
 
 | Phase | 1.1 | 1.2 | 1.3 | 1.9 | Total |
 |---|---|---|---|---|---|
@@ -159,7 +162,12 @@ The union of both sources is **six releases**, and they do not agree on which ex
 sequencing table places in release 1.1 (11 links), 1.4 (5 links) and 2 (16 links). So
 "1.9 / GA & Scale-Up" is a mapping-file construct, not a sequenced release. The app must
 hold both framings and show the decomposition rather than pick a winner — see
-[§7](#7-the-two-sources-disagree) and [D-1](#15-open-decisions).
+[§7](#7-the-two-sources-disagree).
+
+> **This table is the sources as written, and stays that way.** The app now runs on
+> **five** releases: [OV-003](#ov-003--release-19-is-the-tables-14) declares 1.9 and 1.4
+> to be one release, giving a 1.4 with 15 features and 3 capabilities. The figures above
+> are asserted as `EXPECTED_SOURCE_COUNTS` so the alias can never hide a source change.
 
 ---
 
@@ -252,6 +260,8 @@ This is the highest-value thing the app can expose, and it is invisible in both 
 
 ### Release conflicts — 35 of 123 capability links (28%)
 
+As written in the sources, before any declared override:
+
 | Feature's release | Capability's release in table | Links |
 |---|---|---|
 | 1.9 | 2 | 16 |
@@ -259,6 +269,17 @@ This is the highest-value thing the app can expose, and it is invisible in both 
 | 1.9 | 1.4 | 5 |
 | 1.3 | 1.2 | 2 |
 | 1.1 | 1.4 | 1 |
+
+After OV-002 and [OV-003](#ov-003--release-19-is-the-tables-14), **29** remain — the
+1.9 rows renamed to 1.4, and the `1.9 → 1.4` five gone because both sides now name one
+release:
+
+| Feature's release | Capability's release in table | Links |
+|---|---|---|
+| 1.4 | 2 | 16 |
+| 1.4 | 1.1 | 11 |
+| 1.1 | 1.4 | 1 |
+| 1.3 | 1.2 | 1 |
 
 The single 1.1 → 1.4 conflict is worth calling out on its own: F-014 (*Registration and
 login page content*, release 1.1) depends on `Electronic T&Cs acceptance`, which the
@@ -305,10 +326,11 @@ human confirm.
 
 ### 8.1 Scope Map — primary view (`/`)
 
-A single grid. **Releases on the X axis** (1.1 → 1.2 → 1.3 → 1.4 → 1.9 → 2, the sequence
-dimension). **Canonical phases on the Y axis**, rows 1–7. Cells hold the feature cards for
-that release × phase pair. Empty cells stay visible as faint placeholders — an empty cell is
-information: nothing in that phase lands in that release.
+A single grid. **Releases on the X axis** (1.1 → 1.2 → 1.3 → 1.4 → 2, the sequence
+dimension; 1.9 merged into 1.4 under OV-003). **Canonical phases on the Y axis**, rows
+1–7. Cells hold the feature cards for that release × phase pair. Empty cells stay visible
+as faint placeholders — an empty cell is information: nothing in that phase lands in that
+release.
 
 - **R-8.1** Feature card shows ID, name, MVP feature chips (with the `1A`/`1B` option where
   set), an actor summary, and a conflict badge if applicable.
@@ -610,11 +632,10 @@ audit history (only `created_at` / `updated_at` / `source` in v1).
 
 Recorded rather than assumed. Build can start on the recommendation in each case.
 
-**D-1 — How should Release 1.9 be represented?** Its 15 features cite capabilities the
-sequencing table places in 1.1, 1.4 and 2. *Recommendation:* keep 1.9 as a release so the
-mapping file stays representable, show its decomposition in the reconciliation view, and
-treat the choice of which framing is authoritative as a programme decision the app records
-rather than makes. This is the most consequential open question in the dataset.
+**D-1 — How should Release 1.9 be represented? — CLOSED.** Resolved by
+[OV-003](#ov-003--release-19-is-the-tables-14): 1.9 and the sequencing table's 1.4 are one
+release, aliased at import. The decomposition is still shown in the reconciliation view,
+now under 1.4. The sources are unedited, so both framings remain recoverable.
 
 **D-2 — Epic ref `186` appears on two phases** (Applications & Referrals, Employer
 Recruitment). Almost certainly a diagram typo. Stored faithfully and not enforced unique;
@@ -715,6 +736,7 @@ conflicts are derived from the corrected placement rather than left stale.
 |---|---|---|---|---|
 | ~~OV-001~~ | placement | F-085 | Outcomes & Support / 1.3 → Manage Vacancies / 1.1 | superseded by OV-002 |
 | OV-002 | split | F-085 | divided into F-085 + F-093 | features 48 → 49; release conflicts 35 → 34, phase 21 → 18 |
+| OV-003 | release alias | release 1.9 | merged into the table's 1.4 | releases 6 → 5; release conflicts 34 → 29 |
 
 **OV-002 — the F-085 split.** OV-001 moved the whole feature and raised its
 release conflicts from 1 to 3, because two of its three capabilities are
@@ -737,9 +759,10 @@ A split redistributes scope and never adds or drops any: `featureMvpLinks`
 and every assigned MVP ref and assumption position is validated to appear
 exactly once or the import fails.
 
-### Release 1.9 is a bucket, not a sequenced release
+### OV-003 — release 1.9 is the table's 1.4
 
-Recorded here because it answers the framing question behind [D-1](#15-open-decisions).
+This answers [D-1](#15-open-decisions), which is now closed. The finding came
+first; the decision follows it.
 
 1.9 appears only in the mapping file; the sequencing table has no 1.9 column
 at all. Of the **32 capability links from its 15 features, all 32 conflict** —
@@ -750,3 +773,34 @@ So `1.9 → 2` means: a feature the mapping file files under 1.9 cites a
 capability the table delivers in Release 2. 1.9 has no independent sequencing
 identity; it is a label meaning "later" that decomposes into three real
 releases. F-029 is the clearest case — it has no capability links at all.
+
+**The decision.** 1.9 and the table's 1.4 are one release. 1.4 was the mirror
+image of the same gap — 3 capabilities and *no* features — and it is where the
+table schedules 5 of 1.9's links. Naming them separately meant each document
+described a release the other had never heard of. OV-003 declares the alias
+and the import rewrites 1.9 to 1.4 before reconciliation:
+
+| | Before | After |
+|---|---|---|
+| Releases | 6 | 5 |
+| Features in 1.4 | 0 | 15 |
+| Capabilities in 1.4 | 3 | 3 |
+| Release conflicts | 34 | 29 |
+
+The five `1.9 → 1.4` links stop being conflicts because both sides now name
+one release. The other 27 survive unchanged as `1.4 → 1.1` (11) and
+`1.4 → 2` (16): the merge settles what the release is *called*, not the
+disagreement about when its capabilities land. The reconciliation view still
+shows that decomposition, now labelled 1.4, with a note naming the alias so
+the merge never reads as source data.
+
+Under [P-3](#p-3--source-documents-are-never-edited) the mapping file still
+says "Release 1.9 (MVP1.9 / GA & Scale-Up)" and is untouched. `EXPECTED_SOURCE_COUNTS`
+still asserts the pre-alias figures — 6 releases, 35 release conflicts — so the
+alias can never mask a real change to a source document.
+
+The alias also exposed an import bug, now fixed: the import was upsert-only, so
+a release the sources stopped naming survived as an empty orphan sharing another
+release's `display_order`. The import now sweeps imported releases the sources
+no longer name, never touching a manual one, and retains (with a warning)
+any that still has rows pointing at it.

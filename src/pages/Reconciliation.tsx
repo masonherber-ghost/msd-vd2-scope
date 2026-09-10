@@ -58,6 +58,12 @@ export default function Reconciliation() {
 
   if (!model) return null
 
+  // The rename that produced this release, if one did — without it a merged
+  // release reads as source data and the disagreement disappears.
+  const alias = scope.data?.releaseAliases.find(
+    (a) => a.to === model.decompositionRelease?.releaseId,
+  )
+
   const release = model.release.filter(matches)
   const phase = model.phase.filter(matches)
   const unmatched = model.unmatched.filter(matches)
@@ -97,12 +103,13 @@ export default function Reconciliation() {
           aria-labelledby="decomposition"
         >
           <h2 className="text-sm font-semibold" id="decomposition">
-            Release 1.9 decomposes into real releases
+            {model.decompositionRelease?.label ?? 'This release'} decomposes across other
+            releases
           </h2>
           <p className="text-sm text-muted-foreground">
-            1.9 appears only in the mapping file. Every capability its features cite is
-            scheduled elsewhere by the table, so 1.9 reads as a label for “later” rather than
-            a sequenced release.
+            The mapping file files these features under one release, but the sequencing
+            table schedules the capabilities they cite in several. The counts below are the
+            capability links the table places somewhere else.
           </p>
           <ul className="flex flex-wrap gap-3 text-sm">
             {model.decomposition.map((entry) => (
@@ -117,6 +124,12 @@ export default function Reconciliation() {
               </li>
             ))}
           </ul>
+          {alias ? (
+            <p className="text-xs text-muted-foreground">
+              The mapping file calls this release {alias.from}; {alias.id} declares{' '}
+              {alias.from} and the table&rsquo;s {alias.to} to be one release.
+            </p>
+          ) : null}
         </section>
       ) : null}
 

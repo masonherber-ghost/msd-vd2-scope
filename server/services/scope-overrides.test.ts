@@ -3,10 +3,13 @@ import { describe, expect, it } from 'vitest'
 import { parseMappingDocument } from './mapping-parser.js'
 import { MAPPING_PATH } from './scope-source.js'
 import {
+  RELEASE_ALIASES,
   SCOPE_OVERRIDES,
   SCOPE_SPLITS,
+  applyReleaseAliases,
   applyScopeOverrides,
   applyScopeSplits,
+  type ReleaseAlias,
   type ScopeOverride,
   type ScopeSplit,
   type SplitPart,
@@ -248,5 +251,81 @@ describe('the declared splits', () => {
   it('do not collide with the placement override ids', () => {
     const ids = [...SCOPE_OVERRIDES.map((o) => o.id), ...SCOPE_SPLITS.map((s) => s.id)]
     expect(new Set(ids).size).toBe(ids.length)
+  })
+})
+
+
+describe('applyReleaseAliases', () => {
+  const alias: ReleaseAlias = {
+    id: 'OV-TEST',
+    from: '1.9',
+    to: '1.4',
+    rationale: 'test',
+    decidedOn: '2026-09-11',
+  }
+
+  it('is a no-op when there are no aliases', () => {
+    const { mapping, applied } = applyReleaseAliases(parsed, [])
+    expect(applied).toEqual([])
+    expect(mapping).toBe(parsed)
+  })
+
+  it('renames the release and every feature filed under it', () => {
+    const before = parsed.features.filter((f) => f.releaseId === '1.9')
+    expect(before.length).toBeGreaterThan(0)
+
+    const { mapping, applied } = applyReleaseAliases(parsed, [alias])
+
+    expect(mapping.releases.map((r) => r.id)).not.toContain('1.9')
+    expect(mapping.features.some((f) => f.releaseId === '1.9')).toBe(false)
+    expect(mapping.features.filter((f) => f.releaseId === '1.4')).toHaveLength(
+      before.length,
+    )
+    expect(applied[0].features).toEqual(before.map((f) => f.id))
+  })
+
+  it('relabels the release but keeps its prose', () => {
+    const source = parsed.releases.find((r) => r.id === '1.9')!
+    const { mapping } = applyReleaseAliases(parsed, [alias])
+    const renamed = mapping.releases.find((r) => r.id === '1.4')!
+
+    expect(renamed.label).toBe('Release 1.4')
+    expect(renamed.name).toBe(source.name)
+    expect(renamed.description).toBe(source.description)
+  })
+
+  it('leaves other releases and their features alone', () => {
+    const { mapping } = applyReleaseAliases(parsed, [alias])
+    for (const id of ['1.1', '1.2', '1.3']) {
+      expect(mapping.releases.some((r) => r.id === id)).toBe(true)
+      expect(mapping.features.filter((f) => f.releaseId === id)).toHaveLength(
+        parsed.features.filter((f) => f.releaseId === id).length,
+      )
+    }
+  })
+
+  it('does not mutate the input', () => {
+    applyReleaseAliases(parsed, [alias])
+    expect(parsed.releases.some((r) => r.id === '1.9')).toBe(true)
+    expect(parsed.features.some((f) => f.releaseId === '1.9')).toBe(true)
+  })
+
+  it('rejects an alias for a release the mapping document does not have', () => {
+    expect(() =>
+      applyReleaseAliases(parsed, [{ ...alias, from: '9.9' }]),
+    ).toThrow(/9\.9/)
+  })
+
+  it('rejects an alias that renames a release to itself', () => {
+    expect(() => applyReleaseAliases(parsed, [{ ...alias, to: '1.9' }])).toThrow(
+      /itself/,
+    )
+  })
+
+  it('every declared alias targets a release the mapping document has', () => {
+    for (const declared of RELEASE_ALIASES) {
+      expect(parsed.releases.some((r) => r.id === declared.from)).toBe(true)
+      expect(declared.rationale.length).toBeGreaterThan(0)
+    }
   })
 })

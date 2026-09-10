@@ -72,6 +72,15 @@ function checkAndSeedScope(): void {
         `${summary.capabilities} capabilities, ${summary.featureCapabilityEdges} edges ` +
         `(${summary.featureCapabilityCitations} citations)`,
     )
+    if (summary.removedReleases.length > 0) {
+      console.log(`[scope] dropped stale releases: ${summary.removedReleases.join(', ')}`)
+    }
+    for (const stale of summary.retainedStaleReleases) {
+      console.warn(
+        `[scope] release ${stale.id} is no longer in the sources but still has ` +
+          `${stale.features} feature(s) and ${stale.capabilities} capability(ies) — kept`,
+      )
+    }
   } else {
     console.log('[scope] database already populated — POST /api/import to re-import')
   }

@@ -15,7 +15,10 @@ import {
 } from '../repositories/mvp-feature-repository.js'
 import { upsertImportedPhase } from '../repositories/phase-repository.js'
 import { upsertImportedPwcFeature } from '../repositories/pwc-feature-repository.js'
-import { upsertImportedRelease } from '../repositories/release-repository.js'
+import {
+  deleteImportedReleasesNotIn,
+  upsertImportedRelease,
+} from '../repositories/release-repository.js'
 import type { MergedMvpFeature, ReconcileResult } from './reconcile.js'
 import { findCountDrift, loadScopeFromSources } from './scope-source.js'
 import type { ScopeOption } from './scope-types.js'
@@ -52,6 +55,10 @@ export type ImportSummary = {
   releaseConflicts: number
   phaseConflicts: number
   unmatchedLinks: number
+  /** Imported releases the sources no longer name, dropped on re-import. */
+  removedReleases: string[]
+  /** Stale releases kept because rows still point at them. */
+  retainedStaleReleases: { id: string; features: number; capabilities: number }[]
 }
 
 /**
@@ -135,6 +142,12 @@ export function importScope(result: ReconcileResult): ImportSummary {
   const collapsedDuplicateCitations = result.featureCapabilityLinks.length - edges.size
 
   let ambiguousMvpOwners = 0
+  let removedReleases: string[] = []
+  let retainedStaleReleases: {
+    id: string
+    features: number
+    capabilities: number
+  }[] = []
 
   const run = db.transaction(() => {
     for (const release of result.releases) {
@@ -154,6 +167,12 @@ export function importScope(result: ReconcileResult): ImportSummary {
               : 'sequencing',
       })
     }
+
+    // Releases are deleted after the features have been re-pointed by the
+    // upserts above, so a merged release has no dependants left by now.
+    const releaseSweep = deleteImportedReleasesNotIn(result.releases.map((r) => r.id))
+    removedReleases = releaseSweep.deleted
+    retainedStaleReleases = releaseSweep.retained
 
     for (const phase of result.phases) {
       upsertImportedPhase({
@@ -271,6 +290,8 @@ export function importScope(result: ReconcileResult): ImportSummary {
     featureCapabilityCitations: sumFeatureCapabilityCitations(),
     collapsedDuplicateCitations,
     ambiguousMvpOwners,
+    removedReleases,
+    retainedStaleReleases,
     releaseConflicts: result.conflicts.release.length,
     phaseConflicts: result.conflicts.phase.length,
     unmatchedLinks: result.conflicts.unmatched.length,

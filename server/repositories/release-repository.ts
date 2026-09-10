@@ -126,3 +126,45 @@ export function deleteRelease(id: string): number {
   deleteOne ??= db.prepare('DELETE FROM releases WHERE id = ?')
   return deleteOne.run(id).changes
 }
+
+/**
+ * Drops imported releases the sources no longer name — the case a declared
+ * release alias creates (OV-003 merges 1.9 into 1.4). Without this a re-import
+ * leaves the old release behind as an empty orphan with a duplicated
+ * display_order, because the import is otherwise upsert-only.
+ *
+ * Manual releases are never touched: they were never imported, so a source
+ * that does not mention them is not evidence they are gone. A release that
+ * still has features or capabilities is left in place and returned, so the
+ * caller can report it rather than hit a foreign-key error.
+ */
+export function deleteImportedReleasesNotIn(ids: readonly string[]): {
+  deleted: string[]
+  retained: { id: string; features: number; capabilities: number }[]
+} {
+  // Ids come from the reconciled model, never from a request, but they are
+  // still bound as parameters rather than interpolated.
+  const placeholders = ids.length > 0 ? ids.map(() => '?').join(', ') : "''"
+  const stale = db
+    .prepare(
+      `SELECT id FROM releases
+        WHERE source != 'manual' AND id NOT IN (${placeholders})
+        ORDER BY id`,
+    )
+    .all(...ids) as { id: string }[]
+
+  const deleted: string[] = []
+  const retained: { id: string; features: number; capabilities: number }[] = []
+
+  for (const { id } of stale) {
+    const dependents = countReleaseDependents(id)
+    if (dependents.features > 0 || dependents.capabilities > 0) {
+      retained.push({ id, ...dependents })
+      continue
+    }
+    deleteRelease(id)
+    deleted.push(id)
+  }
+
+  return { deleted, retained }
+}

@@ -57,15 +57,17 @@ describe('importScope writes the whole graph', () => {
   it('reports the reconciled counts', () => {
     const summary = importScope(reconciled)
     expect(summary).toMatchObject({
-      releases: 6,
+      // 5, not 6: OV-003 merges 1.9 into 1.4.
+      releases: 5,
       phases: 7,
       pwcFeatures: 49,
       assumptions: 92,
       mvpFeatures: 51,
       capabilities: 107,
       featureMvpLinks: 60,
-      // Post-split figures: OV-002 divides F-085 into F-085 + F-093.
-      releaseConflicts: 34,
+      // Post-split figures: OV-002 divides F-085 into F-085 + F-093, and
+      // OV-003 clears the five 1.9 → 1.4 links by making them one release.
+      releaseConflicts: 29,
       phaseConflicts: 18,
       unmatchedLinks: 2,
     })
@@ -269,6 +271,72 @@ describe('importScope is idempotent (R-11.4)', () => {
     const before = getScopeGraph().counts
     importScope(reconciled)
     expect(getScopeGraph().counts).toEqual(before)
+  })
+})
+
+describe('importScope sweeps releases the sources no longer name', () => {
+  /**
+   * The case OV-003 creates: an earlier import wrote 1.9, the alias means the
+   * sources stop naming it, and an upsert-only import would leave it behind
+   * as an empty orphan sharing another release's display_order.
+   */
+  const withStale = () => {
+    db.prepare(
+      `INSERT INTO releases (id, label, name, description, display_order,
+                             in_mapping_source, in_sequencing_source, source)
+       VALUES ('1.9', 'Release 1.9', '', '', 5, 1, 0, 'mapping')`,
+    ).run()
+  }
+
+  it('drops a stale imported release', () => {
+    withStale()
+    const summary = importScope(reconciled)
+    expect(summary.removedReleases).toEqual(['1.9'])
+    expect(summary.retainedStaleReleases).toEqual([])
+    expect(getScopeGraph().releases.map((r) => r.id)).not.toContain('1.9')
+  })
+
+  it('leaves display_order contiguous afterwards', () => {
+    withStale()
+    importScope(reconciled)
+    const orders = getScopeGraph().releases.map((r) => r.display_order)
+    expect(orders).toEqual([...orders].sort((a, b) => a - b))
+    expect(new Set(orders).size).toBe(orders.length)
+  })
+
+  it('never drops a manual release the sources were never going to name', () => {
+    db.prepare(
+      `INSERT INTO releases (id, label, name, description, display_order,
+                             in_mapping_source, in_sequencing_source, source)
+       VALUES ('3', 'Release 3', '', '', 9, 0, 0, 'manual')`,
+    ).run()
+    const summary = importScope(reconciled)
+    expect(summary.removedReleases).toEqual([])
+    expect(getScopeGraph().releases.map((r) => r.id)).toContain('3')
+  })
+
+  it('retains a stale release that still has rows pointing at it', () => {
+    withStale()
+    // A capability parked on the stale release — deleting it would either
+    // break the foreign key or silently orphan the row.
+    db.prepare(
+      `INSERT INTO capabilities (mvp_ref, text, actor, release_id, source)
+       VALUES (9999, 'parked on the stale release', 'employer', '1.9', 'sequencing')`,
+    ).run()
+
+    const summary = importScope(reconciled)
+    expect(summary.removedReleases).toEqual([])
+    expect(summary.retainedStaleReleases).toEqual([
+      { id: '1.9', features: 0, capabilities: 1 },
+    ])
+    expect(getScopeGraph().releases.map((r) => r.id)).toContain('1.9')
+  })
+
+  it('is a no-op when there is nothing stale', () => {
+    importScope(reconciled)
+    const summary = importScope(reconciled)
+    expect(summary.removedReleases).toEqual([])
+    expect(summary.retainedStaleReleases).toEqual([])
   })
 })
 

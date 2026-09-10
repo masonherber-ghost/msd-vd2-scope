@@ -34,9 +34,18 @@ export type ConflictModel = {
     /** Phase disagreements the canonical merge already settles — not findings. */
     phaseMerged: number
   }
-  /** Release 1.9's decomposition across the table's real releases (D-1). */
+  /** The release DECOMPOSITION_RELEASE_ID names, with its label (D-1). */
+  decompositionRelease: { releaseId: string; label: string } | null
+  /** Where the table actually schedules that release's capabilities (D-1). */
   decomposition: { releaseId: string; label: string; links: number }[]
 }
+
+/**
+ * The release whose capabilities the table scatters across other releases
+ * (PRD D-1). This was 1.9 until OV-003 declared 1.9 and 1.4 to be one
+ * release; the disagreement moved with the features and did not go away.
+ */
+export const DECOMPOSITION_RELEASE_ID = '1.4'
 
 /**
  * Groups the graph's conflicted links for the reconciliation queue.
@@ -85,8 +94,8 @@ export function buildConflictModel(graph: ScopeGraph): ConflictModel {
           : 'not placed',
       })
 
-      // The 1.9 story: where the table actually schedules its capabilities.
-      if (feature.release_id === '1.9' && capability.release_id) {
+      // The D-1 story: where the table actually schedules its capabilities.
+      if (feature.release_id === DECOMPOSITION_RELEASE_ID && capability.release_id) {
         decomposition.set(
           capability.release_id,
           (decomposition.get(capability.release_id) ?? 0) + 1,
@@ -133,6 +142,12 @@ export function buildConflictModel(graph: ScopeGraph): ConflictModel {
       unreviewed: all.filter((row) => row.resolutionState === 'unreviewed').length,
       phaseMerged,
     },
+    decompositionRelease: releaseLabel.has(DECOMPOSITION_RELEASE_ID)
+      ? {
+          releaseId: DECOMPOSITION_RELEASE_ID,
+          label: releaseLabel.get(DECOMPOSITION_RELEASE_ID) ?? DECOMPOSITION_RELEASE_ID,
+        }
+      : null,
     decomposition: [...decomposition.entries()]
       .map(([releaseId, links]) => ({
         releaseId,

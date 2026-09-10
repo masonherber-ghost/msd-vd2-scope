@@ -79,6 +79,51 @@ describe('the real source documents reconcile to the PRD counts', () => {
     expect(exact?.releaseId).toBeNull()
   })
 
+  it('applies OV-003, merging release 1.9 into the table\u2019s 1.4', () => {
+    expect(result.appliedAliases).toHaveLength(1)
+    const [applied] = result.appliedAliases
+    expect(applied.alias).toMatchObject({ id: 'OV-003', from: '1.9', to: '1.4' })
+    expect(applied.features).toHaveLength(15)
+  })
+
+  it('leaves no trace of 1.9 in the reconciled model', () => {
+    expect(result.releases.map((r) => r.id)).toEqual(['1.1', '1.2', '1.3', '1.4', '2'])
+    expect(result.features.some((f) => f.releaseId === '1.9')).toBe(false)
+    expect(result.capabilities.some((c) => c.releaseId === '1.9')).toBe(false)
+    for (const entry of result.summary.releaseConflictBreakdown) {
+      expect([entry.from, entry.to]).not.toContain('1.9')
+    }
+  })
+
+  it('makes 1.4 a release both documents name, carrying the 1.9 prose', () => {
+    const merged = result.releases.find((r) => r.id === '1.4')!
+    expect(merged).toMatchObject({
+      label: 'Release 1.4',
+      name: 'General Availability & Scale-Up',
+      inMappingSource: true,
+      inSequencingSource: true,
+    })
+  })
+
+  it('clears the five 1.9 \u2192 1.4 conflicts without touching the others', () => {
+    // The merge is the only reason the raw 35 drops past the split's 34.
+    const raw = new Map(
+      EXPECTED_SOURCE_RELEASE_CONFLICTS.map((e) => [`${e.from}->${e.to}`, e.links]),
+    )
+    expect(raw.get('1.9->1.4')).toBe(5)
+    expect(
+      result.summary.releaseConflictBreakdown.some(
+        (e) => e.from === '1.4' && e.to === '1.4',
+      ),
+    ).toBe(false)
+    // The other two 1.9 rows survive intact, renamed to 1.4.
+    const after = new Map(
+      result.summary.releaseConflictBreakdown.map((e) => [`${e.from}->${e.to}`, e.links]),
+    )
+    expect(after.get('1.4->2')).toBe(raw.get('1.9->2'))
+    expect(after.get('1.4->1.1')).toBe(raw.get('1.9->1.1'))
+  })
+
   it('applies OV-002, splitting F-085 into F-085 and F-093', () => {
     expect(result.appliedSplits).toHaveLength(1)
     const [applied] = result.appliedSplits
@@ -168,7 +213,8 @@ describe('the real source documents reconcile to the PRD counts', () => {
       // 9, not the pre-split 8: OV-002 puts F-085 in 1.2.
       '1.2': 9,
       '1.3': 5,
-      '1.9': 15,
+      // Was 1.9 until OV-003 declared it and the table's 1.4 to be one release.
+      '1.4': 15,
     })
   })
 

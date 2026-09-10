@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ScopeGraph } from '@/lib/api-client'
+import { DECOMPOSITION_RELEASE_ID } from '@/lib/scope-conflicts'
 
 const { state } = await vi.hoisted(async () => ({
   state: {
@@ -224,32 +225,22 @@ describe('Reconciliation — filtering by state', () => {
   })
 })
 
-describe('Reconciliation — release 1.9 decomposition (D-1)', () => {
-  it('is hidden when nothing sits in 1.9', async () => {
+describe('Reconciliation — release decomposition (D-1)', () => {
+  it('is hidden when nothing sits in the decomposed release', async () => {
     renderPage()
     await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
     expect(screen.queryByRole('region', { name: /decomposes/i })).not.toBeInTheDocument()
   })
 
-  it('shows where the table actually schedules 1.9 capabilities', async () => {
+  it('shows where the table actually schedules that release\u2019s capabilities', async () => {
     const base = makeScopeGraph()
     state.graph = {
       ...base,
-      releases: [
-        ...base.releases,
-        {
-          id: '1.9',
-          label: 'Release 1.9',
-          name: '',
-          description: '',
-          display_order: 3,
-          in_mapping_source: 1,
-          in_sequencing_source: 0,
-          source: 'mapping',
-        },
-      ],
       pwcFeatures: base.pwcFeatures.map((f) =>
-        f.id === 'F-002' ? { ...f, release_id: '1.9' } : f,
+        f.id === 'F-002' ? { ...f, release_id: DECOMPOSITION_RELEASE_ID } : f,
+      ),
+      capabilities: base.capabilities.map((c) =>
+        c.id === 12 ? { ...c, release_id: '1.1' } : c,
       ),
     }
 
@@ -258,7 +249,9 @@ describe('Reconciliation — release 1.9 decomposition (D-1)', () => {
       expect(screen.getByRole('region', { name: /decomposes/i })).toBeInTheDocument(),
     )
     const section = screen.getByRole('region', { name: /decomposes/i })
+    // Named for the release it decomposes, and counting where the table puts it.
     expect(section).toHaveTextContent('Release 1.4')
+    expect(section).toHaveTextContent('Release 1.1')
     expect(section).toHaveTextContent('1 link')
   })
 })

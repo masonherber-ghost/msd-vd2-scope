@@ -8,6 +8,7 @@ import type { ScopeGraph } from '@/lib/api-client'
 export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph {
   const graph: ScopeGraph = {
     overrides: [],
+    releaseAliases: [],
     releases: [
       {
         id: '1.1',

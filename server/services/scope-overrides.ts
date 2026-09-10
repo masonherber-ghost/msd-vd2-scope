@@ -290,3 +290,99 @@ export function applyScopeSplits(
 
   return { mapping: { ...mapping, features }, applied }
 }
+
+/**
+ * A release rename. The mapping document files 15 features under "Release 1.9
+ * (MVP1.9 / GA & Scale-Up)", an id the sequencing table has never heard of —
+ * it sequences those same capabilities under 1.4 and 2. An alias declares that
+ * the two documents are naming one release, so the mapping's id is rewritten
+ * to the table's before reconciliation.
+ *
+ * `to` may already exist in either source: the alias merges into it rather
+ * than creating a duplicate, and any conflict that becomes self-referential
+ * (from and to now equal) stops being a conflict.
+ */
+export type ReleaseAlias = {
+  id: string
+  from: string
+  to: string
+  /** Label for the merged release. Defaults to `Release ${to}`. */
+  label?: string
+  rationale: string
+  decidedOn: string
+}
+
+export const RELEASE_ALIASES: readonly ReleaseAlias[] = [
+  {
+    id: 'OV-003',
+    from: '1.9',
+    to: '1.4',
+    rationale:
+      'Release 1.9 is a mapping-file construct with no column in the sequencing table, ' +
+      'so every one of its 32 capability links conflicted and no capability anywhere was ' +
+      'sequenced as 1.9. The table schedules 5 of those links in 1.4 — the release that ' +
+      'had capabilities but no features. Treating 1.9 and 1.4 as one release is the only ' +
+      'reading under which both documents describe the same plan: it clears those 5 ' +
+      'conflicts and leaves the 27 that are genuine disagreements about 1.1 and 2.',
+    decidedOn: '2026-09-11',
+  },
+]
+
+export type AppliedReleaseAlias = {
+  alias: ReleaseAlias
+  /** Features whose release id was rewritten. */
+  features: string[]
+  /** True when `to` already existed, so this merged rather than renamed. */
+  merged: boolean
+}
+
+/**
+ * Rewrites aliased release ids across the mapping result. Applied first, so
+ * placement overrides and splits are declared against the final ids.
+ */
+export function applyReleaseAliases(
+  mapping: MappingParseResult,
+  aliases: readonly ReleaseAlias[] = RELEASE_ALIASES,
+): { mapping: MappingParseResult; applied: AppliedReleaseAlias[] } {
+  if (aliases.length === 0) return { mapping, applied: [] }
+
+  const applied: AppliedReleaseAlias[] = []
+  let releases = [...mapping.releases]
+  let features = [...mapping.features]
+
+  for (const alias of aliases) {
+    const source = releases.find((r) => r.id === alias.from)
+    if (!source) {
+      throw new Error(
+        `Alias ${alias.id} renames release ${alias.from}, which is not in the mapping document.`,
+      )
+    }
+    if (alias.from === alias.to) {
+      throw new Error(`Alias ${alias.id} renames release ${alias.from} to itself.`)
+    }
+
+    // The mapping document can only name a release once, so a pre-existing
+    // `to` here means two headings collapse into one. Keep the aliased
+    // release's prose — it is the only description either document carries.
+    const existing = releases.find((r) => r.id === alias.to)
+    const renamed = {
+      ...source,
+      id: alias.to,
+      label: alias.label ?? `Release ${alias.to}`,
+    }
+    releases = releases
+      .filter((r) => r.id !== alias.from && r.id !== alias.to)
+      .concat(renamed)
+
+    const moved: string[] = []
+    features = features.map((feature) => {
+      if (feature.releaseId !== alias.from) return feature
+      moved.push(feature.id)
+      return { ...feature, releaseId: alias.to }
+    })
+
+    applied.push({ alias, features: moved, merged: existing !== undefined })
+  }
+
+  return { mapping: { ...mapping, releases, features }, applied }
+}

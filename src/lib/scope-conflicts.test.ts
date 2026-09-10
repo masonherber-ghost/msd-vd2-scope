@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ScopeGraph } from '@/lib/api-client'
-import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
+import {
+  buildConflictModel,
+  DECOMPOSITION_RELEASE_ID,
+  unreviewedFeatureIds,
+} from '@/lib/scope-conflicts'
 import { makeScopeGraph } from '@/test/scope-fixture'
 
 const graph = makeScopeGraph()
@@ -78,35 +82,33 @@ describe('buildConflictModel — counts', () => {
   })
 })
 
-describe('buildConflictModel — release 1.9 decomposition (D-1)', () => {
-  it('is empty when no feature sits in 1.9', () => {
+describe('buildConflictModel — release decomposition (D-1)', () => {
+  it('is empty when no feature sits in the decomposed release', () => {
     expect(model.decomposition).toEqual([])
   })
 
-  it('counts where the table actually schedules 1.9 capabilities', () => {
-    const withNineNine: ScopeGraph = {
+  it('counts where the table actually schedules that release\u2019s capabilities', () => {
+    // F-002 moves into the decomposed release and its conflicting capability
+    // into 1.1, which is the shape the real data has after OV-003.
+    const decomposedGraph: ScopeGraph = {
       ...graph,
-      releases: [
-        ...graph.releases,
-        {
-          id: '1.9',
-          label: 'Release 1.9',
-          name: '',
-          description: '',
-          display_order: 3,
-          in_mapping_source: 1,
-          in_sequencing_source: 0,
-          source: 'mapping',
-        },
-      ],
       pwcFeatures: graph.pwcFeatures.map((feature) =>
-        feature.id === 'F-002' ? { ...feature, release_id: '1.9' } : feature,
+        feature.id === 'F-002'
+          ? { ...feature, release_id: DECOMPOSITION_RELEASE_ID }
+          : feature,
+      ),
+      capabilities: graph.capabilities.map((capability) =>
+        capability.id === 12 ? { ...capability, release_id: '1.1' } : capability,
       ),
     }
-    const decomposed = buildConflictModel(withNineNine)
+    const decomposed = buildConflictModel(decomposedGraph)
     expect(decomposed.decomposition).toEqual([
-      { releaseId: '1.4', label: 'Release 1.4', links: 1 },
+      { releaseId: '1.1', label: 'Release 1.1', links: 1 },
     ])
+    expect(decomposed.decompositionRelease).toEqual({
+      releaseId: DECOMPOSITION_RELEASE_ID,
+      label: 'Release 1.4',
+    })
   })
 })
 

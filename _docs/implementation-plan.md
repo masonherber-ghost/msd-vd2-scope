@@ -73,8 +73,9 @@ Confirmed at the start of this plan: `npm run test` 5/5 pass · `npm run lint` c
 4. **Settle the open decisions that block Phase 1 and 2.** [PRD §15](PRD.md#15-open-decisions)
    lists six. Two must be answered before the parsers are written, because they change the
    import output:
-   - **D-1 — how Release 1.9 is represented.** Recommendation in the PRD is to keep it and
-     record the decomposition. Affects the `releases` seed and every conflict row.
+   - **D-1 — how Release 1.9 is represented.** *Closed by OV-003:* 1.9 and the sequencing
+     table's 1.4 are one release, aliased at import. Affects the `releases` seed and every
+     conflict row.
    - **D-3 — are bare `938`/`946` separate from their Option 1A records?** Affects whether
      `mvp_features` holds 51 records or 49.
 
@@ -140,8 +141,10 @@ Phase 1 verification:
       92 assumptions · 48 MVP refs / 51 MVP records · 107 distinct capabilities ·
       60 feature→MVP links · 123 feature→capability links
 - [ ] Conflicts detected: 35 release conflicts, 21 phase conflicts, 2 unmatched links
-- [ ] Release conflict breakdown matches PRD §7:
+- [ ] Release conflict breakdown matches PRD §7 (sources as written, pre-override):
       1.9→2 = 16 · 1.9→1.1 = 11 · 1.9→1.4 = 5 · 1.3→1.2 = 2 · 1.1→1.4 = 1
+      After OV-002 and OV-003 the app shows 29:
+      1.4→2 = 16 · 1.4→1.1 = 11 · 1.1→1.4 = 1 · 1.3→1.2 = 1
 - [ ] A deliberately corrupted fixture line fails with an error naming the line number
 - [ ] Every hazard in PRD §11 has a named test case
 - [ ] npm run test && npm run lint && npm run build all pass
@@ -215,8 +218,8 @@ Rules: `rules-layout-elements.md` for the page · `rules-css-bem.md` for the com
 
 - `src/pages/ScopeMap.tsx` at `/`, registered in `src/routes/index.tsx`, lazy-loaded.
   Route opts into fluid width (`handle: { fluid: true }`) — the grid needs it.
-- CSS-grid layout: **releases on X** (1.1 → 1.2 → 1.3 → 1.4 → 1.9 → 2), **canonical phases
-  on Y** (rows 1–7). Tailwind utilities for the grid itself (page-level layout).
+- CSS-grid layout: **releases on X** (1.1 → 1.2 → 1.3 → 1.4 → 2, after OV-003 merged 1.9
+  into 1.4), **canonical phases on Y** (rows 1–7). Tailwind utilities for the grid itself (page-level layout).
 - Empty cells render as faint placeholders — an empty cell is information (`R-8.1`).
 - BEM components with their own CSS files, imported in `globals.css`:
   - `FeatureCard` — ID, name, MVP chips with `1A`/`1B`, actor summary (`R-8.1`)
@@ -225,22 +228,23 @@ Rules: `rules-layout-elements.md` for the page · `rules-css-bem.md` for the com
   stock neutral Shadcn ramp with no semantic hues, so these are additions. Derive them as
   tokens; never hardcode in a BEM file. Flag for replacement when a design system arrives.
 - Zoom-to-fit control; the full map legible at 1440px (`R-8.7`).
-- Release 1.4 and 2 columns render even though they have no features — they have
-  capabilities (`R-8.5`).
+- The release 2 column renders even though it has no features — it has capabilities
+  (`R-8.5`). 1.4 was the other such column until OV-003 gave it 1.9's 15 features.
 
 ### Gate
 
 ```
 Phase 3 verification:
-- [ ] / renders a 6-column × 7-row grid from real imported data
+- [ ] / renders a 5-column × 7-row grid from real imported data (6 before OV-003)
 - [ ] Feature counts per cell match PRD §4:
       Access & Onboarding 6/·/·/6 · Employer Profile & Portal 4/·/·/6 ·
       Manage Vacancies 10/1/·/· · Document Management ·/2/·/· ·
       Applications & Referrals ·/2/·/· · Employer Recruitment ·/2/3/· ·
-      Outcomes & Support ·/1/2/3   (columns 1.1/1.2/1.3/1.9)
+      Outcomes & Support ·/1/2/3   (columns 1.1/1.2/1.3/1.4 — the fourth was 1.9
+      before OV-003)
 - [ ] 48 feature cards total; 13 of 28 feature cells populated
 - [ ] Phases appear in canonical order 1–7 with their epic refs
-- [ ] Release 1.4 and 2 columns are present and visibly empty of features
+- [ ] The release 2 column is present and visibly empty of features
 - [ ] Empty cells are visible as placeholders, not collapsed
 - [ ] Whole map legible at 1440px; zoom-to-fit works
 - [ ] Dark mode renders correctly; no hardcoded colours in the BEM files
@@ -271,7 +275,8 @@ Rules: `rules-css-bem.md` · `rules-react-shadcn-tailwind.md` → Routing.
 
 ```
 Phase 4 verification:
-- [ ] Filtering to release 1.1 leaves 20 features; 1.2 → 8; 1.3 → 5; 1.9 → 15
+- [ ] Filtering to release 1.1 leaves 20 features; 1.2 → 9 (8 before the F-085 split);
+      1.3 → 5; 1.4 → 15 (was 1.9 before OV-003)
 - [ ] Filtering by actor=jobseeker shows no features in release 1.1
 - [ ] Filtering by MVP ref 947 leaves exactly 4 features
 - [ ] Filtering by scope option 1B leaves only F-009 and F-010
@@ -453,7 +458,8 @@ The work queue for the source conflicts — the questions neither document can a
 - Filter by resolution state so the unreviewed set visibly shrinks.
 - `ConflictBadge` BEM component; features and capabilities with an unreviewed conflict badged
   on the map (`R-7.4`).
-- Release 1.9's decomposition across table releases 1.1 / 1.4 / 2 shown explicitly (D-1).
+- The decomposition of the aliased release across the table's real releases shown
+  explicitly (D-1) — 1.9 → 1.1 / 1.4 / 2 as built, now 1.4 → 1.1 / 2 after OV-003.
 - The 2 unmatched links (F-050, F-051 → 947) listed for human confirmation — never merged on
   a prefix match ([PRD §7](PRD.md#7-the-two-sources-disagree)).
 
@@ -461,10 +467,12 @@ The work queue for the source conflicts — the questions neither document can a
 
 ```
 Phase 9 verification:
-- [ ] 35 release conflicts and 10 remaining phase conflicts listed
-      (11 of the original 21 resolved by the canonical phase merge)
+- [ ] Release conflicts and remaining phase conflicts listed — 35 / 10 as built,
+      29 / 7 after OV-002 and OV-003
+      (11 of the original 21 phase conflicts resolved by the canonical merge)
 - [ ] The 1.1 → 1.4 T&Cs conflict on F-014 is present and readable
-- [ ] Release 1.9's decomposition into 1.1 (11) / 1.4 (5) / 2 (16) is shown
+- [ ] The decomposition is shown — 1.9 into 1.1 (11) / 1.4 (5) / 2 (16) as built;
+      after OV-003, 1.4 into 1.1 (11) / 2 (16), the five having become agreements
 - [ ] Setting a resolution state persists and survives a reload
 - [ ] Resolved conflicts drop out of the unreviewed filter
 - [ ] Conflict badges appear on the affected cards on the map
@@ -524,7 +532,8 @@ Reply "done" when all pass, or describe any issues.
 ```
 Phase 11 verification:
 - [ ] Ranking shows 947 = 4; then 938, 951, 969, 990 = 3; then 10 refs at 2
-- [ ] Cross-release MVP features listed: 938 (1.1, 1.9), 951 (1.1, 1.9), 972 (1.2, 1.3)
+- [ ] Cross-release MVP features listed: 938 (1.1, 1.4), 951 (1.1, 1.4), 972 (1.2, 1.3)
+      — 938 and 951 read 1.9 before OV-003
 - [ ] Orphans listed: 937 and 953 with no capabilities; the 9 table-only refs
       (950, 957, 959, 973, 976, 986, 989, 992, 993); F-008 and F-029
 - [ ] Actor breakdown shows jobseeker capabilities starting only at release 1.2

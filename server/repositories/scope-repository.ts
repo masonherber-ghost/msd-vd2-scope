@@ -8,7 +8,7 @@ import { getAllMvpFeatures } from './mvp-feature-repository.js'
 import { getAllPhases } from './phase-repository.js'
 import { getAllPwcFeatures } from './pwc-feature-repository.js'
 import { getAllReleases } from './release-repository.js'
-import { SCOPE_OVERRIDES } from '../services/scope-overrides.js'
+import { RELEASE_ALIASES, SCOPE_OVERRIDES } from '../services/scope-overrides.js'
 
 export type ScopeGraph = ReturnType<typeof getScopeGraph>
 
@@ -31,6 +31,9 @@ export function getScopeGraph() {
     // Declared corrections to the source documents. Exposed so a corrected
     // placement is visible in the UI rather than looking like source data.
     overrides: SCOPE_OVERRIDES,
+    // Declared release renames. A merged release otherwise looks like source
+    // data, hiding that two documents disagreed about what to call it.
+    releaseAliases: RELEASE_ALIASES,
     releases,
     phases,
     pwcFeatures,

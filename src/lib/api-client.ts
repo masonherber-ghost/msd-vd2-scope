@@ -98,8 +98,17 @@ export type ScopeOverride = {
   decidedOn: string
 }
 
+export type ReleaseAlias = {
+  id: string
+  from: string
+  to: string
+  rationale: string
+  decidedOn: string
+}
+
 export type ScopeGraph = {
   overrides: ScopeOverride[]
+  releaseAliases: ReleaseAlias[]
   releases: ReleaseRow[]
   phases: PhaseRow[]
   pwcFeatures: PwcFeatureRow[]
@@ -137,6 +146,10 @@ export type ImportSummary = {
   featureCapabilityCitations: number
   collapsedDuplicateCitations: number
   ambiguousMvpOwners: number
+  /** Imported releases the sources no longer name, dropped on re-import. */
+  removedReleases: string[]
+  /** Stale releases kept because rows still point at them. */
+  retainedStaleReleases: { id: string; features: number; capabilities: number }[]
   releaseConflicts: number
   phaseConflicts: number
   unmatchedLinks: number
