@@ -1887,3 +1887,50 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     )
   })
 })
+
+describe('ScopeMap — a decided capability stops arguing its case', () => {
+  it('drops the warning and collapses to one control after confirming', async () => {
+    const user = userEvent.setup()
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    const panel = () => screen.getByRole('region', { name: 'Verify employer' })
+    expect(within(panel()).getByText(/Release differs:/)).toBeInTheDocument()
+
+    await user.click(within(panel()).getByRole('button', { name: 'Resolve' }))
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // The round trip carries the new state back, so the panel re-renders
+    // collapsed without a reload.
+    await waitFor(() =>
+      expect(within(panel()).queryByText(/Release differs:/)).not.toBeInTheDocument(),
+    )
+    expect(
+      within(panel()).getByRole('button', { name: /Reviewed: MSD features sequencing is right/ }),
+    ).toBeInTheDocument()
+    expect(within(panel()).queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
+  })
+
+  it('reopens the decision from the collapsed control', async () => {
+    const user = userEvent.setup()
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      featureCapabilityLinks: base.featureCapabilityLinks.map((l) =>
+        l.id === 102 ? { ...l, resolution_state: 'table_wins' } : l,
+      ),
+    }
+    renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /Reviewed:/ }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})

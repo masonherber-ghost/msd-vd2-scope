@@ -388,3 +388,38 @@
   font-size: 0.75rem;
   color: var(--color-destructive);
 }
+
+/* Decided: the block collapses to one control, aligned to the row's end so
+   a reviewed capability reads as a line of text rather than a finding. */
+.feature-detail__resolution--reviewed {
+  flex-direction: row;
+  justify-content: flex-end;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.feature-detail__reviewed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--spacing-6);
+  height: var(--spacing-6);
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-card);
+  color: var(--color-muted-foreground);
+  cursor: pointer;
+}
+
+.feature-detail__reviewed:hover {
+  color: var(--color-foreground);
+  background-color: var(--color-accent);
+}
+
+.feature-detail__reviewed:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}

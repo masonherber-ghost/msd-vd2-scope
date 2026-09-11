@@ -1,4 +1,4 @@
-import { Filter } from 'lucide-react'
+import { CircleCheck, Filter } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { AssumptionList } from '@/components/AssumptionList'
 import { InlineEditField } from '@/components/InlineEditField'
@@ -7,7 +7,7 @@ import { ConflictBadge } from '@/components/ConflictBadge'
 import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
-import { SOURCE_LABEL, type ResolutionState } from '@/lib/validators'
+import { RESOLUTION_LABEL, SOURCE_LABEL, type ResolutionState } from '@/lib/validators'
 import { CapabilityResolutionModal } from '@/components/CapabilityResolutionModal'
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -539,6 +539,14 @@ function CapabilityRow({
     (capability.phaseConflict && !capability.phaseConflictMerged) ||
     !capability.matched
   const canResolve = resolvable && onKeep !== undefined && onMove !== undefined
+  /**
+   * A decided conflict stops being reported as one. The callout exists to
+   * put a question in front of someone; once it is answered, leaving it up
+   * makes a reviewed row look identical to an open one, and the panel reads
+   * as a list of problems that never shrinks. The decision is still one
+   * click away, and the modal still states the disagreement in full.
+   */
+  const reviewed = resolvable && capability.resolutionState !== 'unreviewed'
   const [resolving, setResolving] = useState(false)
 
   return (
@@ -565,7 +573,7 @@ function CapabilityRow({
         {capability.citations > 1 ? ` · cited ${capability.citations}×` : ''}
       </span>
 
-      {differs ? (
+      {differs && !reviewed ? (
         <div
           className={`feature-detail__mismatch${
             capability.phaseConflictMerged && !capability.releaseDiffers
@@ -604,7 +612,7 @@ function CapabilityRow({
         </div>
       ) : null}
 
-      {!capability.matched ? (
+      {!capability.matched && !reviewed ? (
         <div className="feature-detail__mismatch">
           <span>
             <span className="feature-detail__mismatch-label">Unmatched:</span> the{' '}
@@ -615,17 +623,40 @@ function CapabilityRow({
       ) : null}
 
       {canResolve ? (
-        <div className="feature-detail__resolution">
-          <div className="feature-detail__resolution-head">
-            <ConflictBadge
-              count={1}
-              state={capability.resolutionState as ResolutionState}
-              kind={capability.matched ? 'conflict' : 'unmatched'}
-            />
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setResolving(true)}>
-            {capability.resolutionState === 'unreviewed' ? 'Resolve' : 'Change decision'}
-          </Button>
+        <div
+          className={`feature-detail__resolution${
+            reviewed ? ' feature-detail__resolution--reviewed' : ''
+          }`}
+        >
+          {reviewed ? (
+            // Collapsed to a single control. Its accessible name carries the
+            // decision in words, so the tick is never the only signal
+            // (R-10.6), and `title` surfaces the same on hover.
+            <button
+              type="button"
+              className="feature-detail__reviewed"
+              onClick={() => setResolving(true)}
+              title={`${RESOLUTION_LABEL[capability.resolutionState as ResolutionState]} — change this decision`}
+              aria-label={`Reviewed: ${
+                RESOLUTION_LABEL[capability.resolutionState as ResolutionState]
+              }. Change the decision for ${capability.text}`}
+            >
+              <CircleCheck size={16} aria-hidden="true" />
+            </button>
+          ) : (
+            <>
+              <div className="feature-detail__resolution-head">
+                <ConflictBadge
+                  count={1}
+                  state={capability.resolutionState as ResolutionState}
+                  kind={capability.matched ? 'conflict' : 'unmatched'}
+                />
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setResolving(true)}>
+                Resolve
+              </Button>
+            </>
+          )}
           {resolving ? (
             <CapabilityResolutionModal
               open={resolving}

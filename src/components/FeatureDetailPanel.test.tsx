@@ -208,3 +208,115 @@ describe('FeatureDetailPanel — keyboard and close', () => {
     expect(screen.getByRole('region', { name: 'Verify employer' })).toHaveFocus()
   })
 })
+
+describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () => {
+  const resolvers = {
+    onKeepCapability: vi.fn().mockResolvedValue(undefined),
+    onMoveCapability: vi.fn().mockResolvedValue(undefined),
+    releaseOptions: [
+      { value: '1.1', label: 'Release 1.1' },
+      { value: '1.4', label: 'Release 1.4' },
+    ],
+    phaseOptions: [
+      { value: 'access-and-onboarding', label: 'Access & Onboarding' },
+      { value: 'manage-vacancies', label: 'Manage Vacancies' },
+    ],
+  }
+
+  /** F-002's link 102 carries the release conflict shown in the panel. */
+  const renderWithState = (resolutionState: string) => {
+    const withState = {
+      ...graph,
+      featureCapabilityLinks: graph.featureCapabilityLinks.map((l) =>
+        l.id === 102 ? { ...l, resolution_state: resolutionState } : l,
+      ),
+    }
+    const detail = buildFeatureDetail(withState as typeof graph, 'F-002')!
+    return render(
+      <FeatureDetailPanel
+        detail={detail}
+        onClose={vi.fn()}
+        onPivotToMvp={vi.fn()}
+        onSelectFeature={vi.fn()}
+        activeMvpRefs={[]}
+        {...resolvers}
+      />,
+    )
+  }
+
+  it('argues the case while it is unreviewed', () => {
+    renderWithState('unreviewed')
+    expect(screen.getByText(/Release differs:/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resolve' })).toBeInTheDocument()
+  })
+
+  it('stops arguing it once decided', () => {
+    renderWithState('table_wins')
+    expect(screen.queryByText(/Release differs:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Phase differs:/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
+  })
+
+  it('leaves one control, naming the decision in words', () => {
+    renderWithState('table_wins')
+    // The tick is never the only signal (R-10.6) — the accessible name
+    // carries the decision, and `title` shows it on hover.
+    const control = screen.getByRole('button', {
+      name: /Reviewed: MSD features sequencing is right\. Change the decision for Electronic T&Cs acceptance/,
+    })
+    expect(control).toHaveAttribute(
+      'title',
+      'MSD features sequencing is right — change this decision',
+    )
+  })
+
+  it('names whichever decision was taken', () => {
+    renderWithState('defect_raised')
+    expect(
+      screen.getByRole('button', { name: /Reviewed: Defect raised\./ }),
+    ).toBeInTheDocument()
+  })
+
+  it('reopens the full decision from that control', async () => {
+    const user = userEvent.setup()
+    renderWithState('table_wins')
+    await user.click(screen.getByRole('button', { name: /Reviewed:/ }))
+
+    const dialog = screen.getByRole('dialog')
+    // Collapsed in the panel, still stated in full in the modal.
+    expect(within(dialog).getByText(/F-002 ships in Release 1\.1/)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/delivers this capability in Release 1\.4/),
+    ).toBeInTheDocument()
+  })
+
+  it('still shows a label difference the canonical merge settled', () => {
+    // That note is not a conflict anyone decides, so nothing collapses it.
+    const detail = buildFeatureDetail(graph, 'F-001')!
+    render(
+      <FeatureDetailPanel
+        detail={detail}
+        onClose={vi.fn()}
+        onPivotToMvp={vi.fn()}
+        onSelectFeature={vi.fn()}
+        activeMvpRefs={[]}
+        {...resolvers}
+      />,
+    )
+    expect(screen.getByText(/Labelled differently:/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reviewed:/ })).not.toBeInTheDocument()
+  })
+
+  it('collapses without a reload once the decision is confirmed', async () => {
+    const user = userEvent.setup()
+    renderWithState('unreviewed')
+    expect(screen.getByText(/Release differs:/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Resolve' }))
+    await user.click(
+      within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }),
+    )
+
+    expect(resolvers.onKeepCapability).toHaveBeenCalled()
+  })
+})

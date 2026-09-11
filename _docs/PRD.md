@@ -418,6 +418,13 @@ Opens beside the map — never over it, never as a route change that loses map s
   stands, or *move it to* a chosen release and phase. A capability has one placement
   shared by every feature citing it ([P-2](#p-2--a-capability-may-belong-to-many-pwc-features)),
   so the modal names the other features before the move, not after it.
+- **R-8.25** **A decided capability stops being reported as a problem.** Once resolved,
+  the placement callout goes and the row collapses to a single control carrying the
+  decision in its accessible name and title. The callout exists to put a question in
+  front of someone; leaving it up once answered makes a reviewed row look identical to
+  an open one, and the panel reads as a list of findings that never shrinks. The full
+  disagreement is still stated in the modal, one click away. A phase label difference
+  the canonical merge settles is not a decision anyone takes, so it never collapses.
 - **R-8.24** **A move re-judges the conflict, it does not merely mark it.** Conflict flags
   are derived at import; moving a capability or a feature through the UI recomputes them
   for every link affected. A move that settles a disagreement removes it from the map and
