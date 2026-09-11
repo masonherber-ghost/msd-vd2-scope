@@ -71,8 +71,14 @@ export const CANONICAL_PHASES: readonly CanonicalPhase[] = [
 /**
  * "Onboarding via invite" is an 8th grouping in both sources that the
  * canonical diagram does not have. It folds into Access & Onboarding
- * (PRD §4). Callers keep the original label as `source_phase_label`, so the
- * merge is auditable and reversible.
+ * (PRD §4).
+ *
+ * Both parsers store the *canonical* name as `source_phase_label`, not the
+ * document's own heading. Storing the heading made the two documents' words
+ * for one phase read as a placement disagreement — 12 of them, every one
+ * saying "these are the same phase". The merge stays auditable here, in the
+ * alias table below, which is where a declared rule belongs; the source
+ * documents are unedited and still say what they say.
  */
 export const MERGED_PHASE_LABEL = 'Onboarding via invite'
 

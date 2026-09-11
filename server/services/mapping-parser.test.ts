@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parseMappingDocument } from './mapping-parser.js'
+import { CANONICAL_PHASES } from './phase-canon.js'
 import { ParseError } from './scope-types.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -190,14 +191,22 @@ describe('mapping parser — hazard: phase casing and the invite merge', () => {
   it('folds "Onboarding via invite" into Access & Onboarding', () => {
     const feature = byId.get('F-001')!
     expect(feature.phaseId).toBe('access-and-onboarding')
-    // Recorded so the merge is auditable and reversible.
-    expect(feature.sourcePhaseLabel).toBe('Onboarding via invite')
+    // The canonical name, not the document's heading. Storing the heading
+    // made the two documents' words for one phase read as a disagreement.
+    expect(feature.sourcePhaseLabel).toBe('Access & Onboarding')
   })
 
   it('matches a phase whose casing differs from canonical', () => {
     const feature = byId.get('F-014')!
     expect(feature.phaseId).toBe('access-and-onboarding')
-    expect(feature.sourcePhaseLabel).toBe('Access & onboarding')
+    expect(feature.sourcePhaseLabel).toBe('Access & Onboarding')
+  })
+
+  it('gives every feature a label that is its phase’s canonical name', () => {
+    const phases = new Map(CANONICAL_PHASES.map((p) => [p.id, p.name]))
+    for (const feature of parsed.features) {
+      expect(feature.sourcePhaseLabel).toBe(phases.get(feature.phaseId))
+    }
   })
 })
 

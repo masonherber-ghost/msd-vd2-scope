@@ -534,10 +534,10 @@ function CapabilityRow({
   const differs = capability.releaseDiffers || capability.phaseDiffers
   // Exactly what the reconciliation queue lists, so the same set of findings
   // is decidable in both places.
+  // A phase conflict can only mean genuinely different phases now that both
+  // documents' labels are canonicalised, so there is no merged case to skip.
   const resolvable =
-    capability.releaseConflict ||
-    (capability.phaseConflict && !capability.phaseConflictMerged) ||
-    !capability.matched
+    capability.releaseConflict || capability.phaseConflict || !capability.matched
   const canResolve = resolvable && onKeep !== undefined && onMove !== undefined
   /**
    * A decided conflict stops being reported as one. The callout exists to
@@ -574,13 +574,7 @@ function CapabilityRow({
       </span>
 
       {differs && !reviewed ? (
-        <div
-          className={`feature-detail__mismatch${
-            capability.phaseConflictMerged && !capability.releaseDiffers
-              ? ' feature-detail__mismatch--merged'
-              : ''
-          }`}
-        >
+        <div className="feature-detail__mismatch">
           {capability.releaseDiffers ? (
             <span>
               <span className="feature-detail__mismatch-label">Release differs:</span> the
@@ -595,20 +589,6 @@ function CapabilityRow({
               capability in {capability.phaseName}.
             </span>
           ) : null}
-        </div>
-      ) : null}
-
-      {/* A merged conflict resolves to the same canonical phase, so there is no
-          placement difference to show — only a difference in how the two
-          documents label it. Worth stating, but not as a finding. */}
-      {capability.phaseConflictMerged && !capability.phaseDiffers ? (
-        <div className="feature-detail__mismatch feature-detail__mismatch--merged">
-          <span>
-            <span className="feature-detail__mismatch-label">Labelled differently:</span> the
-            {SOURCE_LABEL.mapping} says “{capability.featurePhaseLabel}” and the{' '}
-            {SOURCE_LABEL.sequencing} says “{capability.capabilityPhaseLabel}”. Resolved by
-            the canonical phase merge — the same phase.
-          </span>
         </div>
       ) : null}
 

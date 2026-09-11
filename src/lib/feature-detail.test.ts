@@ -20,9 +20,11 @@ describe('buildFeatureDetail — identity and placement', () => {
     })
   })
 
-  it('keeps the source document\'s own phase label when it differs', () => {
+  it('carries the canonical phase name as its label', () => {
+    // The parsers store the canonical name rather than each document's own
+    // heading, so the label and the phase can no longer contradict.
     const detail = buildFeatureDetail(graph, 'F-001')!
-    expect(detail.sourcePhaseLabel).toBe('Onboarding via invite')
+    expect(detail.sourcePhaseLabel).toBe('Access & Onboarding')
     expect(detail.phaseName).toBe('Access & Onboarding')
   })
 })
@@ -63,13 +65,14 @@ describe('buildFeatureDetail — capabilities grouped by actor', () => {
     expect(capability.capabilityReleaseId).toBe('1.4')
   })
 
-  it('marks a phase disagreement the canonical merge resolves', () => {
+  it('raises no phase disagreement where the documents agree on the phase', () => {
     const detail = buildFeatureDetail(graph, 'F-001')!
     const employer = detail.actorGroups.find((g) => g.actor === 'employer')!
     const [capability] = employer.capabilities
-    expect(capability.phaseConflict).toBe(true)
-    expect(capability.phaseConflictMerged).toBe(true)
-    // Merge-resolved disagreements are not counted as findings.
+    // Both carry the canonical phase name, so there is nothing to disagree
+    // about and nothing to mark as merged.
+    expect(capability.phaseConflict).toBe(false)
+    expect(capability.phaseConflictMerged).toBe(false)
     expect(detail.conflicts.phase).toBe(0)
   })
 

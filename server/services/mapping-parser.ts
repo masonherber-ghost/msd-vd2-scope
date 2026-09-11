@@ -169,8 +169,13 @@ export function parseMappingDocument(markdown: string): MappingParseResult {
     const phaseMatch = PHASE_RE.exec(line)
     if (phaseMatch) {
       finish()
-      currentPhaseLabel = phaseMatch[1].trim()
-      currentPhaseId = toCanonicalPhase(currentPhaseLabel, SOURCE, lineNo).id
+      // The canonical phase's own name, not the document's heading for it.
+      // Two documents calling one phase two things is a wording difference,
+      // not a disagreement about scope, and comparing the raw headings
+      // reported it as a conflict 12 times over (PRD §4).
+      const phase = toCanonicalPhase(phaseMatch[1].trim(), SOURCE, lineNo)
+      currentPhaseLabel = phase.name
+      currentPhaseId = phase.id
       continue
     }
 

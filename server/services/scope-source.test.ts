@@ -53,10 +53,22 @@ describe('the real source documents reconcile to the PRD counts', () => {
     expect(result.summary.releaseConflictBreakdown).toEqual([...EXPECTED_RELEASE_CONFLICTS])
   })
 
-  it('resolves 11 of the 21 phase conflicts via the canonical merge', () => {
-    const merged = result.conflicts.phase.filter((c) => c.resolvedByCanonicalMerge)
-    expect(merged).toHaveLength(11)
-    expect(merged.every((c) => c.capabilityPhaseLabel === 'Onboarding via invite')).toBe(true)
+  it('raises no phase conflict from the two documents’ words for one phase', () => {
+    // This used to be 11 conflicts, every one of them saying "Onboarding via
+    // invite" and "Access & Onboarding" are the same phase.
+    expect(result.conflicts.phase.filter((c) => c.resolvedByCanonicalMerge)).toEqual([])
+    for (const conflict of result.conflicts.phase) {
+      expect(conflict.featurePhaseId).not.toBe(conflict.capabilityPhaseId)
+    }
+  })
+
+  it('labels every feature and capability with its canonical phase name', () => {
+    const names = new Set(result.phases.map((p) => p.name))
+    for (const feature of result.features) expect(names).toContain(feature.sourcePhaseLabel)
+    for (const capability of result.capabilities) {
+      if (capability.sourcePhaseLabel === null) continue
+      expect(names).toContain(capability.sourcePhaseLabel)
+    }
   })
 
   it('reports the two truncated F-050 / F-051 links as unmatched', () => {

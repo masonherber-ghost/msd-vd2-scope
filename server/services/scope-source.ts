@@ -42,7 +42,11 @@ export const EXPECTED_SOURCE_COUNTS = {
   featureMvpLinks: 60,
   featureCapabilityLinks: 123,
   releaseConflicts: 35,
-  phaseConflicts: 21,
+  // 10, not 21: both parsers store the canonical phase name, so the two
+  // documents' different words for one phase are no longer a disagreement.
+  // Every remaining phase conflict is a genuinely different phase, which is
+  // why the two figures are now equal.
+  phaseConflicts: 10,
   phaseConflictsAfterMerge: 10,
   unmatchedLinks: 2,
 } as const
@@ -57,7 +61,7 @@ export const EXPECTED_SOURCE_COUNTS = {
  * OV-002, the F-085 split (PRD §16 P-1):
  *   pwcFeatures              48 → 49  (F-085 divided into F-085 + F-093)
  *   releaseConflicts         35 → 34  (both halves now agree with the table)
- *   phaseConflicts           21 → 18
+ *   phaseConflicts           10 → 7
  *   phaseConflictsAfterMerge 10 → 7
  *
  * OV-003, the 1.9 → 1.4 release alias:
@@ -91,7 +95,7 @@ export const EXPECTED_COUNTS = {
   pwcFeatures: 49,
   mvpRecords: 49,
   releaseConflicts: 42,
-  phaseConflicts: 18,
+  phaseConflicts: 7,
   phaseConflictsAfterMerge: 7,
 } as const
 

@@ -174,7 +174,11 @@ export default function Reconciliation() {
 
       <ConflictQueue
         title="Phase conflicts"
-        note={`${model.counts.phaseMerged} further phase disagreements are resolved by the canonical phase merge and are not listed — both sides mean the same phase.`}
+        note={
+          model.counts.phaseMerged > 0
+            ? `${model.counts.phaseMerged} further phase disagreements are resolved by the canonical phase merge and are not listed — both sides mean the same phase.`
+            : undefined
+        }
         rows={phase}
         featureSourceLabel={`${SOURCE_LABEL.mapping} — feature sits in`}
         tableSourceLabel={`${SOURCE_LABEL.sequencing} — capability placed in`}

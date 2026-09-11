@@ -425,6 +425,13 @@ Opens beside the map — never over it, never as a route change that loses map s
   stands, or *move it to* a chosen release and phase. A capability has one placement
   shared by every feature citing it ([P-2](#p-2--a-capability-may-belong-to-many-pwc-features)),
   so the modal names the other features before the move, not after it.
+- **R-8.27** **One phase has one name.** Both parsers store the *canonical* phase name as
+  `source_phase_label`, not each document's own heading for it. Storing the headings made
+  the two documents' words for one phase read as a placement disagreement — 12 of them,
+  every one saying "these are the same phase". The merge stays declared and auditable in
+  `phase-canon.ts`, and the source documents are unedited. Phase conflicts now mean a
+  genuinely different phase, which is why `phaseConflicts` and `phaseConflictsAfterMerge`
+  are equal and the merged case is unreachable.
 - **R-8.25** **A decided capability stops being reported as a problem.** Once resolved,
   the placement callout goes and the row collapses to a single control carrying the
   decision in its accessible name and title. The callout exists to put a question in
@@ -433,8 +440,11 @@ Opens beside the map — never over it, never as a route change that loses map s
   disagreement is still stated in the modal, one click away. A phase label difference
   the canonical merge settles is not a decision anyone takes, so it never collapses.
 - **R-8.24** **A move re-judges the conflict, it does not merely mark it.** Conflict flags
-  are derived at import; moving a capability or a feature through the UI recomputes them
-  for every link affected. A move that settles a disagreement removes it from the map and
+  describe the **database**, not the reconciled sources. Moving a capability or a feature
+  through the UI recomputes them for every link affected, and an import finishes by
+  recomputing them all — a manually moved row is protected from the import's upserts, but
+  the flags written alongside it come from a model that has never heard of that move, so
+  without this a re-import undid the visible effect of one. A move that settles a disagreement removes it from the map and
   the queue; a move that creates one adds it. The rules mirror the reconciler and are
   asserted against it — recomputing a freshly imported graph must change nothing.
 - **R-8.22** **A conflict is decidable where it is shown.** Every capability the panel marks

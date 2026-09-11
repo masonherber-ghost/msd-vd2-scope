@@ -70,7 +70,7 @@ describe('importScope writes the whole graph', () => {
       // feature out of the pilot leaves the PwC features that deliver it
       // behind, and every link between them now says so.
       releaseConflicts: 42,
-      phaseConflicts: 18,
+      phaseConflicts: 7,
       unmatchedLinks: 2,
     })
   })
@@ -176,12 +176,32 @@ describe('importScope writes the whole graph', () => {
     ])
   })
 
-  it('flags the 11 phase conflicts the canonical merge resolves', () => {
+  it('writes no merged phase conflict, because none can arise', () => {
     importScope(reconciled)
-    const merged = db
-      .prepare('SELECT COUNT(*) AS n FROM pwc_feature_capabilities WHERE phase_conflict_merged = 1')
-      .get()
-    expect(merged).toEqual({ n: 11 })
+    // Both parsers store the canonical phase name, so two documents' words
+    // for one phase never differ and the merged case is unreachable.
+    expect(
+      db
+        .prepare(
+          'SELECT COUNT(*) AS n FROM pwc_feature_capabilities WHERE phase_conflict_merged = 1',
+        )
+        .get(),
+    ).toEqual({ n: 0 })
+  })
+
+  it('leaves every phase conflict a genuine difference of phase', () => {
+    importScope(reconciled)
+    const rows = db
+      .prepare(
+        `SELECT f.phase_id AS f_phase, c.phase_id AS c_phase
+           FROM pwc_feature_capabilities l
+           JOIN pwc_features f ON f.id = l.pwc_feature_id
+           JOIN capabilities c ON c.id = l.capability_id
+          WHERE l.phase_conflict = 1`,
+      )
+      .all() as { f_phase: string; c_phase: string }[]
+    expect(rows).toHaveLength(7)
+    for (const row of rows) expect(row.f_phase).not.toBe(row.c_phase)
   })
 
   it('starts every conflict unreviewed (R-7.2)', () => {
@@ -343,6 +363,53 @@ describe('importScope sweeps releases the sources no longer name', () => {
     const summary = importScope(reconciled)
     expect(summary.removedReleases).toEqual([])
     expect(summary.retainedStaleReleases).toEqual([])
+  })
+})
+
+describe('importScope settles conflict flags against what it wrote', () => {
+  it('leaves a manually moved feature agreeing with its capability', () => {
+    importScope(reconciled)
+    const conflicted = db
+      .prepare(
+        `SELECT l.id, l.pwc_feature_id, c.release_id
+           FROM pwc_feature_capabilities l
+           JOIN capabilities c ON c.id = l.capability_id
+          WHERE l.release_conflict = 1 AND l.removed_at IS NULL
+          LIMIT 1`,
+      )
+      .get() as { id: number; pwc_feature_id: string; release_id: string }
+
+    // Move the feature to meet its capability, by hand, as the UI does.
+    db.prepare("UPDATE pwc_features SET release_id = ?, source = 'manual' WHERE id = ?").run(
+      conflicted.release_id,
+      conflicted.pwc_feature_id,
+    )
+
+    // Re-importing must not resurrect a conflict the move settled: the
+    // sources still disagree, but the database no longer does.
+    importScope(reconciled)
+
+    const after = db
+      .prepare('SELECT release_conflict FROM pwc_feature_capabilities WHERE id = ?')
+      .get(conflicted.id) as { release_conflict: number }
+    expect(after.release_conflict).toBe(0)
+  })
+
+  it('changes nothing when no row has been moved by hand', () => {
+    importScope(reconciled)
+    const before = db
+      .prepare(
+        'SELECT id, release_conflict, phase_conflict FROM pwc_feature_capabilities ORDER BY id',
+      )
+      .all()
+    importScope(reconciled)
+    expect(
+      db
+        .prepare(
+          'SELECT id, release_conflict, phase_conflict FROM pwc_feature_capabilities ORDER BY id',
+        )
+        .all(),
+    ).toEqual(before)
   })
 })
 

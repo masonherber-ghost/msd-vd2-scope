@@ -34,9 +34,11 @@ describe('FeatureDetailPanel — header', () => {
     expect(screen.getByText(/Release 1\.1 · Access & Onboarding · epic 179/)).toBeInTheDocument()
   })
 
-  it('notes where the source document filed it differently', () => {
+  it('no longer contradicts itself about the phase name', () => {
+    // The label is the canonical phase's own name, so the "filed this under"
+    // note has nothing left to report.
     renderPanel('F-001')
-    expect(screen.getByText(/filed this under “Onboarding via invite”/)).toBeInTheDocument()
+    expect(screen.queryByText(/filed this under/)).not.toBeInTheDocument()
   })
 
   it('shows the foundational-build statement', () => {
@@ -64,9 +66,11 @@ describe('FeatureDetailPanel — capability placement (R-8.15)', () => {
     ).toBeInTheDocument()
   })
 
-  it('says a phase disagreement is resolved by the canonical merge', () => {
+  it('says nothing about a phase the two documents merely word differently', () => {
+    // Both now carry the canonical name, so there is no difference to note.
     renderPanel('F-001')
-    expect(screen.getByText(/resolved by the canonical phase merge/i)).toBeInTheDocument()
+    expect(screen.queryByText(/resolved by the canonical phase merge/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Labelled differently:/)).not.toBeInTheDocument()
   })
 
   it('explains an unmatched capability rather than hiding it', () => {
@@ -290,8 +294,7 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
     ).toBeInTheDocument()
   })
 
-  it('still shows a label difference the canonical merge settled', () => {
-    // That note is not a conflict anyone decides, so nothing collapses it.
+  it('has nothing to show for a phase the documents merely word differently', () => {
     const detail = buildFeatureDetail(graph, 'F-001')!
     render(
       <FeatureDetailPanel
@@ -303,7 +306,7 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
         {...resolvers}
       />,
     )
-    expect(screen.getByText(/Labelled differently:/)).toBeInTheDocument()
+    expect(screen.queryByText(/Labelled differently:/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Reviewed:/ })).not.toBeInTheDocument()
   })
 

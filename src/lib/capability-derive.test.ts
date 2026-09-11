@@ -49,13 +49,13 @@ describe('buildCapabilityCards', () => {
     expect(byId.get(12)!.pwcFeatures.map((f) => f.id)).toEqual(['F-002'])
   })
 
-  it('counts conflicts across its links, ignoring a merged phase', () => {
-    // Link 101 is a phase conflict the canonical merge settles.
+  it('counts conflicts across its links', () => {
+    // Link 101 carries none: the two documents word its phase the same way.
     expect(byId.get(11)!.conflicts).toEqual({
       release: 0,
       phase: 0,
       unmatched: 0,
-      unreviewed: 1,
+      unreviewed: 0,
     })
     expect(byId.get(12)!.conflicts).toMatchObject({ release: 1, phase: 1, unmatched: 1 })
   })

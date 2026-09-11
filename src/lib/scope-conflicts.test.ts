@@ -35,9 +35,10 @@ describe('buildConflictModel — grouping', () => {
     })
   })
 
-  it('counts but does not list a merge-resolved phase disagreement', () => {
-    // F-001's phase conflict has phase_conflict_merged = 1.
-    expect(model.counts.phaseMerged).toBe(1)
+  it('has no merge-resolved phase disagreement to count', () => {
+    // Both documents carry the canonical phase name, so the merged case
+    // cannot arise and F-001 raises no phase conflict at all.
+    expect(model.counts.phaseMerged).toBe(0)
     expect(model.phase.every((row) => row.featureId !== 'F-001')).toBe(true)
   })
 

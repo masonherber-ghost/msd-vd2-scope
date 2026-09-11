@@ -129,19 +129,20 @@ describe('reconcile — conflicts are data, not errors (R-7.1)', () => {
     ])
   })
 
-  it('flags a phase conflict the canonical merge resolves', () => {
-    const merged = result.conflicts.phase.filter((c) => c.resolvedByCanonicalMerge)
-    expect(merged).toHaveLength(1)
-    expect(merged[0]).toMatchObject({
-      pwcFeatureId: 'F-014',
-      featurePhaseLabel: 'Access & onboarding',
-      capabilityPhaseLabel: 'Onboarding via invite',
-    })
+  it('raises no phase conflict from a wording difference', () => {
+    // F-014 is filed under "Access & onboarding" and its capability sits in
+    // the table's "Onboarding via invite" column. One phase, two words for
+    // it, and that used to be reported as a disagreement.
+    expect(result.conflicts.phase.some((c) => c.pwcFeatureId === 'F-014')).toBe(false)
+    expect(result.conflicts.phase.filter((c) => c.resolvedByCanonicalMerge)).toEqual([])
   })
 
-  it('separates phase conflicts needing review from those the merge resolves', () => {
-    expect(result.summary.phaseConflicts).toBe(3)
+  it('leaves only genuinely different phases, so the two counts agree', () => {
+    expect(result.summary.phaseConflicts).toBe(2)
     expect(result.summary.phaseConflictsAfterMerge).toBe(2)
+    for (const conflict of result.conflicts.phase) {
+      expect(conflict.featurePhaseId).not.toBe(conflict.capabilityPhaseId)
+    }
   })
 
   it('records an unmatched link rather than merging on a prefix', () => {

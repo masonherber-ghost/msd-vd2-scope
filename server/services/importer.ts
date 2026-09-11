@@ -9,6 +9,7 @@ import {
   upsertImportedFeatureCapabilityLink,
   upsertImportedFeatureMvpLink,
 } from '../repositories/feature-link-repository.js'
+import { recomputeAllConflicts } from './conflict-recompute.js'
 import {
   deleteImportedMvpFeaturesNotIn,
   findMvpFeature,
@@ -289,6 +290,15 @@ export function importScope(result: ReconcileResult): ImportSummary {
         phase_conflict_merged: phaseConflict?.resolvedByCanonicalMerge ? 1 : 0,
       })
     }
+
+    // Conflict flags describe the *database*, not the reconciled sources.
+    // A manually moved feature or capability is protected from the upserts
+    // above (R-11.4), but the flags written alongside them come from a model
+    // that has never heard of that move — so re-importing used to undo the
+    // visible effect of one. Recomputing here settles them against what was
+    // actually written. On a graph with no manual rows this changes nothing,
+    // which is what conflict-recompute.test.ts asserts.
+    recomputeAllConflicts()
 
     // Last, so the links and capability owners above have already been
     // repointed off any record the sources stopped producing.

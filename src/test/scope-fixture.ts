@@ -56,7 +56,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         foundational_build: '',
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
-        source_phase_label: 'Onboarding via invite',
+        source_phase_label: 'Access & Onboarding',
         capability_note: null,
         display_order: 1,
         source: 'mapping',
@@ -67,7 +67,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         foundational_build: '',
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
-        source_phase_label: 'Access & onboarding',
+        source_phase_label: 'Access & Onboarding',
         capability_note: null,
         display_order: 2,
         source: 'mapping',
@@ -89,7 +89,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         actor: 'staff',
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
-        source_phase_label: 'Onboarding via invite',
+        source_phase_label: 'Access & Onboarding',
         source: 'both',
       },
       {
@@ -101,7 +101,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         actor: 'employer',
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
-        source_phase_label: 'Onboarding via invite',
+        source_phase_label: 'Access & Onboarding',
         source: 'both',
       },
       {
@@ -149,13 +149,15 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         source_citations: 1,
         matched: 1,
         release_conflict: 0,
-        // A phase conflict the canonical merge resolves — not a finding.
-        phase_conflict: 1,
+        // No phase conflict: both parsers store the canonical phase name, so
+        // the two documents' words for one phase can no longer differ. This
+        // link used to carry the merged case, which is now unreachable.
+        phase_conflict: 0,
         feature_release_id: null,
         capability_release_id: null,
-        feature_phase_label: 'Access & onboarding',
-        capability_phase_label: 'Onboarding via invite',
-        phase_conflict_merged: 1,
+        feature_phase_label: null,
+        capability_phase_label: null,
+        phase_conflict_merged: 0,
         resolution_state: 'unreviewed',
         resolution_note: null,
         resolved_at: null,

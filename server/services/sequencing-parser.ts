@@ -72,9 +72,11 @@ export function parseSequencingTable(markdown: string): SequencingParseResult {
   const phaseLabels = header.slice(1)
   // Validate every column header up front, so a renamed column fails at the
   // header rather than once per cell.
-  const phaseIds = phaseLabels.map(
-    (label) => toCanonicalPhase(label, SOURCE, headerRow.line).id,
+  const phases = phaseLabels.map((label) =>
+    toCanonicalPhase(label, SOURCE, headerRow.line),
   )
+  const phaseIds = phases.map((phase) => phase.id)
+  const phaseNames = phases.map((phase) => phase.name)
 
   const capabilities: ParsedTableCapability[] = []
   const releaseIds: string[] = []
@@ -137,7 +139,9 @@ export function parseSequencingTable(markdown: string): SequencingParseResult {
           ref: Number(m[3]),
           releaseId,
           phaseId: phaseIds[column],
-          sourcePhaseLabel: phaseLabels[column],
+          // The canonical phase's name, matching the mapping parser, so a
+          // wording difference never reads as a placement disagreement.
+          sourcePhaseLabel: phaseNames[column],
         })
       }
     }

@@ -105,11 +105,13 @@ describe('Reconciliation — grouping', () => {
     expect(row).toHaveTextContent('Release 1.4')
   })
 
-  it('explains the phase disagreements the canonical merge already settles', async () => {
+  it('has no merge-settled phase disagreements left to explain', async () => {
     renderPage()
     await waitFor(() => expect(queue(/^Phase conflicts/)).toBeInTheDocument())
-    expect(queue(/^Phase conflicts/)).toHaveTextContent(
-      /1 further phase disagreements are resolved by the canonical phase merge/,
+    // Both documents carry the canonical phase name, so the note that used
+    // to account for the difference has nothing to account for.
+    expect(queue(/^Phase conflicts/)).not.toHaveTextContent(
+      /resolved by the canonical phase merge/,
     )
   })
 

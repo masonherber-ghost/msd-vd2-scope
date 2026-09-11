@@ -81,12 +81,20 @@ describe('sequencing parser — hazard: literal "-" empty cells', () => {
 })
 
 describe('sequencing parser — hazard: phase casing normalises to canonical', () => {
-  it('folds the invite column into Access & Onboarding, keeping the label', () => {
-    const invite = parsed.capabilities.filter(
-      (c) => c.sourcePhaseLabel === 'Onboarding via invite',
+  it('folds the invite column into Access & Onboarding, under one label', () => {
+    // The column still exists in the table; what changes is that its
+    // capabilities come out labelled with the canonical phase name, so they
+    // cannot read as disagreeing with a feature filed under the other word.
+    expect(parsed.phaseLabels).toContain('Onboarding via invite')
+    expect(
+      parsed.capabilities.some((c) => c.sourcePhaseLabel === 'Onboarding via invite'),
+    ).toBe(false)
+
+    const onboarding = parsed.capabilities.filter(
+      (c) => c.phaseId === 'access-and-onboarding',
     )
-    expect(invite).not.toHaveLength(0)
-    expect(invite.every((c) => c.phaseId === 'access-and-onboarding')).toBe(true)
+    expect(onboarding).not.toHaveLength(0)
+    expect(onboarding.every((c) => c.sourcePhaseLabel === 'Access & Onboarding')).toBe(true)
   })
 
   it('matches a column whose casing differs from canonical', () => {
@@ -107,7 +115,8 @@ describe('sequencing parser — records placement, which the table owns', () => 
       actor: 'employer',
       releaseId: '1.4',
       phaseId: 'access-and-onboarding',
-      sourcePhaseLabel: 'Onboarding via invite',
+      // The canonical name, though the cell sits in the invite column.
+      sourcePhaseLabel: 'Access & Onboarding',
     })
   })
 })
