@@ -21,6 +21,7 @@ const {
   upsertImportedCapability,
   getAllCapabilities,
   findCapabilityByText: findCapability,
+  updateCapability,
 } = await import(
   './capability-repository.js'
 )
@@ -768,5 +769,45 @@ describe('conflict resolution (R-7.2)', () => {
     expect(after.resolution_state).toBe('both_correct')
     expect(after.resolution_note).toBe('Confirmed with delivery')
     expect(after.release_conflict).toBe(1)
+  })
+})
+
+describe('a question is an annotation, not an edit', () => {
+  const seed = (text: string) => {
+    upsertImportedCapability({
+      mvp_feature_id: null,
+      mvp_ref: 938,
+      mvp_owner_ambiguous: 0,
+      text,
+      actor: 'staff',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+      source_phase_label: 'Manage Vacancies',
+      source: 'sequencing',
+    })
+    return findCapability(938, text)!
+  }
+
+  it('does not mark the capability manual', () => {
+    const capability = seed('Question target')
+    const after = updateCapability(capability.id, { question: 'Still in scope?' })!
+    expect(after.question).toBe('Still in scope?')
+    // Marking it manual would stop the import refreshing the row, which
+    // asking a question should never do.
+    expect(after.source).toBe('sequencing')
+  })
+
+  it('still marks it manual when the content changes', () => {
+    const capability = seed('Reword target')
+    expect(updateCapability(capability.id, { text: 'Reworded by hand' })!.source).toBe(
+      'manual',
+    )
+  })
+
+  it('marks it manual when a question accompanies a content change', () => {
+    const capability = seed('Both target')
+    expect(
+      updateCapability(capability.id, { text: 'Reworded', question: 'Why?' })!.source,
+    ).toBe('manual')
   })
 })

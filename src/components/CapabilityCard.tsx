@@ -79,8 +79,9 @@ export function CapabilityCard({
         )}
       </div>
 
-      {conflicts > 0 || card.conflicts.unmatched > 0 ? (
+      {conflicts > 0 || card.conflicts.unmatched > 0 || card.question !== null ? (
         <div className="capability-card__badges">
+          {card.question !== null ? <ConflictBadge count={1} kind="question" /> : null}
           {conflicts > 0 ? (
             <ConflictBadge
               count={conflicts}

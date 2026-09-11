@@ -90,6 +90,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
         source_phase_label: 'Access & Onboarding',
+        question: null,
         source: 'both',
       },
       {
@@ -102,6 +103,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         release_id: '1.1',
         phase_id: 'access-and-onboarding',
         source_phase_label: 'Access & Onboarding',
+        question: null,
         source: 'both',
       },
       {
@@ -115,6 +117,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         release_id: '1.4',
         phase_id: 'manage-vacancies',
         source_phase_label: 'Manage Vacancies',
+        question: null,
         source: 'sequencing',
       },
     ],

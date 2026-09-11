@@ -209,6 +209,12 @@ export const updateCapabilitySchema = z
     actor: actorSchema,
     release_id: z.string().trim().min(1, 'Choose a release.'),
     phase_id: z.string().trim().min(1, 'Choose a phase.'),
+    /** Null clears it. An empty string would read as "a blank question". */
+    question: z
+      .string()
+      .trim()
+      .max(1000, 'Keep a question under 1000 characters.')
+      .nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })

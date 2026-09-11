@@ -20,6 +20,8 @@ export type CapabilityDetailPanelProps = {
   phaseNames?: Map<string, string>
   /** Rejects with the server's message, which the field surfaces. */
   onSaveText?: (text: string) => Promise<unknown>
+  /** Saves a question, or clears it when the text is emptied. */
+  onSaveQuestion?: (question: string | null) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
 }
 
@@ -38,6 +40,7 @@ export function CapabilityDetailPanel({
   releaseLabels,
   phaseNames,
   onSaveText,
+  onSaveQuestion,
   onDirtyChange,
 }: CapabilityDetailPanelProps) {
   const placement =
@@ -87,6 +90,28 @@ export function CapabilityDetailPanel({
             <ConflictBadge count={card.conflicts.unmatched} kind="unmatched" />
           ) : null}
         </div>
+      ) : null}
+
+      {card.question ? (
+        <p className="capability-detail__question" role="note">
+          <span className="capability-detail__question-label">Question:</span>{' '}
+          {card.question}
+        </p>
+      ) : null}
+
+      {onSaveQuestion ? (
+        <section className="capability-detail__section">
+          <h3 className="capability-detail__section-title">Question</h3>
+          <InlineEditField
+            label="Question"
+            value={card.question ?? ''}
+            multiline
+            addLabel="Add a question"
+            // Emptying it clears the question rather than storing a blank one.
+            onSave={(next) => onSaveQuestion(next.trim() === '' ? null : next)}
+            onDirtyChange={onDirtyChange}
+          />
+        </section>
       ) : null}
 
       {card.releaseId === null || card.phaseId === null ? (

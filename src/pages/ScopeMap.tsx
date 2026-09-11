@@ -811,6 +811,12 @@ export default function ScopeMap() {
                   patch: { text },
                 })
               }
+              onSaveQuestion={(question) =>
+                updateCapability.mutateAsync({
+                  id: capabilityDetail.id,
+                  patch: { question },
+                })
+              }
               onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the

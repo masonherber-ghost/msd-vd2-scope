@@ -45,6 +45,7 @@ export type ConflictFilter =
   | 'unmatched'
   | 'unreviewed'
   | 'corrected'
+  | 'question'
   | 'none'
 
 export type FilterState = {
@@ -107,6 +108,7 @@ export function parseFilters(params: URLSearchParams): FilterState {
     'phase',
     'unmatched',
     'unreviewed',
+    'question',
     'corrected',
     'none',
   ])

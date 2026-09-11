@@ -127,6 +127,7 @@ describe('buildScopeMap — totals', () => {
             release_id: null,
             phase_id: null,
             source_phase_label: null,
+            question: null,
             source: 'mapping',
           },
         ],

@@ -1,0 +1,14 @@
+-- Migration 005 backfilled source_text only where source != 'manual', to
+-- avoid claiming a capability created by hand. That also skipped rows that
+-- *were* imported and had merely been edited by hand — editing sets source
+-- to 'manual' too, and the two cases are indistinguishable from the column.
+--
+-- Such a row has no source_text, so the import falls back to matching on its
+-- current text. That holds until someone renames it, at which point nothing
+-- matches the document's wording and the import inserts a duplicate. One did.
+--
+-- Backfilling from the current text is right for every row that has not been
+-- renamed, which is every row this can still reach: the one that had been is
+-- repaired alongside this migration, and no row can enter this state again
+-- now that both 005 and this run before any rename.
+UPDATE capabilities SET source_text = text WHERE source_text IS NULL;

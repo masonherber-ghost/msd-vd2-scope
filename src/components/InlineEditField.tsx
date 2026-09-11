@@ -25,6 +25,8 @@ export type InlineEditFieldProps = {
   variant?: 'field' | 'heading'
   /** Class for the heading, so the caller keeps its own type styling. */
   headingClassName?: string
+  /** Button label when there is no value yet — "Add a question", not "Edit". */
+  addLabel?: string
 }
 
 /**
@@ -43,6 +45,7 @@ export function InlineEditField({
   onDirtyChange,
   variant = 'field',
   headingClassName,
+  addLabel,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -119,7 +122,7 @@ export function InlineEditField({
           {!displayValue && !value ? <em>Not set</em> : null}
         </span>
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-          Edit {label.toLowerCase()}
+          {!value && addLabel ? addLabel : `Edit ${label.toLowerCase()}`}
         </Button>
       </div>
     )

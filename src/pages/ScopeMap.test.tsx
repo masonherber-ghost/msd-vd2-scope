@@ -2170,3 +2170,86 @@ describe('ScopeMap — editing a capability’s text', () => {
     expect(screen.getByLabelText('Capability text')).toHaveValue('Something else')
   })
 })
+
+describe('ScopeMap — raising a question on a capability', () => {
+  const openCapability = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage('/?view=capability')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }))
+    return screen.getByRole('complementary', { name: /^Capability:/ })
+  }
+
+  it('saves a question against the capability', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+
+    await user.click(within(panel).getByRole('button', { name: 'Add a question' }))
+    await user.type(screen.getByLabelText('Question'), 'Is this in or out of R1.1?')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(state.capabilityMoves).toHaveLength(1))
+    expect(state.capabilityMoves[0]).toEqual({
+      id: 12,
+      patch: { question: 'Is this in or out of R1.1?' },
+    })
+  })
+
+  it('shows it as a warning once saved, without a reload', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+
+    await user.click(within(panel).getByRole('button', { name: 'Add a question' }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('note')).toHaveTextContent('Question: Who owns this?'),
+    )
+  })
+
+  it('badges the card, alongside the conflict badges', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      capabilities: base.capabilities.map((c) =>
+        c.id === 12 ? { ...c, question: 'Still needed?' } : c,
+      ),
+    }
+    renderPage('/?view=capability')
+
+    const card = await waitFor(
+      () =>
+        screen
+          .getByRole('button', { name: /^Electronic T&Cs acceptance/ })
+          .closest('article') as HTMLElement,
+    )
+    expect(within(card).getByTitle('A question has been raised')).toHaveTextContent(
+      '1 question',
+    )
+    // The conflict badges are still there beside it.
+    expect(within(card).getByText(/2 conflicts/)).toBeInTheDocument()
+    expect(within(card).getByText(/1 unmatched/)).toBeInTheDocument()
+  })
+
+  it('filters to capabilities carrying a question', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      capabilities: base.capabilities.map((c) =>
+        c.id === 12 ? { ...c, question: 'Still needed?' } : c,
+      ),
+    }
+    renderPage('/?view=capability&conflict=question')
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByRole('button', { name: /MSD feature 9\d\d$/ })).toHaveLength(1)
+  })
+})

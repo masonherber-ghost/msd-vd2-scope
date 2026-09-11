@@ -27,6 +27,9 @@ export type CapabilityCardModel = {
   ownerAmbiguous: boolean
   releaseId: string | null
   phaseId: string | null
+  /** A question someone raised about it. Not a source disagreement — a
+   *  person flagging something that needs an answer — but shown like one. */
+  question: string | null
   source: string
   /** The MSD feature that owns it, where the ref resolved to one. */
   mvpFeature: { id: number; ref: number; scopeOption: '1A' | '1B' | null; title: string } | null
@@ -83,6 +86,7 @@ export function buildCapabilityCards(graph: ScopeGraph): CapabilityCardModel[] {
         ownerAmbiguous: capability.mvp_owner_ambiguous === 1,
         releaseId: capability.release_id,
         phaseId: capability.phase_id,
+        question: capability.question,
         source: capability.source,
         mvpFeature: mvp
           ? { id: mvp.id, ref: mvp.ref, scopeOption: mvp.scope_option, title: mvp.title }
@@ -139,11 +143,13 @@ export function applyCapabilityFilters(
         if (kind === 'phase') return card.conflicts.phase > 0
         if (kind === 'unmatched') return card.conflicts.unmatched > 0
         if (kind === 'unreviewed') return card.conflicts.unreviewed > 0
+        if (kind === 'question') return card.question !== null
         if (kind === 'none') {
           return (
             card.conflicts.release === 0 &&
             card.conflicts.phase === 0 &&
-            card.conflicts.unmatched === 0
+            card.conflicts.unmatched === 0 &&
+            card.question === null
           )
         }
         // `corrected` marks a feature the sources were overridden for, which

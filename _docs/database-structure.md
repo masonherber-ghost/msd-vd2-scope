@@ -58,6 +58,10 @@ one forever (R-9.9).
 An upsert onto either must repeat the same expression in its `ON CONFLICT`
 target, or SQLite cannot match the index.
 
+**`capabilities.question`** holds a question someone raised about a capability. It is not
+a source disagreement, so it stays out of every conflict count, and setting it does not
+flip `source` to `manual` — an annotation is not an edit of what the document said.
+
 **`capabilities.source_text` is what the import matches on, not `text`.**
 Identity by wording is right for the documents and wrong the moment someone
 corrects a typo: the import still carries the original text, matches nothing,

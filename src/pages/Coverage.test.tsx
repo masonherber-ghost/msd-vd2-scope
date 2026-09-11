@@ -113,6 +113,7 @@ describe('Coverage', () => {
           release_id: '1.1',
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
+          question: null,
           source: 'sequencing',
         },
         {
@@ -125,6 +126,7 @@ describe('Coverage', () => {
           release_id: '1.1',
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
+          question: null,
           source: 'sequencing',
         },
       ],

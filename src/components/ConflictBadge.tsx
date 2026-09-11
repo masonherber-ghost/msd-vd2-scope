@@ -4,7 +4,7 @@ export type ConflictBadgeProps = {
   count: number
   /** Unreviewed conflicts are the ones that still need a decision. */
   state?: ResolutionState
-  kind?: 'conflict' | 'unmatched'
+  kind?: 'conflict' | 'unmatched' | 'question'
 }
 
 /**
@@ -19,15 +19,28 @@ export function ConflictBadge({
   if (count <= 0) return null
 
   const unreviewed = state === 'unreviewed'
-  const noun = kind === 'unmatched' ? 'unmatched' : `conflict${count === 1 ? '' : 's'}`
+  const noun =
+    kind === 'unmatched'
+      ? 'unmatched'
+      : kind === 'question'
+        ? `question${count === 1 ? '' : 's'}`
+        : `conflict${count === 1 ? '' : 's'}`
+  // A question is asking, not warning: "?" rather than "!".
+  const glyph = unreviewed ? (kind === 'question' ? '?' : '!') : '✓'
 
   return (
     <span
       className={`conflict-badge conflict-badge--${unreviewed ? 'unreviewed' : 'reviewed'}`}
-      title={unreviewed ? 'Not yet reviewed' : RESOLUTION_LABEL[state]}
+      title={
+        kind === 'question'
+          ? 'A question has been raised'
+          : unreviewed
+            ? 'Not yet reviewed'
+            : RESOLUTION_LABEL[state]
+      }
     >
       <span className="conflict-badge__glyph" aria-hidden="true">
-        {unreviewed ? '!' : '✓'}
+        {glyph}
       </span>
       {count} {noun}
       {unreviewed ? '' : ' · reviewed'}

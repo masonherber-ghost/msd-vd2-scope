@@ -311,3 +311,18 @@ describe('helpers', () => {
     expect(withoutGroup(state, 'release')).toEqual(withFilters({ actor: ['staff'] }))
   })
 })
+
+describe('the question filter value', () => {
+  it('survives a round trip through the URL', () => {
+    const params = writeFilters({ ...EMPTY_FILTERS, conflict: ['question'] }, new URLSearchParams())
+    expect(parseFilters(params).conflict).toEqual(['question'])
+  })
+
+  it('narrows features to nothing rather than matching them all', () => {
+    // A question is raised against a capability. In the feature views this
+    // must exclude everything, not silently pass everything through.
+    expect(
+      applyFilters(features, { ...EMPTY_FILTERS, conflict: ['question'] }),
+    ).toEqual([])
+  })
+})

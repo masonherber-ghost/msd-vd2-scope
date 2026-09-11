@@ -468,6 +468,24 @@ describe('importScope keeps a renamed capability, rather than duplicating it', (
     expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual(before)
   })
 
+  it('still matches a row that was manual before it was renamed', () => {
+    // The gap migration 007 closes: a row edited by hand before source_text
+    // existed had none, so a later rename left nothing matching the
+    // document's wording and the import inserted a duplicate.
+    importScope(reconciled)
+    const target = first()
+    db.prepare(
+      "UPDATE capabilities SET source = 'manual', source_text = NULL WHERE id = ?",
+    ).run(target.id)
+    // Migration 007 backfills it before any rename can strand it.
+    db.prepare('UPDATE capabilities SET source_text = text WHERE source_text IS NULL').run()
+    updateCapability(target.id, { text: 'Renamed after going manual' })
+
+    const before = db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()
+    importScope(reconciled)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual(before)
+  })
+
   it('never claims a capability created by hand', () => {
     importScope(reconciled)
     const before = db.prepare('SELECT COUNT(*) AS n FROM capabilities').get() as { n: number }
@@ -484,6 +502,38 @@ describe('importScope keeps a renamed capability, rather than duplicating it', (
     expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual({
       n: before.n + 1,
     })
+  })
+})
+
+describe('importScope leaves a question alone', () => {
+  it('never clears one a person raised', () => {
+    importScope(reconciled)
+    const target = db
+      .prepare('SELECT id FROM capabilities ORDER BY id LIMIT 1')
+      .get() as { id: number }
+    updateCapability(target.id, { question: 'Is this actually in scope?' })
+
+    importScope(reconciled)
+
+    expect(
+      db.prepare('SELECT question FROM capabilities WHERE id = ?').get(target.id),
+    ).toEqual({ question: 'Is this actually in scope?' })
+  })
+
+  it('survives a question on a row the import otherwise refreshes', () => {
+    importScope(reconciled)
+    const target = db
+      .prepare("SELECT id FROM capabilities WHERE source != 'manual' ORDER BY id LIMIT 1")
+      .get() as { id: number }
+    // Set it directly, so the row keeps source != 'manual' and the import
+    // still refreshes its other columns.
+    db.prepare('UPDATE capabilities SET question = ? WHERE id = ?').run('Why?', target.id)
+
+    importScope(reconciled)
+
+    expect(
+      db.prepare('SELECT question FROM capabilities WHERE id = ?').get(target.id),
+    ).toEqual({ question: 'Why?' })
   })
 })
 

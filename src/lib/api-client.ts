@@ -56,6 +56,8 @@ export type CapabilityRow = {
   release_id: string | null
   phase_id: string | null
   source_phase_label: string | null
+  /** A question someone raised about this capability, or null. */
+  question: string | null
   source: string
 }
 
@@ -364,6 +366,8 @@ export const apiClient = {
         actor: CapabilityRow['actor']
         release_id: string
         phase_id: string
+        /** Null clears the question. */
+        question: string | null
       }>,
     ) =>
       request<CapabilityRow>(`/api/capabilities/${id}`, {

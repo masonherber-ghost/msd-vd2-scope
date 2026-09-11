@@ -107,3 +107,54 @@ describe('CapabilityDetailPanel — editing the text', () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)
   })
 })
+
+describe('CapabilityDetailPanel — questions', () => {
+  const withQuestion = { ...card, question: 'Is this in or out of R1.1?' }
+
+  it('offers nothing when the panel has no question handler', () => {
+    renderPanel()
+    expect(screen.queryByRole('button', { name: 'Add a question' })).not.toBeInTheDocument()
+  })
+
+  it('offers to add one when it has', () => {
+    renderPanel({ onSaveQuestion: vi.fn().mockResolvedValue(undefined) })
+    expect(screen.getByRole('button', { name: 'Add a question' })).toBeInTheDocument()
+  })
+
+  it('shows an existing question as a warning, like a conflict', () => {
+    renderPanel({ card: withQuestion })
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('Question: Is this in or out of R1.1?')
+    expect(note).toHaveClass('capability-detail__question')
+  })
+
+  it('saves a question', async () => {
+    const user = userEvent.setup()
+    const onSaveQuestion = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onSaveQuestion })
+
+    await user.click(screen.getByRole('button', { name: 'Add a question' }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSaveQuestion).toHaveBeenCalledWith('Who owns this?')
+  })
+
+  it('offers to edit rather than add once one exists', () => {
+    renderPanel({ card: withQuestion, onSaveQuestion: vi.fn() })
+    expect(screen.getByRole('button', { name: 'Edit question' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add a question' })).not.toBeInTheDocument()
+  })
+
+  it('clears the question when the text is emptied, rather than storing a blank', async () => {
+    const user = userEvent.setup()
+    const onSaveQuestion = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ card: withQuestion, onSaveQuestion })
+
+    await user.click(screen.getByRole('button', { name: 'Edit question' }))
+    await user.clear(screen.getByLabelText('Question'))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSaveQuestion).toHaveBeenCalledWith(null)
+  })
+})

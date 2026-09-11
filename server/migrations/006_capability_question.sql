@@ -1,0 +1,15 @@
+-- A question someone has raised about a capability: "is this in or out?",
+-- "who owns this?", "is this the same as 980?". It is not a disagreement
+-- between the two documents — it is a human flagging something for an answer —
+-- but it wants the same visibility a conflict gets, because it is the same
+-- kind of open item.
+--
+-- Kept on the capability rather than on a link: the question is about the
+-- capability itself, and every feature citing it should see the same one.
+--
+-- It stays out of the conflict counts on purpose. Those are the drift
+-- baseline for the two source documents, and a question is neither source's.
+--
+-- SQLite has no ADD COLUMN IF NOT EXISTS. Adding a nullable column is the
+-- normal way to extend a table, and the migration runner applies this once.
+ALTER TABLE capabilities ADD COLUMN question TEXT;

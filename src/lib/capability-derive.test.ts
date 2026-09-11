@@ -188,3 +188,48 @@ describe('blameCapabilityGroups', () => {
     ).toEqual(['actor'])
   })
 })
+
+describe('questions', () => {
+  const asked: ScopeGraph = {
+    ...graph,
+    capabilities: graph.capabilities.map((c) =>
+      c.id === 10 ? { ...c, question: 'Is this in R1.1?' } : c,
+    ),
+  }
+  const askedCards = buildCapabilityCards(asked)
+
+  it('carries the question onto the card', () => {
+    expect(askedCards.find((c) => c.id === 10)!.question).toBe('Is this in R1.1?')
+    expect(askedCards.find((c) => c.id === 11)!.question).toBeNull()
+  })
+
+  it('filters to the capabilities carrying one', () => {
+    expect(
+      applyCapabilityFilters(askedCards, { ...EMPTY_FILTERS, conflict: ['question'] }).map(
+        (c) => c.id,
+      ),
+    ).toEqual([10])
+  })
+
+  it('excludes a question from "no conflicts"', () => {
+    // A question is an open item. Answering "show me what is settled" with a
+    // capability someone has flagged would be wrong.
+    const settled = applyCapabilityFilters(askedCards, {
+      ...EMPTY_FILTERS,
+      conflict: ['none'],
+    }).map((c) => c.id)
+    expect(settled).not.toContain(10)
+    expect(settled).toContain(11)
+  })
+
+  it('keeps a question out of the conflict counts', () => {
+    // Those are the drift baseline for the two documents, and a question is
+    // neither document's.
+    expect(askedCards.find((c) => c.id === 10)!.conflicts).toEqual({
+      release: 0,
+      phase: 0,
+      unmatched: 0,
+      unreviewed: 0,
+    })
+  })
+})

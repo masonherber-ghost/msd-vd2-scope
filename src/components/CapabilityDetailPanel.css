@@ -196,3 +196,24 @@ button.capability-detail__feature:focus-visible {
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
+
+/* ========================================
+   QUESTION
+   ======================================== */
+
+/* Styled like a conflict warning, because it is the same kind of open item:
+   something a person still has to answer. */
+.capability-detail__question {
+  display: block;
+  margin: 0;
+  padding: var(--spacing-2);
+  border-left: 3px solid var(--color-destructive);
+  background-color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.capability-detail__question-label {
+  font-weight: 600;
+}

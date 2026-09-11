@@ -425,6 +425,15 @@ Opens beside the map — never over it, never as a route change that loses map s
   stands, or *move it to* a chosen release and phase. A capability has one placement
   shared by every feature citing it ([P-2](#p-2--a-capability-may-belong-to-many-pwc-features)),
   so the modal names the other features before the move, not after it.
+- **R-8.28** **A question can be raised against a capability**, as free text on the
+  capability itself so every feature citing it sees the same one. It shows with the same
+  weight as a conflict, badged on the card and called out in the detail, because it is the
+  same kind of open item: something a person still has to answer. It is deliberately **not**
+  counted in the conflict figures — those are the drift baseline for the two documents, and
+  a question is neither document's — and it does not mark the capability as manually
+  edited, because an annotation is not a change to what the document said. Emptying the
+  text clears it. Filter: *Question raised*, which is meaningful in the capability view and
+  narrows to nothing elsewhere.
 - **R-8.27** **One phase has one name.** Both parsers store the *canonical* phase name as
   `source_phase_label`, not each document's own heading for it. Storing the headings made
   the two documents' words for one phase read as a placement disagreement — 12 of them,

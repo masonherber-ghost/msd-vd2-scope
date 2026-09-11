@@ -11,13 +11,15 @@ export type CapabilityRow = {
   release_id: string | null
   phase_id: string | null
   source_phase_label: string | null
+  /** A question someone raised about this capability, or null. */
+  question: string | null
   source: string
   created_at: string
   updated_at: string
 }
 
 const COLUMNS = `id, mvp_feature_id, mvp_ref, mvp_owner_ambiguous, text, actor,
-  release_id, phase_id, source_phase_label, source, created_at, updated_at`
+  release_id, phase_id, source_phase_label, question, source, created_at, updated_at`
 
 let selectAll: Statement | undefined
 let selectByIdentity: Statement | undefined
@@ -159,16 +161,30 @@ export function updateCapability(
     actor?: string
     release_id?: string
     phase_id?: string
+    /** Null clears the question. */
+    question?: string | null
     /** Set when a hand-move needs the label to follow the phase. */
     source_phase_label?: string
   },
 ): CapabilityRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]
   if (fields.length === 0) return getCapabilityById(id)
+
+  // `source` records where the capability's *content* came from, and marking
+  // it manual stops the import refreshing the row. A question is an
+  // annotation on top of the document's capability, not a change to it, so
+  // asking one must not quietly freeze the row against future imports.
+  const SOURCE_DERIVED = ['text', 'actor', 'release_id', 'phase_id'] as const
+  const changesSource = fields.some((field) =>
+    (SOURCE_DERIVED as readonly string[]).includes(field),
+  )
+
   const assignments = fields.map((field) => `${field} = @${field}`).join(', ')
   return db
     .prepare(
-      `UPDATE capabilities SET ${assignments}, source = 'manual', updated_at = datetime('now')
+      `UPDATE capabilities
+          SET ${assignments}${changesSource ? ", source = 'manual'" : ''},
+              updated_at = datetime('now')
         WHERE id = @id RETURNING ${COLUMNS}`,
     )
     .get({ ...patch, id }) as CapabilityRow | undefined
