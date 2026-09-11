@@ -412,6 +412,17 @@ Opens beside the map — never over it, never as a route change that loses map s
 - **R-8.18** Where a feature has no mapped capabilities (F-008, F-029), state the source's
   own qualifier rather than rendering an empty section.
 - **R-8.19** Inline edit affordances on every field, per [§9](#9-crud-and-forms).
+- **R-8.23** **A capability conflict is resolved by deciding its placement**, in a modal
+  opened from the capability it concerns. Two ways out, because that is what the
+  disagreement offers: *keep it here*, which records that the capability's placement
+  stands, or *move it to* a chosen release and phase. A capability has one placement
+  shared by every feature citing it ([P-2](#p-2--a-capability-may-belong-to-many-pwc-features)),
+  so the modal names the other features before the move, not after it.
+- **R-8.24** **A move re-judges the conflict, it does not merely mark it.** Conflict flags
+  are derived at import; moving a capability or a feature through the UI recomputes them
+  for every link affected. A move that settles a disagreement removes it from the map and
+  the queue; a move that creates one adds it. The rules mirror the reconciler and are
+  asserted against it — recomputing a freshly imported graph must change nothing.
 - **R-8.22** **A conflict is decidable where it is shown.** Every capability the panel marks
   as disagreeing carries the same resolution states and note as the reconciliation queue,
   recorded against the *link* rather than the capability — a capability cited by several

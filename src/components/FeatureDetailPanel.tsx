@@ -7,12 +7,8 @@ import { ConflictBadge } from '@/components/ConflictBadge'
 import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
-import {
-  RESOLUTION_LABEL,
-  RESOLUTION_STATES,
-  SOURCE_LABEL,
-  type ResolutionState,
-} from '@/lib/validators'
+import { SOURCE_LABEL, type ResolutionState } from '@/lib/validators'
+import { CapabilityResolutionModal } from '@/components/CapabilityResolutionModal'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -52,13 +48,18 @@ export type FeatureDetailPanelProps = {
   linkedMvpIds?: number[]
   linkedCapabilityIds?: number[]
   /**
-   * Records a decision on one capability link, without leaving the panel
-   * (R-7.3). Omitted when the panel is read-only.
+   * Records that the capability's current placement stands, resolving the
+   * link without moving anything (R-7.3). Omitted when read-only.
    */
-  onResolveConflict?: (
-    linkId: number,
-    state: ResolutionState,
-    note: string | null,
+  onKeepCapability?: (linkId: number, note: string | null) => Promise<unknown>
+  /**
+   * Moves a capability. One placement is shared by every feature citing it
+   * (PRD §16 P-2), so this is not local to the open feature.
+   */
+  onMoveCapability?: (
+    capabilityId: number,
+    releaseId: string,
+    phaseId: string,
   ) => Promise<unknown>
   /** Assumption editing, including explicit reordering (R-9.8). */
   onAddAssumption?: (text: string) => Promise<unknown>
@@ -85,7 +86,8 @@ export function FeatureDetailPanel({
   onSetCapabilityLinks,
   linkedMvpIds = [],
   linkedCapabilityIds = [],
-  onResolveConflict,
+  onKeepCapability,
+  onMoveCapability,
   onAddAssumption,
   onEditAssumption,
   onMoveAssumption,
@@ -363,7 +365,10 @@ export function FeatureDetailPanel({
                           : undefined
                       }
                       editorOpen={capabilityEditorOpen}
-                      onResolveConflict={onResolveConflict}
+                      onKeep={onKeepCapability}
+                      onMove={onMoveCapability}
+                      releaseOptions={releaseOptions}
+                      phaseOptions={phaseOptions}
                     />
                   </li>
                 ))}
@@ -511,18 +516,20 @@ function CapabilityRow({
   detail,
   onOpenEditor,
   editorOpen,
-  onResolveConflict,
+  onKeep,
+  onMove,
+  releaseOptions,
+  phaseOptions,
 }: {
   capability: DetailCapability
   detail: FeatureDetail
   /** Tapping the capability that is there opens the lookup. */
   onOpenEditor?: () => void
   editorOpen?: boolean
-  onResolveConflict?: (
-    linkId: number,
-    state: ResolutionState,
-    note: string | null,
-  ) => Promise<unknown>
+  onKeep?: (linkId: number, note: string | null) => Promise<unknown>
+  onMove?: (capabilityId: number, releaseId: string, phaseId: string) => Promise<unknown>
+  releaseOptions?: { value: string; label: string }[]
+  phaseOptions?: { value: string; label: string }[]
 }) {
   const differs = capability.releaseDiffers || capability.phaseDiffers
   // Exactly what the reconciliation queue lists, so the same set of findings
@@ -531,6 +538,8 @@ function CapabilityRow({
     capability.releaseConflict ||
     (capability.phaseConflict && !capability.phaseConflictMerged) ||
     !capability.matched
+  const canResolve = resolvable && onKeep !== undefined && onMove !== undefined
+  const [resolving, setResolving] = useState(false)
 
   return (
     <div className="feature-detail__capability">
@@ -605,117 +614,38 @@ function CapabilityRow({
         </div>
       ) : null}
 
-      {onResolveConflict && resolvable ? (
-        <CapabilityResolution
-          capability={capability}
-          onResolve={onResolveConflict}
-        />
+      {canResolve ? (
+        <div className="feature-detail__resolution">
+          <div className="feature-detail__resolution-head">
+            <ConflictBadge
+              count={1}
+              state={capability.resolutionState as ResolutionState}
+              kind={capability.matched ? 'conflict' : 'unmatched'}
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setResolving(true)}>
+            {capability.resolutionState === 'unreviewed' ? 'Resolve' : 'Change decision'}
+          </Button>
+          {resolving ? (
+            <CapabilityResolutionModal
+              open={resolving}
+              onOpenChange={setResolving}
+              capability={capability}
+              detail={detail}
+              releaseOptions={releaseOptions ?? []}
+              phaseOptions={phaseOptions ?? []}
+              // The note is not edited here, but it must survive: one may
+              // have been written in the reconciliation queue.
+              onKeep={() => onKeep!(capability.linkId, capability.resolutionNote)}
+              onMove={(releaseId, phaseId) =>
+                onMove!(capability.id, releaseId, phaseId)
+              }
+            />
+          ) : null}
+        </div>
       ) : null}
     </div>
   )
 }
 
-/**
- * The decision on one capability link, made where the disagreement is shown
- * rather than only in the reconciliation queue (R-7.3). Same states and the
- * same note as the queue — one decision, two places to reach it.
- *
- * A phase disagreement the canonical merge already settles is not offered:
- * both sides mean the same phase, so there is nothing to decide.
- */
-function CapabilityResolution({
-  capability,
-  onResolve,
-}: {
-  capability: DetailCapability
-  onResolve: (
-    linkId: number,
-    state: ResolutionState,
-    note: string | null,
-  ) => Promise<unknown>
-}) {
-  const [note, setNote] = useState(capability.resolutionNote ?? '')
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
-  const save = async (state: ResolutionState, nextNote: string | null) => {
-    setSaving(true)
-    setError(null)
-    try {
-      await onResolve(capability.linkId, state, nextNote)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not save that decision.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const state = capability.resolutionState as ResolutionState
-  const resolved = state !== 'unreviewed'
-  const selectId = `detail-resolution-${capability.linkId}`
-  const noteId = `detail-resolution-note-${capability.linkId}`
-
-  return (
-    <div className="feature-detail__resolution">
-      <div className="feature-detail__resolution-head">
-        <ConflictBadge
-          count={1}
-          state={state}
-          kind={capability.matched ? 'conflict' : 'unmatched'}
-        />
-      </div>
-
-      {error ? (
-        <p role="alert" className="feature-detail__resolution-error">
-          {error}
-        </p>
-      ) : null}
-
-      <label className="sr-only" htmlFor={selectId}>
-        Resolution for {capability.text}
-      </label>
-      <select
-        id={selectId}
-        className="feature-detail__resolution-select"
-        value={state}
-        disabled={saving}
-        onChange={(event) =>
-          void save(event.target.value as ResolutionState, note.trim() || null)
-        }
-      >
-        {RESOLUTION_STATES.map((option) => (
-          <option key={option} value={option}>
-            {RESOLUTION_LABEL[option]}
-          </option>
-        ))}
-      </select>
-
-      <label className="sr-only" htmlFor={noteId}>
-        Note for {capability.text}
-      </label>
-      <input
-        id={noteId}
-        className="feature-detail__resolution-note"
-        placeholder="Add a note"
-        value={note}
-        disabled={saving}
-        onChange={(event) => setNote(event.target.value)}
-        onBlur={() => {
-          if ((capability.resolutionNote ?? '') === note.trim()) return
-          void save(state, note.trim() || null)
-        }}
-      />
-
-      {resolved ? (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={saving}
-          onClick={() => void save('unreviewed', note.trim() || null)}
-        >
-          Reopen
-        </Button>
-      ) : null}
-    </div>
-  )
-}

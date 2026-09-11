@@ -29,6 +29,12 @@ export type DetailCapability = {
   capabilityPhaseLabel: string | null
   citations: number
   ownerAmbiguous: boolean
+  /**
+   * Other PwC features citing this capability. A capability has one
+   * placement shared by all of them (PRD §16 P-2), so these are everyone a
+   * move would affect — named before the move, not after.
+   */
+  otherFeatures: { id: string; name: string }[]
 }
 
 export type DetailActorGroup = {
@@ -94,6 +100,17 @@ export function buildFeatureDetail(
     (l) => l.pwc_feature_id === feature.id,
   )
 
+  // Who else cites each capability, for the move warning.
+  const citersByCapability = new Map<number, { id: string; name: string }[]>()
+  for (const link of graph.featureCapabilityLinks) {
+    if (link.pwc_feature_id === feature.id) continue
+    const other = graph.pwcFeatures.find((f) => f.id === link.pwc_feature_id)
+    if (!other) continue
+    const list = citersByCapability.get(link.capability_id) ?? []
+    list.push({ id: other.id, name: other.name })
+    citersByCapability.set(link.capability_id, list)
+  }
+
   const capabilities: DetailCapability[] = []
   let unreviewed = 0
   let releaseConflicts = 0
@@ -146,6 +163,9 @@ export function buildFeatureDetail(
       capabilityPhaseLabel: link.capability_phase_label,
       citations: link.source_citations,
       ownerAmbiguous: capability.mvp_owner_ambiguous === 1,
+      otherFeatures: (citersByCapability.get(capability.id) ?? []).sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
     })
   }
 

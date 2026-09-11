@@ -19,6 +19,7 @@ const { state } = await vi.hoisted(async () => ({
     mvpLinkCalls: [] as { id: string; mvpFeatureIds: number[] }[],
     capabilityLinkCalls: [] as { id: string; capabilityIds: number[] }[],
     resolved: [] as { id: number; body: unknown }[],
+    capabilityMoves: [] as { id: number; patch: Record<string, unknown> }[],
   },
 }))
 
@@ -66,6 +67,33 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
             deleted: 1,
             cascaded: { assumptions: 0, mvpLinks: 0, capabilityLinks: 0 },
           }
+        },
+      },
+      capabilities: {
+        update: async (id: number, patch: Record<string, unknown>) => {
+          failWrite()
+          state.capabilityMoves.push({ id, patch })
+          // Mirror the move, and re-judge the links the way the server does,
+          // so the test sees what a real round trip would show.
+          const graph = state.graph as ScopeGraph
+          const moved = graph.capabilities.map((c) =>
+            c.id === id ? { ...c, ...patch } : c,
+          )
+          const byId = new Map(moved.map((c) => [c.id, c]))
+          const featureById = new Map(graph.pwcFeatures.map((f) => [f.id, f]))
+          state.graph = {
+            ...graph,
+            capabilities: moved,
+            featureCapabilityLinks: graph.featureCapabilityLinks.map((link) => {
+              if (link.capability_id !== id) return link
+              const c = byId.get(link.capability_id)
+              const f = featureById.get(link.pwc_feature_id)
+              const conflict =
+                c?.release_id != null && f != null && c.release_id !== f.release_id
+              return { ...link, release_conflict: conflict ? 1 : 0 }
+            }),
+          } as ScopeGraph
+          return {} as never
         },
       },
       conflicts: {
@@ -158,6 +186,7 @@ beforeEach(() => {
   state.mvpLinkCalls = []
   state.capabilityLinkCalls = []
   state.resolved = []
+  state.capabilityMoves = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -1663,9 +1692,9 @@ describe('ScopeMap — an empty MSD view names the right filter', () => {
   })
 })
 
-describe('ScopeMap — resolving a conflict from the feature detail panel', () => {
-  /** F-002 cites capability 12, whose link (id 102) carries both conflicts. */
-  const openF002 = async () => {
+describe('ScopeMap — resolving a capability conflict in a modal', () => {
+  /** F-002 cites capability 12 (link 102), which carries both conflicts. */
+  const openPanel = async () => {
     renderPage('/?selected=F-002')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
@@ -1673,11 +1702,15 @@ describe('ScopeMap — resolving a conflict from the feature detail panel', () =
     return screen.getByRole('region', { name: 'Verify employer' })
   }
 
-  it('offers a decision on a capability that conflicts', async () => {
-    const panel = await openF002()
-    expect(
-      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
-    ).toBeInTheDocument()
+  const openModal = async (user: ReturnType<typeof userEvent.setup>) => {
+    const panel = await openPanel()
+    await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
+    return screen.getByRole('dialog')
+  }
+
+  it('offers Resolve on a capability that conflicts', async () => {
+    const panel = await openPanel()
+    expect(within(panel).getByRole('button', { name: 'Resolve' })).toBeInTheDocument()
   })
 
   it('offers none on a capability that agrees', async () => {
@@ -1685,126 +1718,172 @@ describe('ScopeMap — resolving a conflict from the feature detail panel', () =
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
     )
-    const panel = screen.getByRole('region', { name: 'Invite employer' })
-    // F-001's link 100 has no conflict at all, so there is nothing to decide.
+    // F-001's links either agree or are a merged phase label, which the
+    // canonical merge already settles.
     expect(
-      within(panel).queryByLabelText(/Resolution for Invite employer to register/i),
+      within(screen.getByRole('region', { name: 'Invite employer' })).queryByRole(
+        'button',
+        { name: 'Resolve' },
+      ),
     ).not.toBeInTheDocument()
   })
 
-  it('offers none where the canonical merge already settled the phase', async () => {
-    renderPage('/?selected=F-001')
-    await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
-    )
-    const panel = screen.getByRole('region', { name: 'Invite employer' })
-    // Link 101 is a merged phase conflict: both sides mean the same phase.
-    expect(
-      within(panel).getByText(/Labelled differently:/i),
-    ).toBeInTheDocument()
-    expect(
-      within(panel).queryByLabelText(/Resolution for Receive secure email invite/i),
-    ).not.toBeInTheDocument()
-  })
-
-  it('records the decision against the link, not the capability', async () => {
+  it('opens a dialog showing both placements', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
+    const dialog = await openModal(user)
+    expect(within(dialog).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
+    expect(within(dialog).getByText(/F-002 ships in Release 1\.1/)).toBeInTheDocument()
+    expect(
+      within(dialog).getByText(/delivers this capability in Release 1\.4/),
+    ).toBeInTheDocument()
+  })
 
-    await user.selectOptions(
-      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
-      'table_wins',
-    )
+  it('defaults to keeping it, and resolves the link on confirm', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+
+    expect(within(dialog).getByRole('radio', { name: /Keep it here/ })).toBeChecked()
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => expect(state.resolved).toHaveLength(1))
-    // 102 is the link id; 12 is the capability. Resolving the capability
-    // would decide it for every feature citing it.
+    // Keeping it means the capability's own placement stands.
     expect(state.resolved[0]).toEqual({
       id: 102,
       body: { resolution_state: 'table_wins', resolution_note: null },
     })
+    expect(state.capabilityMoves).toHaveLength(0)
   })
 
-  it('saves a note against the decision', async () => {
+  it('keeps a note written in the reconciliation queue', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      featureCapabilityLinks: base.featureCapabilityLinks.map((l) =>
+        l.id === 102 ? { ...l, resolution_note: 'Raised with PwC on 3 Sept' } : l,
+      ),
+    }
 
-    const note = within(panel).getByLabelText(/Note for Electronic T&Cs acceptance/i)
-    await user.type(note, 'Confirmed with the delivery lead')
-    await user.tab()
+    const dialog = await openModal(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() => expect(state.resolved).toHaveLength(1))
+    // The modal has no note field, but confirming must not erase one.
     expect(state.resolved[0].body).toEqual({
-      resolution_state: 'unreviewed',
-      resolution_note: 'Confirmed with the delivery lead',
+      resolution_state: 'table_wins',
+      resolution_note: 'Raised with PwC on 3 Sept',
     })
   })
 
-  it('does not write when the note has not changed', async () => {
+  it('moves the capability instead, when asked', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
-    await user.click(within(panel).getByLabelText(/Note for Electronic T&Cs acceptance/i))
-    await user.tab()
+    const dialog = await openModal(user)
+
+    await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
+
+    await waitFor(() => expect(state.capabilityMoves).toHaveLength(1))
+    // Defaults to the feature's own cell, which is the common case.
+    expect(state.capabilityMoves[0]).toEqual({
+      id: 12,
+      patch: { release_id: '1.1', phase_id: 'access-and-onboarding' },
+    })
+    // A move is the decision; it does not also record a resolution state.
     expect(state.resolved).toHaveLength(0)
   })
 
-  it('offers to reopen once resolved, and does', async () => {
+  it('moves it somewhere else entirely when a different cell is chosen', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
+    const dialog = await openModal(user)
 
+    await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
+    await user.selectOptions(within(dialog).getByLabelText('Release'), '1.4')
     await user.selectOptions(
-      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
-      'both_correct',
+      within(dialog).getByLabelText('Phase'),
+      'manage-vacancies',
     )
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Reopen' })).toBeInTheDocument(),
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Reopen' }))
-    await waitFor(() => expect(state.resolved).toHaveLength(2))
-    expect(state.resolved[1].body).toMatchObject({ resolution_state: 'unreviewed' })
+    // 1.4 / Manage Vacancies is where it already sits, so Confirm is blocked.
+    expect(within(dialog).getByRole('button', { name: 'Confirm' })).toBeDisabled()
+    expect(within(dialog).getByText(/where it already sits/i)).toBeInTheDocument()
   })
 
-  it('surfaces a rejected decision without losing the panel', async () => {
+  it('names the other features a move would affect (P-2)', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
-    state.writeFail = 'That conflict was already resolved by someone else.'
+    const base = makeScopeGraph()
+    // Give F-001 a link to the same capability, so the move is shared.
+    state.graph = {
+      ...base,
+      featureCapabilityLinks: [
+        ...base.featureCapabilityLinks,
+        {
+          ...base.featureCapabilityLinks[2],
+          id: 103,
+          pwc_feature_id: 'F-001',
+        },
+      ],
+    }
 
-    await user.selectOptions(
-      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
-      'mapping_wins',
-    )
+    const dialog = await openModal(user)
+    await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
+
+    expect(
+      within(dialog).getByText(/also cited by F-001/),
+    ).toBeInTheDocument()
+    expect(within(dialog).getByText(/moving it moves it for that feature too/i)).toBeInTheDocument()
+  })
+
+  it('says nothing about other features when nothing else cites it', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+    await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
+    expect(within(dialog).queryByText(/also cited by/)).not.toBeInTheDocument()
+  })
+
+  it('closes without writing when cancelled', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(state.resolved).toHaveLength(0)
+    expect(state.capabilityMoves).toHaveLength(0)
+  })
+
+  it('surfaces a rejected write and keeps the dialog open', async () => {
+    const user = userEvent.setup()
+    const dialog = await openModal(user)
+    state.writeFail = 'Someone else moved that capability.'
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
     await waitFor(() =>
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'That conflict was already resolved by someone else.',
+      expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
+        'Someone else moved that capability.',
       ),
     )
-    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
   })
 
-  it('clears the unreviewed badge on the card once decided', async () => {
+  it('clears the conflict on the card once the capability is moved to meet it', async () => {
     const user = userEvent.setup()
-    const panel = await openF002()
-
-    // The card carries no aria-label of its own — its select button does —
-    // so reach the card through the button.
     const card = () =>
       screen.getByRole('button', { name: /^F-002 / }).closest('article') as HTMLElement
 
-    // F-002's link carries a release and an unmerged phase conflict.
+    const panel = await openPanel()
+    // Checked before opening: Radix marks the rest of the page inert while
+    // the dialog is up, so the card is not queryable until it closes.
     expect(within(card()).getByTitle('Not yet reviewed')).toHaveTextContent('2 conflicts')
 
-    await user.selectOptions(
-      within(panel).getByLabelText(/Resolution for Electronic T&Cs acceptance/i),
-      'table_wins',
-    )
+    await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
-    // The map badge reads the same resolution state, so deciding here has to
-    // reach the card without a reload.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // The release conflict is gone because the capability now sits with the
+    // feature — the badge drops from 2 to 1, it is not merely marked decided.
     await waitFor(() =>
-      expect(within(card()).queryByTitle('Not yet reviewed')).not.toBeInTheDocument(),
+      expect(within(card()).getByTitle('Not yet reviewed')).toHaveTextContent('1 conflict'),
     )
-    expect(within(card()).getByText(/2 conflicts · reviewed/)).toBeInTheDocument()
   })
 })

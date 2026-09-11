@@ -95,7 +95,14 @@ export function createCapability(row: {
 
 export function updateCapability(
   id: number,
-  patch: { text?: string; actor?: string; release_id?: string; phase_id?: string },
+  patch: {
+    text?: string
+    actor?: string
+    release_id?: string
+    phase_id?: string
+    /** Set when a hand-move needs the label to follow the phase. */
+    source_phase_label?: string
+  },
 ): CapabilityRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]
   if (fields.length === 0) return getCapabilityById(id)

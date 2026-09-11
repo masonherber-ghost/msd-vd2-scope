@@ -26,6 +26,7 @@ import {
   updatePwcFeature,
 } from '../repositories/pwc-feature-repository.js'
 import { getAllReleases } from '../repositories/release-repository.js'
+import { recomputeConflictsForFeature } from '../services/conflict-recompute.js'
 
 export const featuresRouter = Router()
 
@@ -73,6 +74,13 @@ featuresRouter.patch('/:id', (req, res) => {
 
   const updated = updatePwcFeature(id, parsed.data)
   if (!updated) throw new HttpError(500, `Could not update feature ${id}.`)
+
+  // Moving a feature changes what its capabilities disagree with, so the
+  // flags have to follow it or the map keeps reporting the old answer.
+  if (parsed.data.release_id !== undefined || parsed.data.phase_id !== undefined) {
+    recomputeConflictsForFeature(id)
+  }
+
   res.json(updated)
 })
 

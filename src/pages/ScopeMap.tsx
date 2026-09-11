@@ -23,6 +23,7 @@ import {
   useMoveAssumption,
   useResolveConflict,
   useUpdateAssumption,
+  useUpdateCapability,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
@@ -298,6 +299,7 @@ export default function ScopeMap() {
   const moveAssumption = useMoveAssumption()
   const removeAssumption = useDeleteAssumption()
   const resolveConflict = useResolveConflict()
+  const updateCapability = useUpdateCapability()
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
   const nextId = useNextFeatureId(creatingIn !== null)
@@ -751,8 +753,16 @@ export default function ScopeMap() {
               onSetCapabilityLinks={(capabilityIds) =>
                 setCapabilityLinks.mutateAsync({ id: detail.id, capabilityIds })
               }
-              onResolveConflict={(linkId, state, note) =>
-                resolveConflict.mutateAsync({ id: linkId, state, note })
+              onKeepCapability={(linkId, note) =>
+                // Keeping it means the capability's placement stands, which
+                // is the MSD sequencing being right.
+                resolveConflict.mutateAsync({ id: linkId, state: 'table_wins', note })
+              }
+              onMoveCapability={(capabilityId, releaseId, phaseId) =>
+                updateCapability.mutateAsync({
+                  id: capabilityId,
+                  patch: { release_id: releaseId, phase_id: phaseId },
+                })
               }
               onAddAssumption={(text) =>
                 addAssumption.mutateAsync({ featureId: detail.id, text })

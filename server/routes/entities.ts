@@ -57,6 +57,7 @@ import {
   getRelease,
   updateRelease,
 } from '../repositories/release-repository.js'
+import { recomputeConflictsForCapability } from '../services/conflict-recompute.js'
 
 /** Every handler here is synchronous, so `throw` reaches the error middleware. */
 
@@ -345,7 +346,23 @@ capabilitiesRouter.patch('/:id', (req, res) => {
   if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
   assertCapabilityPlacement(parsed.data.release_id, parsed.data.phase_id)
 
-  res.json(updateCapability(id, parsed.data))
+  const patch: Parameters<typeof updateCapability>[1] = { ...parsed.data }
+  // A phase conflict is measured on the source labels, so a hand-moved
+  // capability has to carry the label of where it now is. Leaving the
+  // document's old label would have it disagreeing with its own phase.
+  if (patch.phase_id !== undefined) {
+    patch.source_phase_label = getPhase(patch.phase_id)?.name ?? patch.phase_id
+  }
+
+  const updated = updateCapability(id, patch)
+
+  if (patch.release_id !== undefined || patch.phase_id !== undefined) {
+    // One placement, shared by every feature citing it (PRD §16 P-2), so
+    // every one of those links is re-judged.
+    recomputeConflictsForCapability(id)
+  }
+
+  res.json(updated)
 })
 
 capabilitiesRouter.delete('/:id', (req, res) => {

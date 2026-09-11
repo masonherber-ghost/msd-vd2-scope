@@ -38,6 +38,10 @@ let removeMvpLink: Statement | undefined
 let addCapabilityLink: Statement | undefined
 let removeCapabilityLink: Statement | undefined
 let liveMvpLinksFor: Statement | undefined
+let conflictInputsByCapability: Statement | undefined
+let conflictInputsByFeature: Statement | undefined
+let allConflictInputs: Statement | undefined
+let updateConflictFlags: Statement | undefined
 let liveCapabilityLinksFor: Statement | undefined
 let selectLink: Statement | undefined
 let setResolution: Statement | undefined
@@ -263,4 +267,87 @@ export function resolveConflict(
   `)
   setResolution.run({ id, state, note })
   return getFeatureCapabilityLink(id)
+}
+
+/** Everything the conflict rules need about one live link, joined up. */
+export type ConflictInputs = {
+  link_id: number
+  pwc_feature_id: string
+  capability_id: number
+  matched: number
+  feature_release_id: string
+  feature_phase_id: string
+  feature_phase_label: string | null
+  capability_release_id: string | null
+  capability_phase_id: string | null
+  capability_phase_label: string | null
+  release_conflict: number
+  phase_conflict: number
+  phase_conflict_merged: number
+}
+
+const CONFLICT_INPUTS_SQL = `
+  SELECT l.id                   AS link_id,
+         l.pwc_feature_id       AS pwc_feature_id,
+         l.capability_id        AS capability_id,
+         l.matched              AS matched,
+         l.release_conflict     AS release_conflict,
+         l.phase_conflict       AS phase_conflict,
+         l.phase_conflict_merged AS phase_conflict_merged,
+         f.release_id           AS feature_release_id,
+         f.phase_id             AS feature_phase_id,
+         f.source_phase_label   AS feature_phase_label,
+         c.release_id           AS capability_release_id,
+         c.phase_id             AS capability_phase_id,
+         c.source_phase_label   AS capability_phase_label
+    FROM pwc_feature_capabilities l
+    JOIN pwc_features f ON f.id = l.pwc_feature_id
+    JOIN capabilities c ON c.id = l.capability_id
+   WHERE l.removed_at IS NULL`
+
+/** Live links to one capability — every feature a move would affect. */
+export function getConflictInputsForCapability(capabilityId: number): ConflictInputs[] {
+  conflictInputsByCapability ??= db.prepare(
+    `${CONFLICT_INPUTS_SQL} AND l.capability_id = ? ORDER BY l.id`,
+  )
+  return conflictInputsByCapability.all(capabilityId) as ConflictInputs[]
+}
+
+/** Live links from one feature — every link a feature move would affect. */
+export function getConflictInputsForFeature(featureId: string): ConflictInputs[] {
+  conflictInputsByFeature ??= db.prepare(
+    `${CONFLICT_INPUTS_SQL} AND l.pwc_feature_id = ? ORDER BY l.id`,
+  )
+  return conflictInputsByFeature.all(featureId) as ConflictInputs[]
+}
+
+/** Every live link, for the check that recompute agrees with the import. */
+export function getAllConflictInputs(): ConflictInputs[] {
+  allConflictInputs ??= db.prepare(`${CONFLICT_INPUTS_SQL} ORDER BY l.id`)
+  return allConflictInputs.all() as ConflictInputs[]
+}
+
+export function setLinkConflictFlags(row: {
+  id: number
+  release_conflict: number
+  phase_conflict: number
+  phase_conflict_merged: number
+  feature_release_id: string | null
+  capability_release_id: string | null
+  feature_phase_label: string | null
+  capability_phase_label: string | null
+}): void {
+  updateConflictFlags ??= db.prepare(`
+    UPDATE pwc_feature_capabilities
+       SET release_conflict       = @release_conflict,
+           phase_conflict         = @phase_conflict,
+           phase_conflict_merged  = @phase_conflict_merged,
+           feature_release_id     = @feature_release_id,
+           capability_release_id  = @capability_release_id,
+           feature_phase_label    = @feature_phase_label,
+           capability_phase_label = @capability_phase_label,
+           updated_at             = datetime('now')
+     WHERE id = @id
+  `)
+  updateConflictFlags.run(row)
 }
