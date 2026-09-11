@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
+import { CapabilityDetailPanel } from '@/components/CapabilityDetailPanel'
 import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
@@ -40,6 +41,12 @@ import {
   buildMvpCards,
   projectMvpCells,
 } from '@/lib/mvp-derive'
+import {
+  applyCapabilityFilters,
+  blameCapabilityGroups,
+  buildCapabilityCards,
+  projectCapabilityCells,
+} from '@/lib/capability-derive'
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
@@ -89,7 +96,9 @@ export default function ScopeMap() {
    */
   const viewParam = searchParams.get('view')
   const view: ViewMode =
-    viewParam === 'actor' || viewParam === 'mvp' ? viewParam : 'release'
+    viewParam === 'actor' || viewParam === 'mvp' || viewParam === 'capability'
+      ? viewParam
+      : 'release'
   const rowMode = rowModeFor(view)
 
   const setView = useCallback(
@@ -114,6 +123,24 @@ export default function ScopeMap() {
   const selectedMvpId = Number.isInteger(selectedMvpParam) && selectedMvpParam > 0
     ? selectedMvpParam
     : null
+
+  const selectedCapabilityParam = Number(searchParams.get('selectedCapability'))
+  const selectedCapabilityId =
+    Number.isInteger(selectedCapabilityParam) && selectedCapabilityParam > 0
+      ? selectedCapabilityParam
+      : null
+
+  const setSelectedCapability = useCallback(
+    (capabilityId: number | null) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        if (capabilityId) next.set('selectedCapability', String(capabilityId))
+        else next.delete('selectedCapability')
+        return next
+      })
+    },
+    [setSearchParams],
+  )
 
   const setSelectedMvp = useCallback(
     (mvpId: number | null) => {
@@ -200,6 +227,28 @@ export default function ScopeMap() {
   )
 
   const isMvpView = view === 'mvp'
+  const isCapabilityView = view === 'capability'
+
+  // ---- Capability view ---------------------------------------------------
+  const capabilityCards = useMemo(
+    () => (scope.data ? buildCapabilityCards(scope.data) : []),
+    [scope.data],
+  )
+
+  const visibleCapabilityCards = useMemo(
+    () => applyCapabilityFilters(capabilityCards, filters),
+    [capabilityCards, filters],
+  )
+
+  const capabilityProjection = useMemo(
+    () => projectCapabilityCells(visibleCapabilityCards),
+    [visibleCapabilityCards],
+  )
+
+  const selectedCapabilityCard = useMemo(
+    () => capabilityCards.find((card) => card.id === selectedCapabilityId) ?? null,
+    [capabilityCards, selectedCapabilityId],
+  )
 
   const selectedMvpCard = useMemo(
     () => mvpCards.find((card) => card.id === selectedMvpId) ?? null,
@@ -219,15 +268,11 @@ export default function ScopeMap() {
   // Blame is answered against whichever set the view is actually showing —
   // naming a group that emptied the other view would send someone after the
   // wrong filter (R-8.10).
-  const blame = useMemo(
-    () =>
-      isMvpView
-        ? blameMvpGroups(mvpCards, filters)
-        : model
-          ? blameGroups(model.features, filters)
-          : [],
-    [isMvpView, mvpCards, model, filters],
-  )
+  const blame = useMemo(() => {
+    if (isMvpView) return blameMvpGroups(mvpCards, filters)
+    if (isCapabilityView) return blameCapabilityGroups(capabilityCards, filters)
+    return model ? blameGroups(model.features, filters) : []
+  }, [isMvpView, isCapabilityView, mvpCards, capabilityCards, model, filters])
 
   // Edges follow the filtered view, so a hidden feature never anchors one.
   const results = useMemo(
@@ -272,15 +317,16 @@ export default function ScopeMap() {
 
   const detail = useMemo(
     () =>
-      scope.data && selectedId && !isMvpView
+      scope.data && selectedId && !isMvpView && !isCapabilityView
         ? buildFeatureDetail(scope.data, selectedId)
         : null,
-    [scope.data, selectedId, isMvpView],
+    [scope.data, selectedId, isMvpView, isCapabilityView],
   )
 
   // Each view has its own panel; only one can be open at a time.
   const mvpDetail = isMvpView ? selectedMvpCard : null
-  const panelOpen = detail !== null || mvpDetail !== null
+  const capabilityDetail = isCapabilityView ? selectedCapabilityCard : null
+  const panelOpen = detail !== null || mvpDetail !== null || capabilityDetail !== null
 
   // ---- Create / edit / delete -------------------------------------------
   const [creatingIn, setCreatingIn] = useState<{
@@ -591,9 +637,19 @@ export default function ScopeMap() {
               />
             ) : null}
 
-            {(isMvpView ? visibleMvpCards.length : visible.length) === 0 ? (
+            {(isMvpView
+              ? visibleMvpCards.length
+              : isCapabilityView
+                ? visibleCapabilityCards.length
+                : visible.length) === 0 ? (
               <ZeroResults
-                subject={isMvpView ? 'MSD features' : 'features'}
+                subject={
+                  isMvpView
+                    ? 'MSD features'
+                    : isCapabilityView
+                      ? 'capabilities'
+                      : 'features'
+                }
                 blame={blame}
                 onDrop={(group) => setFilters(withoutGroup(filters, group))}
                 onClearAll={() => setFilters(EMPTY_FILTERS)}
@@ -629,8 +685,38 @@ export default function ScopeMap() {
                   setDirty(false)
                   setSelectedMvp(id === selectedMvpId ? null : id)
                 }}
+                capabilityCellIndex={capabilityProjection.cellIndex}
+                selectedCapabilityId={selectedCapabilityId}
+                onSelectCapability={(id) => {
+                  if (!confirmDiscard()) return
+                  setDirty(false)
+                  setSelectedCapability(id === selectedCapabilityId ? null : id)
+                }}
               />
             )}
+
+            {isCapabilityView && capabilityProjection.unplaced.length > 0 ? (
+              <section
+                className="rounded-lg border border-border p-4"
+                aria-labelledby="capability-unplaced"
+              >
+                <h2 className="text-sm font-semibold" id="capability-unplaced">
+                  Not on the map ({capabilityProjection.unplaced.length})
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  The sequencing table never matched these, so they have no release or
+                  stage. Listed rather than dropped.
+                </p>
+                <ul className="mt-2 flex flex-col gap-1 text-sm">
+                  {capabilityProjection.unplaced.map((card) => (
+                    <li key={card.id}>
+                      <span className="font-medium">{card.ref}</span>{' '}
+                      <span className="text-muted-foreground">{card.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             {isMvpView && mvpProjection.unplaced.length > 0 ? (
               <section
@@ -660,15 +746,25 @@ export default function ScopeMap() {
 
             <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
               <div className="flex gap-2">
-                <dt>{isMvpView ? 'MSD features' : 'Features'}</dt>
-                <dd className="font-medium text-foreground">
+                <dt>
                   {isMvpView
+                    ? 'MSD features'
+                    : isCapabilityView
+                      ? 'Capabilities shown'
+                      : 'Features'}
+                </dt>
+                <dd className="font-medium text-foreground">
+                  {isCapabilityView
                     ? isEmpty(filters)
-                      ? mvpCards.length
-                      : `${visibleMvpCards.length} of ${mvpCards.length}`
-                    : isEmpty(filters)
-                      ? model.totals.features
-                      : `${visible.length} of ${model.totals.features}`}
+                      ? capabilityCards.length
+                      : `${visibleCapabilityCards.length} of ${capabilityCards.length}`
+                    : isMvpView
+                      ? isEmpty(filters)
+                        ? mvpCards.length
+                        : `${visibleMvpCards.length} of ${mvpCards.length}`
+                      : isEmpty(filters)
+                        ? model.totals.features
+                        : `${visible.length} of ${model.totals.features}`}
                 </dd>
               </div>
               <div className="flex gap-2">
@@ -676,7 +772,9 @@ export default function ScopeMap() {
                 <dd className="font-medium text-foreground">
                   {isMvpView
                     ? mvpProjection.totals.populatedCells
-                    : projected.totals.populatedCells}{' '}
+                    : isCapabilityView
+                      ? capabilityProjection.totals.populatedCells
+                      : projected.totals.populatedCells}{' '}
                   of {model.totals.totalCells}
                 </dd>
               </div>
@@ -700,6 +798,26 @@ export default function ScopeMap() {
               capabilitiesByRelease={model.totals.capabilitiesByRelease}
             />
           </div>
+
+          {capabilityDetail ? (
+            <CapabilityDetailPanel
+              card={capabilityDetail}
+              onClose={() => setSelectedCapability(null)}
+              releaseLabels={releaseLabelMap}
+              phaseNames={phaseNameMap}
+              onSelectFeature={(id) => {
+                // Jumping to a PwC feature means leaving this view — the
+                // feature panel only exists in the feature views.
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current)
+                  next.delete('view')
+                  next.delete('selectedCapability')
+                  next.set('selected', id)
+                  return next
+                })
+              }}
+            />
+          ) : null}
 
           {mvpDetail ? (
             <MvpDetailPanel

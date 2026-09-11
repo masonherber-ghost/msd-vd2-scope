@@ -1372,7 +1372,7 @@ describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
 
     const rows = screen.getAllByRole('rowheader')
     expect(rows[0]).toHaveTextContent('Release 1.1')
-    expect(screen.getByRole('button', { name: 'By release' })).toHaveAttribute(
+    expect(screen.getByRole('button', { name: 'By PwC release' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -1517,14 +1517,14 @@ describe('ScopeMap — the MSD feature view', () => {
   it('offers the view as a third tab', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'By release' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'By PwC release' })).toBeInTheDocument(),
     )
     const tabs = screen.getByRole('group', { name: 'Map view' })
     expect(
       within(tabs)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['By release', 'By actor', 'By MSD feature'])
+    ).toEqual(['By PwC release', 'By actor', 'By MSD feature', 'By capability'])
   })
 
   it('swaps PwC cards for MSD feature cards', async () => {
@@ -1570,7 +1570,7 @@ describe('ScopeMap — the MSD feature view', () => {
     await openMsdView(user)
     expect(url()).toContain('view=mvp')
 
-    await user.click(screen.getByRole('button', { name: 'By release' }))
+    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
     expect(url()).not.toContain('view=mvp')
   })
 
@@ -1651,7 +1651,7 @@ describe('ScopeMap — the MSD feature view', () => {
     // The PwC panel cannot render here, and no MSD card is selected yet.
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'By release' }))
+    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
     expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
   })
 
@@ -1932,5 +1932,156 @@ describe('ScopeMap — a decided capability stops arguing its case', () => {
 
     await user.click(screen.getByRole('button', { name: /Reviewed:/ }))
     expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap — the capability view', () => {
+  const openCapabilityView = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('button', { name: 'By capability' }))
+  }
+
+  it('swaps the cards for capabilities', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^F-\d{3} / }).length).toBeGreaterThan(0),
+    )
+
+    await openCapabilityView(user)
+
+    expect(screen.queryAllByRole('button', { name: /^F-\d{3} / })).toHaveLength(0)
+    expect(
+      screen.getByRole('button', {
+        name: 'Invite employer to register — Staff, MSD feature 938',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /MSD feature 9\d\d$/ })).toHaveLength(3)
+  })
+
+  it('keeps stages across and releases down', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By capability' })).toBeInTheDocument(),
+    )
+    await openCapabilityView(user)
+
+    // Row header is the release, column header the stage — the same grid.
+    expect(screen.getByRole('rowheader', { name: /Release 1\.4/ })).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: /Manage Vacancies/ }),
+    ).toBeInTheDocument()
+    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    expect(
+      within(cell).getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('counts capabilities, not features, in the cell label', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By capability' })).toBeInTheDocument(),
+    )
+    await openCapabilityView(user)
+    expect(
+      screen.getByRole('cell', { name: 'Release 1.1, Access & Onboarding: 2 capabilities' }),
+    ).toBeInTheDocument()
+  })
+
+  it('carries the view in the URL', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'By capability' })).toBeInTheDocument(),
+    )
+    await openCapabilityView(user)
+    expect(url()).toContain('view=capability')
+  })
+
+  it('opens a detail naming the MSD feature and the citing PwC features', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }))
+
+    const panel = screen.getByRole('complementary', {
+      name: 'Capability: Electronic T&Cs acceptance',
+    })
+    expect(within(panel).getByText('MSD feature')).toBeInTheDocument()
+    expect(within(panel).getByText('948 · 1B')).toBeInTheDocument()
+    expect(within(panel).getByText('Verification methods')).toBeInTheDocument()
+    expect(within(panel).getByText('PwC features citing this (1)')).toBeInTheDocument()
+    expect(within(panel).getByText('F-002')).toBeInTheDocument()
+    expect(url()).toContain('selectedCapability=12')
+  })
+
+  it('jumps from a capability to the feature citing it', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }))
+
+    const panel = screen.getByRole('complementary', {
+      name: 'Capability: Electronic T&Cs acceptance',
+    })
+    await user.click(within(panel).getByRole('button', { name: /F-002/ }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+    expect(url()).not.toContain('view=capability')
+    expect(url()).toContain('selected=F-002')
+  })
+
+  it('lists a capability the table never placed rather than dropping it', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      capabilities: base.capabilities.map((c) =>
+        c.id === 12 ? { ...c, release_id: null, phase_id: null } : c,
+      ),
+    }
+    renderPage('/?view=capability')
+
+    const unplaced = await screen.findByRole('region', { name: /Not on the map/ })
+    expect(within(unplaced).getByText(/Electronic T&Cs acceptance/)).toBeInTheDocument()
+  })
+
+  it('does not offer to add a PwC feature from a capability cell', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: /^Add a feature to/ }).length).toBeGreaterThan(0),
+    )
+    await openCapabilityView(user)
+    expect(screen.queryAllByRole('button', { name: /^Add a feature to/ })).toHaveLength(0)
+  })
+
+  it('filters capability cards with the same rail', async () => {
+    renderPage('/?view=capability&actor=staff')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Invite employer to register/ }),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.getAllByRole('button', { name: /MSD feature 9\d\d$/ })).toHaveLength(1)
+  })
+
+  it('blames the group that emptied this view', async () => {
+    renderPage('/?view=capability&actor=jobseeker')
+    await waitFor(() =>
+      expect(screen.getByText('No capabilities match these filters.')).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: 'Drop Actor filter' })).toBeInTheDocument()
   })
 })

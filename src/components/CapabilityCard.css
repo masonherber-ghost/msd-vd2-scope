@@ -1,0 +1,116 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.capability-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1px solid var(--color-primary-50);
+  /* The accent is the actor: in this view the release and stage are the
+     cell, so the only thing left for the card to carry is who acts. */
+  border-left: 5px solid var(--card-accent, var(--color-primary-900));
+  border-radius: var(--radius-md);
+  background-color: var(--color-card);
+  box-shadow: var(--shadow-card);
+  text-align: left;
+  width: 100%;
+  min-width: 0;
+}
+
+.capability-card__text {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  color: var(--color-ink-700);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+/* Stretches over the whole card, so the card is clickable while the button
+   itself contains only phrasing content. */
+.capability-card__select {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.capability-card__select::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-md);
+}
+
+.capability-card__select:focus-visible::after {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   VARIANTS / MODIFIERS
+   ======================================== */
+
+.capability-card--selected {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 2px var(--color-primary-300), var(--shadow-card);
+}
+
+.capability-card--compact .capability-card__meta,
+.capability-card--compact .capability-card__badges {
+  display: none;
+}
+
+/* ========================================
+   META
+   ======================================== */
+
+.capability-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2);
+  font-size: 0.6875rem;
+  line-height: 1.5;
+  color: var(--color-ink-500);
+}
+
+.capability-card__actor {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.0625rem var(--spacing-2);
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--actor-accent, var(--color-line));
+  color: var(--color-ink-700);
+}
+
+/* The label carries the meaning; the colour is a scanning aid (R-10.6). */
+.capability-card__actor--employer { --actor-accent: var(--color-actor-employer); }
+.capability-card__actor--staff { --actor-accent: var(--color-actor-staff); }
+.capability-card__actor--jobseeker { --actor-accent: var(--color-actor-jobseeker); }
+.capability-card__actor--system { --actor-accent: var(--color-actor-system); }
+
+.capability-card__ref,
+.capability-card__citers {
+  font-family: var(--font-mono);
+}
+
+.capability-card__citers--none {
+  font-family: inherit;
+  font-style: italic;
+}
+
+/* ========================================
+   BADGES
+   ======================================== */
+
+.capability-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-1);
+}

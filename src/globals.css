@@ -28,10 +28,12 @@
 @import "./components/ScopeMapChrome.css";
 @import "./components/FeatureCard.css";
 @import "./components/MvpCard.css";
+@import "./components/CapabilityCard.css";
 @import "./components/FilterRail.css";
 @import "./components/FeatureDetailPanel.css";
 @import "./components/CapabilityResolutionModal.css";
 @import "./components/MvpDetailPanel.css";
+@import "./components/CapabilityDetailPanel.css";
 @import "./components/InlineEditField.css";
 @import "./components/FeatureForm.css";
 @import "./components/LinkPicker.css";

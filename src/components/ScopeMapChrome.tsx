@@ -8,7 +8,7 @@ const accent = (token: string) => ({ '--chip-accent': `var(${token})` }) as CSSP
 const VIEW_TABS: { mode: ViewMode; label: string; lede: string }[] = [
   {
     mode: 'release',
-    label: 'By release',
+    label: 'By PwC release',
     lede: 'the release they ship in',
   },
   {
@@ -18,8 +18,13 @@ const VIEW_TABS: { mode: ViewMode; label: string; lede: string }[] = [
   },
   {
     mode: 'mvp',
-    label: "By MSD feature",
+    label: 'By MSD feature',
     lede: 'the release their capabilities are scheduled in',
+  },
+  {
+    mode: 'capability',
+    label: 'By capability',
+    lede: 'the release the table delivers them in',
   },
 ]
 
@@ -67,9 +72,10 @@ export function ScopeMapChrome({
           <h1 className="scope-chrome__title">VD2 release scope map</h1>
           <p className="scope-chrome__lede">
             {view === 'mvp'
-              ? 'MSD features plotted across the seven canonical journey phases, each card '
-              : 'PwC features plotted across the seven canonical journey phases, each card '}
-            naming the {view === 'mvp' ? 'PwC features that cite it' : 'MVP features it cites'}.
+              ? 'MSD features plotted across the seven canonical journey phases, each card naming the PwC features that cite it. '
+              : view === 'capability'
+                ? 'Capabilities plotted across the seven canonical journey phases, each card naming its actor, its MSD feature and the PwC features citing it. '
+                : 'PwC features plotted across the seven canonical journey phases, each card naming the MVP features it cites. '}
             Rows group them by{' '}
             {VIEW_TABS.find((t) => t.mode === view)?.lede ?? 'the release they ship in'}. An
             empty cell is information: nothing in that phase lands there.

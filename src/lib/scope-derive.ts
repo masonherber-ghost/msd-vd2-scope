@@ -73,16 +73,17 @@ export type ScopeMapModel = {
 export type RowMode = 'actor' | 'release'
 
 /**
- * What the map is showing. The first two change how rows group; `mvp`
- * changes what a card *is* — MSD feature records rather than PwC features —
- * which is a different question of the same grid.
+ * What the map is showing. The first two change how rows group; `mvp` and
+ * `capability` change what a card *is* — MSD feature records, or the
+ * capabilities themselves — which are different questions of the same grid.
  */
-export type ViewMode = 'release' | 'actor' | 'mvp'
+export type ViewMode = 'release' | 'actor' | 'mvp' | 'capability'
 
 /**
- * The row grouping a view uses. The MSD view groups by release: an MSD
- * feature is placed by its capabilities, and their release is the only
- * grouping either source actually states for it.
+ * The row grouping a view uses. Everything but the actor view groups by
+ * release: a capability is placed in one directly, and an MSD feature is
+ * placed by its capabilities, so release is the only grouping either source
+ * actually states for them.
  */
 export const rowModeFor = (view: ViewMode): RowMode =>
   view === 'actor' ? 'actor' : 'release'
