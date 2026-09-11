@@ -7,7 +7,7 @@ import {
   type SequencingParseResult,
 } from './scope-types.js'
 
-const SOURCE = 'R1-sequenced-release-capabilities-table.md'
+const SOURCE = 'MSD-R1-sequenced-release-capabilities-table.md'
 
 /** Release labels are bolded, and "Release 2" has no minor version. */
 const RELEASE_CELL_RE = /^\*{0,2}\s*Release\s+([\d.]+)\s*\*{0,2}$/u
@@ -47,7 +47,18 @@ export function parseSequencingTable(markdown: string): SequencingParseResult {
   }
 
   const rows = numbered.filter(({ text }) => !SEPARATOR_RE.test(text.trim()))
-  const [headerRow, ...bodyRows] = rows
+
+  // The document may open with a sentence describing the table. Skip any
+  // leading non-table prose rather than demanding the header on line 1 —
+  // but only prose: a line starting "|" is a table row, and one appearing
+  // before the header means the table itself is malformed, which must still
+  // fail loudly (R-11.2).
+  const headerIndex = rows.findIndex(({ text }) => text.trim().startsWith('|'))
+  if (headerIndex === -1) {
+    throw new ParseError(SOURCE, rows[0]?.line ?? 1, 'Document contains no table')
+  }
+  const headerRow = rows[headerIndex]
+  const bodyRows = rows.slice(headerIndex + 1)
 
   const header = splitRow(headerRow.text)
   if (header.length < 2 || !/release/iu.test(header[0])) {

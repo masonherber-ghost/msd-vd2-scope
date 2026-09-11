@@ -147,3 +147,48 @@ describe('sequencing parser — fails loudly (R-11.2)', () => {
     expect(() => parseSequencingTable('')).toThrow(/Document is empty/)
   })
 })
+
+describe('parseSequencingTable — a preamble above the table', () => {
+  const table = [
+    '| Release | Access & Onboarding |',
+    '| --- | --- |',
+    '| **Release 1.1** | • Do a thing (staff, 938) |',
+  ].join('\n')
+
+  it('skips a prose sentence before the header', () => {
+    const withPreamble = `The sequenced release capabilities table.\n\n${table}`
+    const parsed = parseSequencingTable(withPreamble)
+    expect(parsed.releaseIds).toEqual(['1.1'])
+    expect(parsed.capabilities).toHaveLength(1)
+  })
+
+  it('parses identically with and without the preamble', () => {
+    expect(parseSequencingTable(`Some words.\n\n${table}`)).toEqual(
+      parseSequencingTable(table),
+    )
+  })
+
+  it('reports line numbers against the real file, preamble included', () => {
+    // The capability is on line 5 once two lines precede the table; an error
+    // that named line 3 would send someone to the wrong row.
+    const broken = `Preamble.\n\n${table.replace('(staff, 938)', '')}`
+    expect(() => parseSequencingTable(broken)).toThrow(/:5 —/)
+  })
+
+  it('still fails when there is no table at all', () => {
+    expect(() => parseSequencingTable('Just prose.\n\nMore prose.')).toThrow(
+      /no table/,
+    )
+  })
+
+  it('still fails when the first table row is not the header', () => {
+    // A stray table row above the header means the table is malformed, and
+    // skipping it as if it were prose would lose a row of scope. It is taken
+    // as the header — "Release 1.1" satisfies the header test — and then
+    // rejected because its cells are not phase names. The message differs
+    // from a missing header, but it still fails loudly (R-11.2).
+    const stray = `| **Release 1.1** | • Do a thing (staff, 938) |\n${table}`
+    expect(() => parseSequencingTable(stray)).toThrow(ParseError)
+    expect(() => parseSequencingTable(stray)).toThrow(/Unrecognised phase label/)
+  })
+})

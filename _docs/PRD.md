@@ -5,7 +5,7 @@ two source documents:
 
 - [`_docs/pwc-scope-to-mvp-mapping.md`](pwc-scope-to-mvp-mapping.md) — 48 PwC features with
   assumptions, mapped to MVP features
-- [`_docs/R1-sequenced-release-capabilities-table.md`](R1-sequenced-release-capabilities-table.md) —
+- [`_docs/MSD-R1-sequenced-release-capabilities-table.md`](MSD-R1-sequenced-release-capabilities-table.md) —
   107 sequenced capabilities positioned in a release × phase grid
 
 > **Note for future sessions:** the root `CLAUDE.md` currently describes a "Story Creator"

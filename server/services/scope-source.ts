@@ -23,7 +23,7 @@ const DOCS_DIR = path.join(here, '..', '..', '_docs')
 export const MAPPING_PATH = path.join(DOCS_DIR, 'pwc-scope-to-mvp-mapping.md')
 export const SEQUENCING_PATH = path.join(
   DOCS_DIR,
-  'R1-sequenced-release-capabilities-table.md',
+  'MSD-R1-sequenced-release-capabilities-table.md',
 )
 
 /**

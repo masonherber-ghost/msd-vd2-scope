@@ -69,7 +69,7 @@ Confirmed at the start of this plan: `npm run test` 5/5 pass · `npm run lint` c
 3. **Confirm the source documents are present and unmodified** — the parsers in Phase 1 are
    written against them:
    - `_docs/pwc-scope-to-mvp-mapping.md`
-   - `_docs/R1-sequenced-release-capabilities-table.md`
+   - `_docs/MSD-R1-sequenced-release-capabilities-table.md`
 4. **Settle the open decisions that block Phase 1 and 2.** [PRD §15](PRD.md#15-open-decisions)
    lists six. Two must be answered before the parsers are written, because they change the
    import output:

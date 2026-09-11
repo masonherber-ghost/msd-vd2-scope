@@ -390,11 +390,18 @@ describe('the real documents still fail loudly when corrupted (R-11.2)', () => {
 
   it('names the line number when a real table cell is corrupted', () => {
     const lines = fs.readFileSync(SEQUENCING_PATH, 'utf8').split('\n')
-    lines[2] = lines[2].replace('(staff, 938)', '')
+    // Found by content, not by index: the document may carry a preamble
+    // above the table, and the point of the test is the reported line
+    // number, not where the row happens to sit.
+    const index = lines.findIndex((l) => l.includes('(staff, 938)'))
+    expect(index).toBeGreaterThan(-1)
+    lines[index] = lines[index].replace('(staff, 938)', '')
 
     const corrupted = lines.join('\n')
     expect(() => parseSequencingTable(corrupted)).toThrow(ParseError)
-    expect(() => parseSequencingTable(corrupted)).toThrow(/:3 —/)
+    expect(() => parseSequencingTable(corrupted)).toThrow(
+      new RegExp(`:${index + 1} —`),
+    )
   })
 
   it('fails when a phase column is renamed in the real table', () => {
