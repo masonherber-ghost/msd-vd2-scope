@@ -10,6 +10,7 @@ import type { DetailCapability, FeatureDetail } from '@/lib/feature-detail'
 import {
   RESOLUTION_LABEL,
   RESOLUTION_STATES,
+  SOURCE_LABEL,
   type ResolutionState,
 } from '@/lib/validators'
 
@@ -341,7 +342,7 @@ export function FeatureDetailPanel({
         {detail.capabilityCount === 0 ? (
           <p className="feature-detail__note">
             {detail.capabilityNote
-              ? `The mapping document states: “${detail.capabilityNote}”.`
+              ? `The ${SOURCE_LABEL.mapping} states: “${detail.capabilityNote}”.`
               : 'No capabilities are mapped to this feature.'}
           </p>
         ) : (
@@ -551,7 +552,7 @@ function CapabilityRow({
           ? `${capability.releaseLabel ?? 'no release'} · ${
               capability.phaseName ?? 'no phase'
             }`
-          : 'No exact match in the sequencing table'}
+          : `No exact match in the ${SOURCE_LABEL.sequencing}`}
         {capability.citations > 1 ? ` · cited ${capability.citations}×` : ''}
       </span>
 
@@ -566,15 +567,15 @@ function CapabilityRow({
           {capability.releaseDiffers ? (
             <span>
               <span className="feature-detail__mismatch-label">Release differs:</span> the
-              feature ships in {detail.releaseLabel}, the table delivers this capability in{' '}
-              {capability.releaseLabel}.
+              feature ships in {detail.releaseLabel}, the {SOURCE_LABEL.sequencing} delivers
+              this capability in {capability.releaseLabel}.
             </span>
           ) : null}
           {capability.phaseDiffers ? (
             <span>
               <span className="feature-detail__mismatch-label">Phase differs:</span> the
-              feature sits in {detail.phaseName}, the table places this capability in{' '}
-              {capability.phaseName}.
+              feature sits in {detail.phaseName}, the {SOURCE_LABEL.sequencing} places this
+              capability in {capability.phaseName}.
             </span>
           ) : null}
         </div>
@@ -587,9 +588,9 @@ function CapabilityRow({
         <div className="feature-detail__mismatch feature-detail__mismatch--merged">
           <span>
             <span className="feature-detail__mismatch-label">Labelled differently:</span> the
-            mapping file says “{capability.featurePhaseLabel}” and the table says “
-            {capability.capabilityPhaseLabel}”. Resolved by the canonical phase merge — the
-            same phase.
+            {SOURCE_LABEL.mapping} says “{capability.featurePhaseLabel}” and the{' '}
+            {SOURCE_LABEL.sequencing} says “{capability.capabilityPhaseLabel}”. Resolved by
+            the canonical phase merge — the same phase.
           </span>
         </div>
       ) : null}
@@ -597,9 +598,9 @@ function CapabilityRow({
       {!capability.matched ? (
         <div className="feature-detail__mismatch">
           <span>
-            <span className="feature-detail__mismatch-label">Unmatched:</span> the mapping
-            document cites this text, but the table has no exact match. Not merged on a
-            prefix — a human confirms it.
+            <span className="feature-detail__mismatch-label">Unmatched:</span> the{' '}
+            {SOURCE_LABEL.mapping} cites this text, but the {SOURCE_LABEL.sequencing} has no
+            exact match. Not merged on a prefix — a human confirms it.
           </span>
         </div>
       ) : null}

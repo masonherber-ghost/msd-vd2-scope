@@ -10,6 +10,7 @@ import {
   type FilterGroup,
   type FilterState,
 } from '@/lib/scope-filters'
+import { SOURCE_LABEL } from '@/lib/validators'
 
 type Option = { value: string | number; label: string; hint?: string }
 
@@ -37,9 +38,11 @@ const OPTION_OPTIONS: Option[] = [
 ]
 
 const SOURCE_OPTIONS: Option[] = [
-  { value: 'mapping', label: 'Mapping file' },
-  { value: 'sequencing', label: 'Sequencing table' },
-  { value: 'both', label: 'Both sources' },
+  { value: 'mapping', label: SOURCE_LABEL.mapping },
+  { value: 'sequencing', label: SOURCE_LABEL.sequencing },
+  { value: 'both', label: SOURCE_LABEL.both },
+  // Not SOURCE_LABEL.manual: in the filter rail this reads as an action the
+  // user took here, which is more useful than the neutral provenance word.
   { value: 'manual', label: 'Added or edited here' },
 ]
 

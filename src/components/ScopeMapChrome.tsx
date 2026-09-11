@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { ACTOR_ROWS, releaseTokenSuffix, type ViewMode } from '@/lib/scope-derive'
 import type { ReleaseRow } from '@/lib/api-client'
+import { SOURCE_LABEL } from '@/lib/validators'
 
 const accent = (token: string) => ({ '--chip-accent': `var(${token})` }) as CSSProperties
 
@@ -137,8 +138,8 @@ export function ReleaseHorizons({
         Release horizons
       </h2>
       <p className="scope-chrome__lede" style={{ marginBottom: 'var(--spacing-6)' }}>
-        What each release carries. Descriptions come from the mapping document; a release the
-        sequencing table alone knows about has none.
+        What each release carries. Descriptions come from the {SOURCE_LABEL.mapping}; a
+        release the {SOURCE_LABEL.sequencing} alone knows about has none.
       </p>
       <ul className="scope-chrome__horizons">
         {releases.map((release) => (
@@ -159,7 +160,8 @@ export function ReleaseHorizons({
               {release.name || 'No name recorded'}
             </span>
             <span className="scope-chrome__horizon-desc">
-              {release.description || 'This release appears only in the sequencing table.'}
+              {release.description ||
+                `This release appears only in the ${SOURCE_LABEL.sequencing}.`}
             </span>
           </li>
         ))}

@@ -49,14 +49,18 @@ describe('FeatureDetailPanel — capability placement (R-8.15)', () => {
   it('shows both placements inline when the release differs', () => {
     renderPanel('F-002')
     expect(
-      screen.getByText(/the feature ships in Release 1\.1, the table delivers this capability in Release 1\.4/i),
+      screen.getByText(
+        /the feature ships in Release 1\.1, the MSD features sequencing delivers this capability in Release 1\.4/i,
+      ),
     ).toBeInTheDocument()
   })
 
   it('shows both placements when the phase differs', () => {
     renderPanel('F-002')
     expect(
-      screen.getByText(/the feature sits in Access & Onboarding, the table places this capability in Manage Vacancies/i),
+      screen.getByText(
+        /the feature sits in Access & Onboarding, the MSD features sequencing places this capability in Manage Vacancies/i,
+      ),
     ).toBeInTheDocument()
   })
 
@@ -107,7 +111,9 @@ describe('FeatureDetailPanel — no capabilities (R-8.18)', () => {
       />,
     )
     expect(
-      screen.getByText(/The mapping document states: “Mapped under Release 2\+ in table”/),
+      screen.getByText(
+        /The PwC features sequencing states: “Mapped under Release 2\+ in table”/,
+      ),
     ).toBeInTheDocument()
   })
 })

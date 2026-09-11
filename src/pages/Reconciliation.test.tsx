@@ -99,9 +99,9 @@ describe('Reconciliation — grouping', () => {
     const row = within(queue(/^Release conflicts/)).getByRole('article', {
       name: /F-002 — Electronic T&Cs acceptance/,
     })
-    expect(row).toHaveTextContent('Mapping file — feature ships in')
+    expect(row).toHaveTextContent('PwC features sequencing — feature ships in')
     expect(row).toHaveTextContent('Release 1.1')
-    expect(row).toHaveTextContent('Sequencing table — capability delivered in')
+    expect(row).toHaveTextContent('MSD features sequencing — capability delivered in')
     expect(row).toHaveTextContent('Release 1.4')
   })
 
@@ -131,8 +131,8 @@ describe('Reconciliation — resolving (R-7.2, R-7.3)', () => {
     )
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
       'Unreviewed',
-      'Mapping file is right',
-      'Sequencing table is right',
+      'PwC features sequencing is right',
+      'MSD features sequencing is right',
       'Both are correct',
       'Defect raised',
     ])

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  RESOLUTION_LABEL,
+  SOURCE_LABEL,
   createFeatureSchema,
   fieldErrors,
+  sourceLabel,
   summariseZodError,
   updateFeatureSchema,
 } from '@/lib/validators'
@@ -117,5 +120,29 @@ describe('error helpers', () => {
       expect(summary).toContain('id:')
       expect(summary).toContain('name:')
     }
+  })
+})
+
+describe('SOURCE_LABEL — the two source documents have one display name each', () => {
+  it('names them as the programme does', () => {
+    expect(SOURCE_LABEL.mapping).toBe('PwC features sequencing')
+    expect(SOURCE_LABEL.sequencing).toBe('MSD features sequencing')
+  })
+
+  it('derives the resolution labels, so the two can never disagree', () => {
+    expect(RESOLUTION_LABEL.mapping_wins).toBe(`${SOURCE_LABEL.mapping} is right`)
+    expect(RESOLUTION_LABEL.table_wins).toBe(`${SOURCE_LABEL.sequencing} is right`)
+  })
+
+  it('covers every source value the schema accepts', () => {
+    // A stored source with no label would render blank or raw in the UI.
+    for (const source of ['mapping', 'sequencing', 'both', 'manual']) {
+      expect(sourceLabel(source)).not.toBe(source)
+      expect(sourceLabel(source).length).toBeGreaterThan(0)
+    }
+  })
+
+  it('falls back to the raw value rather than rendering nothing', () => {
+    expect(sourceLabel('something-new')).toBe('something-new')
   })
 })

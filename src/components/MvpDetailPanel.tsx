@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { mvpCardLabel, type MvpCardModel } from '@/lib/mvp-derive'
+import { SOURCE_LABEL } from '@/lib/validators'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -9,10 +10,9 @@ const ACTOR_LABEL: Record<string, string> = {
 }
 
 const PLACEMENT_NOTE: Record<MvpCardModel['placement'], string> = {
-  capability:
-    'Placed where the sequencing table schedules its capabilities. Neither source gives an MSD feature a release of its own.',
+  capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a release of its own.`,
   feature:
-    'This record owns no placed capability, so it is placed by the PwC features that cite it. That is a weaker footing than the table’s own placement.',
+    `This record owns no placed capability, so it is placed by the PwC features that cite it. That is a weaker footing than the ${SOURCE_LABEL.sequencing}’s own placement.`,
   unplaced: 'Nothing places this record: it owns no capability and no PwC feature cites it.',
 }
 
@@ -69,8 +69,8 @@ export function MvpDetailPanel({
         </h3>
         {card.pwcFeatures.length === 0 ? (
           <p className="mvp-detail__note">
-            No PwC feature cites this record. It reaches the map from the sequencing
-            table alone.
+            No PwC feature cites this record. It reaches the map from the{' '}
+            {SOURCE_LABEL.sequencing} alone.
           </p>
         ) : (
           <ul className="mvp-detail__list">

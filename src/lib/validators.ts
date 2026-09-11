@@ -214,6 +214,37 @@ export const updateCapabilitySchema = z
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
 
 // ---------------------------------------------------------------------------
+// Source documents
+// ---------------------------------------------------------------------------
+
+/**
+ * What each source document is called in the UI.
+ *
+ * The stored `source` values stay `mapping` / `sequencing` — they are the
+ * provenance the import writes and renaming them would be a migration for no
+ * gain. These are the display names, and they have one home: the two
+ * documents are named in a dozen places across the app, and letting each
+ * place spell them out is how two screens end up disagreeing about what the
+ * sources are called.
+ *
+ * `mapping` is the PwC scope-to-MVP mapping document, which sequences the
+ * **PwC features**. `sequencing` is the MSD release capabilities table, which
+ * sequences the **MSD features** and their capabilities.
+ */
+export const SOURCE_LABEL = {
+  mapping: 'PwC features sequencing',
+  sequencing: 'MSD features sequencing',
+  both: 'Both sources',
+  manual: 'Added by hand',
+} as const
+
+export type SourceKey = keyof typeof SOURCE_LABEL
+
+/** Falls back to the raw value, so an unexpected source is visible not blank. */
+export const sourceLabel = (source: string): string =>
+  SOURCE_LABEL[source as SourceKey] ?? source
+
+// ---------------------------------------------------------------------------
 // Conflict resolution (R-7.2)
 // ---------------------------------------------------------------------------
 
@@ -229,8 +260,8 @@ export type ResolutionState = (typeof RESOLUTION_STATES)[number]
 
 export const RESOLUTION_LABEL: Record<ResolutionState, string> = {
   unreviewed: 'Unreviewed',
-  mapping_wins: 'Mapping file is right',
-  table_wins: 'Sequencing table is right',
+  mapping_wins: `${SOURCE_LABEL.mapping} is right`,
+  table_wins: `${SOURCE_LABEL.sequencing} is right`,
   both_correct: 'Both are correct',
   defect_raised: 'Defect raised',
 }

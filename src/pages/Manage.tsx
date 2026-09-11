@@ -17,6 +17,7 @@ import {
   useUpdateRelease,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
+import { sourceLabel } from '@/lib/validators'
 
 const ENTITIES = [
   { slug: 'releases', label: 'Releases' },
@@ -165,7 +166,7 @@ function Releases({ scope }: { scope: Scope }) {
                   />
                 </td>
                 <td className="manage-table__mono">{featureCount(release.id)}</td>
-                <td className="manage-table__muted">{release.source}</td>
+                <td className="manage-table__muted">{sourceLabel(release.source)}</td>
                 <td>
                   <div className="manage-table__actions">
                     <Button

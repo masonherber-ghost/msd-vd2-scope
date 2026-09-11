@@ -329,8 +329,8 @@ describe('ScopeMap filter rail', () => {
 
     const source = screen.getByRole('group', { name: /^source/i })
     for (const label of [
-      'Mapping file',
-      'Sequencing table',
+      'PwC features sequencing',
+      'MSD features sequencing',
       'Both sources',
       'Added or edited here',
     ]) {
@@ -1473,9 +1473,9 @@ describe('ScopeMap chrome from the design', () => {
     expect(
       within(horizons).getByText('Invitation access for a trusted cohort.'),
     ).toBeInTheDocument()
-    // 1.4 exists only in the sequencing table, so it has no description.
+    // 1.4 exists only in the MSD features sequencing, so it has no description.
     expect(
-      within(horizons).getByText(/appears only in the sequencing table/i),
+      within(horizons).getByText(/appears only in the MSD features sequencing/i),
     ).toBeInTheDocument()
   })
 })

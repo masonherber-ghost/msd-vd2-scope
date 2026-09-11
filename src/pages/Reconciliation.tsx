@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button'
 import { useResolveConflict } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildConflictModel, type ConflictRow } from '@/lib/scope-conflicts'
-import { RESOLUTION_LABEL, RESOLUTION_STATES, type ResolutionState } from '@/lib/validators'
+import {
+  RESOLUTION_LABEL,
+  RESOLUTION_STATES,
+  SOURCE_LABEL,
+  type ResolutionState,
+} from '@/lib/validators'
 
 const STATE_PARAM = 'state'
 
@@ -73,7 +78,8 @@ export default function Reconciliation() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Reconciliation</h1>
         <p className="text-sm text-muted-foreground">
-          Where the mapping file and the sequencing table disagree. Both placements are kept —
+          Where the {SOURCE_LABEL.mapping} and the {SOURCE_LABEL.sequencing} disagree. Both
+          placements are kept —
           recording a decision here changes neither source.
         </p>
       </div>
@@ -107,9 +113,9 @@ export default function Reconciliation() {
             releases
           </h2>
           <p className="text-sm text-muted-foreground">
-            The mapping file files these features under one release, but the sequencing
-            table schedules the capabilities they cite in several. The counts below are the
-            capability links the table places somewhere else.
+            The {SOURCE_LABEL.mapping} files these features under one release, but the{' '}
+            {SOURCE_LABEL.sequencing} schedules the capabilities they cite in several. The counts below are the
+            capability links the {SOURCE_LABEL.sequencing} places somewhere else.
           </p>
           <ul className="flex flex-wrap gap-3 text-sm">
             {model.decomposition.map((entry) => (
@@ -126,8 +132,10 @@ export default function Reconciliation() {
           </ul>
           {alias ? (
             <p className="text-xs text-muted-foreground">
-              The mapping file calls this release {alias.from}; {alias.id} declares{' '}
-              {alias.from} and the table&rsquo;s {alias.to} to be one release.
+              The {SOURCE_LABEL.mapping} calls this release {alias.from}; {alias.id}{' '}
+              declares{' '}
+              {alias.from} and the {SOURCE_LABEL.sequencing}&rsquo;s {alias.to} to be one
+              release.
             </p>
           ) : null}
         </section>
@@ -156,10 +164,10 @@ export default function Reconciliation() {
 
       <ConflictQueue
         title="Release conflicts"
-        note="The feature ships in one release; the table delivers the capability in another."
+        note={`The feature ships in one release; the ${SOURCE_LABEL.sequencing} delivers the capability in another.`}
         rows={release}
-        featureSourceLabel="Mapping file — feature ships in"
-        tableSourceLabel="Sequencing table — capability delivered in"
+        featureSourceLabel={`${SOURCE_LABEL.mapping} — feature ships in`}
+        tableSourceLabel={`${SOURCE_LABEL.sequencing} — capability delivered in`}
         onResolve={onResolve}
         emptyMessage="No release conflicts match this filter."
       />
@@ -168,18 +176,18 @@ export default function Reconciliation() {
         title="Phase conflicts"
         note={`${model.counts.phaseMerged} further phase disagreements are resolved by the canonical phase merge and are not listed — both sides mean the same phase.`}
         rows={phase}
-        featureSourceLabel="Mapping file — feature sits in"
-        tableSourceLabel="Sequencing table — capability placed in"
+        featureSourceLabel={`${SOURCE_LABEL.mapping} — feature sits in`}
+        tableSourceLabel={`${SOURCE_LABEL.sequencing} — capability placed in`}
         onResolve={onResolve}
         emptyMessage="No phase conflicts match this filter."
       />
 
       <ConflictQueue
         title="Unmatched links"
-        note="The mapping file cites text the table has no exact match for. Never merged on a prefix — a human confirms it."
+        note={`The ${SOURCE_LABEL.mapping} cites text the ${SOURCE_LABEL.sequencing} has no exact match for. Never merged on a prefix — a human confirms it.`}
         rows={unmatched}
-        featureSourceLabel="Mapping file — cited by"
-        tableSourceLabel="Sequencing table"
+        featureSourceLabel={`${SOURCE_LABEL.mapping} — cited by`}
+        tableSourceLabel={SOURCE_LABEL.sequencing}
         onResolve={onResolve}
         emptyMessage="No unmatched links match this filter."
       />
