@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { ConflictBadge } from '@/components/ConflictBadge'
+import { InlineEditField } from '@/components/InlineEditField'
 import type { CapabilityCardModel } from '@/lib/capability-derive'
 import { SOURCE_LABEL } from '@/lib/validators'
 
@@ -17,15 +18,18 @@ export type CapabilityDetailPanelProps = {
   onSelectFeature?: (featureId: string) => void
   releaseLabels?: Map<string, string>
   phaseNames?: Map<string, string>
+  /** Rejects with the server's message, which the field surfaces. */
+  onSaveText?: (text: string) => Promise<unknown>
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
  * A capability's own page: where the table puts it, the MSD feature it
  * belongs to, and the PwC features that asked for it.
  *
- * Read-only. A capability's placement is edited from the feature whose
- * conflict it causes, so offering a second editor here would give the same
- * decision two homes with no shared context.
+ * The text is editable in place — click the title. Placement is not: it is
+ * edited from the feature whose conflict it causes, so offering a second
+ * editor here would give the same decision two homes with no shared context.
  */
 export function CapabilityDetailPanel({
   card,
@@ -33,6 +37,8 @@ export function CapabilityDetailPanel({
   onSelectFeature,
   releaseLabels,
   phaseNames,
+  onSaveText,
+  onDirtyChange,
 }: CapabilityDetailPanelProps) {
   const placement =
     card.releaseId && card.phaseId
@@ -49,7 +55,19 @@ export function CapabilityDetailPanel({
           <span className="capability-detail__eyebrow">
             Capability · {ACTOR_LABEL[card.actor]}
           </span>
-          <h2 className="capability-detail__name">{card.text}</h2>
+          {onSaveText ? (
+            <InlineEditField
+              label="Capability text"
+              value={card.text}
+              multiline
+              variant="heading"
+              headingClassName="capability-detail__name"
+              onSave={onSaveText}
+              onDirtyChange={onDirtyChange}
+            />
+          ) : (
+            <h2 className="capability-detail__name">{card.text}</h2>
+          )}
           <span className="capability-detail__placement">{placement}</span>
         </div>
         <Button variant="outline" size="sm" onClick={onClose}>
@@ -113,31 +131,38 @@ export function CapabilityDetailPanel({
           </p>
         ) : (
           <ul className="capability-detail__list">
-            {card.pwcFeatures.map((feature) => (
-              <li key={feature.id}>
-                {onSelectFeature ? (
-                  <button
-                    type="button"
-                    className="capability-detail__feature"
-                    onClick={() => onSelectFeature(feature.id)}
-                  >
-                    <span className="capability-detail__feature-id">{feature.id}</span>
-                    <span className="capability-detail__feature-name">{feature.name}</span>
-                    <span className="capability-detail__feature-place">
-                      {releaseLabels?.get(feature.releaseId) ?? feature.releaseId}
-                      {card.releaseId && feature.releaseId !== card.releaseId
-                        ? ' · differs from this capability'
-                        : ''}
-                    </span>
-                  </button>
-                ) : (
-                  <span className="capability-detail__feature">
-                    <span className="capability-detail__feature-id">{feature.id}</span>
-                    <span className="capability-detail__feature-name">{feature.name}</span>
+            {card.pwcFeatures.map((feature) => {
+              // Shown whether or not the row is clickable: a citing feature
+              // sitting in another release is the finding, not a decoration
+              // on the link to it.
+              const body = (
+                <>
+                  <span className="capability-detail__feature-id">{feature.id}</span>
+                  <span className="capability-detail__feature-name">{feature.name}</span>
+                  <span className="capability-detail__feature-place">
+                    {releaseLabels?.get(feature.releaseId) ?? feature.releaseId}
+                    {card.releaseId && feature.releaseId !== card.releaseId
+                      ? ' · differs from this capability'
+                      : ''}
                   </span>
-                )}
-              </li>
-            ))}
+                </>
+              )
+              return (
+                <li key={feature.id}>
+                  {onSelectFeature ? (
+                    <button
+                      type="button"
+                      className="capability-detail__feature"
+                      onClick={() => onSelectFeature(feature.id)}
+                    >
+                      {body}
+                    </button>
+                  ) : (
+                    <span className="capability-detail__feature">{body}</span>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         )}
       </section>

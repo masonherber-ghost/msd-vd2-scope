@@ -1,7 +1,7 @@
 import { db } from '../database.js'
 import { replaceImportedAssumptions } from '../repositories/assumption-repository.js'
 import {
-  findCapability,
+  findCapabilityBySourceText,
   upsertImportedCapability,
 } from '../repositories/capability-repository.js'
 import {
@@ -267,7 +267,7 @@ export function importScope(result: ReconcileResult): ImportSummary {
       if (!capability) {
         throw new Error(`Import bug: capability ${edge.capabilityKey} missing`)
       }
-      const row = findCapability(capability.ref, capability.text)
+      const row = findCapabilityBySourceText(capability.ref, capability.text)
       if (!row) {
         throw new Error(`Import bug: capability row ${edge.capabilityKey} not written`)
       }

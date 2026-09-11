@@ -805,6 +805,13 @@ export default function ScopeMap() {
               onClose={() => setSelectedCapability(null)}
               releaseLabels={releaseLabelMap}
               phaseNames={phaseNameMap}
+              onSaveText={(text) =>
+                updateCapability.mutateAsync({
+                  id: capabilityDetail.id,
+                  patch: { text },
+                })
+              }
+              onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
                 // feature panel only exists in the feature views.

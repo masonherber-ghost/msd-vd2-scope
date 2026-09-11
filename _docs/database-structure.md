@@ -58,6 +58,16 @@ one forever (R-9.9).
 An upsert onto either must repeat the same expression in its `ON CONFLICT`
 target, or SQLite cannot match the index.
 
+**`capabilities.source_text` is what the import matches on, not `text`.**
+Identity by wording is right for the documents and wrong the moment someone
+corrects a typo: the import still carries the original text, matches nothing,
+and inserts a second capability beside the renamed one — 107 rows became 108.
+`source_text` records what the document said, so a renamed row is still
+recognised as the one that text belongs to. It is `NULL` for a capability
+created by hand, because no document named it and no import should claim it;
+the lookup falls back to `text` in that case, and for any row written before
+the column existed.
+
 **`pwc_feature_capabilities.source_citations`** exists because F-079 cites both
 casings of ref 980 — one capability, cited twice. That is one edge carrying 2
 citations, so 123 parsed links become 122 rows and `SUM(source_citations)`

@@ -26,6 +26,9 @@ let selectById: Statement | undefined
 let insertOne: Statement | undefined
 let deleteOne: Statement | undefined
 let selectDependents: Statement | undefined
+let selectBySourceText: Statement | undefined
+let selectByText: Statement | undefined
+let refreshImported: Statement | undefined
 
 export function getAllCapabilities(): CapabilityRow[] {
   selectAll ??= db.prepare(`SELECT ${COLUMNS} FROM capabilities ORDER BY mvp_ref, id`)
@@ -33,9 +36,20 @@ export function getAllCapabilities(): CapabilityRow[] {
 }
 
 /** Identity is (ref, case-insensitive text) — the dedup rule from PRD §11. */
-export function findCapability(ref: number, text: string): CapabilityRow | undefined {
+/**
+ * The row a document's capability belongs to.
+ *
+ * Matched on `source_text` — the wording the document used — not on `text`,
+ * which someone may since have corrected. Falls back to `text` for a row
+ * with no source text, which is one created by hand.
+ */
+export function findCapabilityBySourceText(
+  ref: number,
+  text: string,
+): CapabilityRow | undefined {
   selectByIdentity ??= db.prepare(
-    `SELECT ${COLUMNS} FROM capabilities WHERE mvp_ref = ? AND LOWER(text) = LOWER(?)`,
+    `SELECT ${COLUMNS} FROM capabilities
+      WHERE mvp_ref = ? AND LOWER(COALESCE(source_text, text)) = LOWER(?)`,
   )
   return selectByIdentity.get(ref, text) as CapabilityRow | undefined
 }
@@ -51,11 +65,44 @@ export function upsertImportedCapability(row: {
   source_phase_label: string | null
   source: string
 }): void {
+  // Claimed by its source text first: a row someone has renamed no longer
+  // matches on `text`, and inserting would leave a duplicate beside it.
+  // COALESCE, so a row predating the source_text column — or created by
+  // hand and never renamed — is still recognised by its own text.
+  selectBySourceText ??= db.prepare(
+    `SELECT id, source FROM capabilities
+      WHERE mvp_ref = ? AND LOWER(COALESCE(source_text, text)) = LOWER(?)`,
+  )
+  const owner = selectBySourceText.get(row.mvp_ref, row.text) as
+    | { id: number; source: string }
+    | undefined
+
+  if (owner) {
+    // A manual row is left exactly as it is (R-11.4) — but it has still
+    // claimed this source text, so nothing is inserted for it either.
+    if (owner.source === 'manual') return
+    refreshImported ??= db.prepare(`
+      UPDATE capabilities
+         SET mvp_feature_id      = @mvp_feature_id,
+             mvp_owner_ambiguous = @mvp_owner_ambiguous,
+             text                = @text,
+             actor               = @actor,
+             release_id          = @release_id,
+             phase_id            = @phase_id,
+             source_phase_label  = @source_phase_label,
+             source              = @source,
+             updated_at          = datetime('now')
+       WHERE id = @id
+    `)
+    refreshImported.run({ ...row, id: owner.id })
+    return
+  }
+
   upsert ??= db.prepare(`
     INSERT INTO capabilities (mvp_feature_id, mvp_ref, mvp_owner_ambiguous, text, actor,
-                              release_id, phase_id, source_phase_label, source)
+                              release_id, phase_id, source_phase_label, source, source_text)
     VALUES (@mvp_feature_id, @mvp_ref, @mvp_owner_ambiguous, @text, @actor,
-            @release_id, @phase_id, @source_phase_label, @source)
+            @release_id, @phase_id, @source_phase_label, @source, @text)
     ON CONFLICT (mvp_ref, LOWER(text)) DO UPDATE SET
       mvp_feature_id      = excluded.mvp_feature_id,
       mvp_owner_ambiguous = excluded.mvp_owner_ambiguous,
@@ -64,10 +111,22 @@ export function upsertImportedCapability(row: {
       phase_id            = excluded.phase_id,
       source_phase_label  = excluded.source_phase_label,
       source              = excluded.source,
+      source_text         = excluded.source_text,
       updated_at          = datetime('now')
     WHERE capabilities.source != 'manual'
   `)
   upsert.run(row)
+}
+
+/** An existing capability with this exact wording under the same ref. */
+export function findCapabilityByText(
+  ref: number,
+  text: string,
+): CapabilityRow | undefined {
+  selectByText ??= db.prepare(
+    `SELECT ${COLUMNS} FROM capabilities WHERE mvp_ref = ? AND LOWER(text) = LOWER(?)`,
+  )
+  return selectByText.get(ref, text) as CapabilityRow | undefined
 }
 
 export function getCapabilityById(id: number): CapabilityRow | undefined {

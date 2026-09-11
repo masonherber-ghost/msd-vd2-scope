@@ -62,3 +62,33 @@
   display: flex;
   gap: var(--spacing-2);
 }
+
+/* ========================================
+   HEADING VARIANT
+   ======================================== */
+
+/* The value is the title, so it is also the control: a separate Edit button
+   beside a heading reads as a second heading. */
+.inline-edit__heading-button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+}
+
+.inline-edit__heading-button:hover {
+  border-bottom-color: var(--color-border);
+}
+
+.inline-edit__heading-button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}

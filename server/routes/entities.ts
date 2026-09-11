@@ -28,6 +28,7 @@ import {
   deleteCapability,
   getAllCapabilities,
   getCapabilityById,
+  findCapabilityByText,
   updateCapability,
 } from '../repositories/capability-repository.js'
 import {
@@ -340,7 +341,8 @@ capabilitiesRouter.post('/', (req, res) => {
 
 capabilitiesRouter.patch('/:id', (req, res) => {
   const id = parseIntId(req.params.id, 'Capability')
-  if (!getCapabilityById(id)) throw new HttpError(404, `There is no capability ${id}.`)
+  const current = getCapabilityById(id)
+  if (!current) throw new HttpError(404, `There is no capability ${id}.`)
 
   const parsed = updateCapabilitySchema.safeParse(req.body)
   if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
@@ -352,6 +354,19 @@ capabilitiesRouter.patch('/:id', (req, res) => {
   // document's old label would have it disagreeing with its own phase.
   if (patch.phase_id !== undefined) {
     patch.source_phase_label = getPhase(patch.phase_id)?.name ?? patch.phase_id
+  }
+
+  // Capability identity is (ref, case-insensitive text), so a rename onto
+  // another capability's wording under the same ref hits a unique index.
+  // Without this it surfaces as a 500 with a raw SQLite message.
+  if (patch.text !== undefined) {
+    const clash = findCapabilityByText(current.mvp_ref, patch.text)
+    if (clash && clash.id !== id) {
+      throw new HttpError(
+        409,
+        `MVP feature ${current.mvp_ref} already has a capability called “${clash.text}”.`,
+      )
+    }
   }
 
   const updated = updateCapability(id, patch)

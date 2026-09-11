@@ -2085,3 +2085,88 @@ describe('ScopeMap — the capability view', () => {
     expect(screen.getByRole('button', { name: 'Drop Actor filter' })).toBeInTheDocument()
   })
 })
+
+describe('ScopeMap — editing a capability’s text', () => {
+  const openCapability = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderPage('/?view=capability')
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }))
+    return screen.getByRole('complementary', {
+      name: 'Capability: Electronic T&Cs acceptance',
+    })
+  }
+
+  it('makes the title itself the control', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+    // The title is the thing you click — no separate Edit button beside it.
+    const title = within(panel).getByRole('button', {
+      name: 'Edit capability text: Electronic T&Cs acceptance',
+    })
+    expect(title.closest('h2')).toHaveClass('capability-detail__name')
+  })
+
+  it('saves a new text', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: /^Edit capability text:/ }),
+    )
+    const input = screen.getByLabelText('Capability text')
+    await user.clear(input)
+    await user.type(input, 'Electronic terms and conditions acceptance')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(state.capabilityMoves).toHaveLength(1))
+    expect(state.capabilityMoves[0]).toEqual({
+      id: 12,
+      patch: { text: 'Electronic terms and conditions acceptance' },
+    })
+  })
+
+  it('cancels on Escape without writing', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: /^Edit capability text:/ }),
+    )
+    await user.type(screen.getByLabelText('Capability text'), ' extra')
+    await user.keyboard('{Escape}')
+
+    expect(state.capabilityMoves).toHaveLength(0)
+    expect(
+      within(screen.getByRole('complementary', { name: /^Capability:/ })).getByRole(
+        'button',
+        { name: /^Edit capability text:/ },
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps the draft when the server rejects it', async () => {
+    const user = userEvent.setup()
+    const panel = await openCapability(user)
+    state.writeFail = 'MVP feature 948 already has a capability called “Something else”.'
+
+    await user.click(
+      within(panel).getByRole('button', { name: /^Edit capability text:/ }),
+    )
+    const input = screen.getByLabelText('Capability text')
+    await user.clear(input)
+    await user.type(input, 'Something else')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'MVP feature 948 already has a capability called',
+      ),
+    )
+    // Nothing typed is lost.
+    expect(screen.getByLabelText('Capability text')).toHaveValue('Something else')
+  })
+})

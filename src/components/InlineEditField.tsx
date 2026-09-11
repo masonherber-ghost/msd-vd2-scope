@@ -16,6 +16,15 @@ export type InlineEditFieldProps = {
   highlight?: string
   /** Reports whether an edit is in progress, for navigation protection. */
   onDirtyChange?: (dirty: boolean) => void
+  /**
+   * `heading` makes the value itself the thing you click, rendered as the
+   * panel's own heading rather than a labelled field beside an Edit button.
+   * Used where the value *is* the title, so a separate control would sit
+   * oddly next to it.
+   */
+  variant?: 'field' | 'heading'
+  /** Class for the heading, so the caller keeps its own type styling. */
+  headingClassName?: string
 }
 
 /**
@@ -32,6 +41,8 @@ export function InlineEditField({
   displayValue,
   highlight = '',
   onDirtyChange,
+  variant = 'field',
+  headingClassName,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -82,6 +93,22 @@ export function InlineEditField({
     } finally {
       setSaving(false)
     }
+  }
+
+  if (!editing && variant === 'heading') {
+    return (
+      <h2 className={headingClassName}>
+        <button
+          type="button"
+          className="inline-edit__heading-button"
+          onClick={() => setEditing(true)}
+          aria-label={`Edit ${label.toLowerCase()}: ${displayValue ?? value}`}
+        >
+          <HighlightText text={displayValue ?? value ?? ''} term={highlight} />
+          {!displayValue && !value ? <em>Not set</em> : null}
+        </button>
+      </h2>
+    )
   }
 
   if (!editing) {

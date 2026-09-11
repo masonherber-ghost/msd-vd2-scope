@@ -12,6 +12,7 @@ const { resetSchema } = await import('../test-support/apply-migrations.js')
 const { ImportDriftError, chooseMvpOwner, importScope } = await import('./importer.js')
 const { loadScopeFromSources } = await import('./scope-source.js')
 const { getScopeGraph } = await import('../repositories/scope-repository.js')
+const { updateCapability } = await import('../repositories/capability-repository.js')
 
 const reconciled = loadScopeFromSources()
 
@@ -410,6 +411,79 @@ describe('importScope settles conflict flags against what it wrote', () => {
         )
         .all(),
     ).toEqual(before)
+  })
+})
+
+describe('importScope keeps a renamed capability, rather than duplicating it', () => {
+  const first = () =>
+    db
+      .prepare('SELECT id, mvp_ref, text, source_text FROM capabilities ORDER BY id LIMIT 1')
+      .get() as { id: number; mvp_ref: number; text: string; source_text: string }
+
+  it('records the document’s wording as source_text', () => {
+    importScope(reconciled)
+    const row = first()
+    expect(row.source_text).toBe(row.text)
+  })
+
+  it('claims the renamed row by its source text instead of inserting a second', () => {
+    importScope(reconciled)
+    const before = db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()
+    const target = first()
+
+    updateCapability(target.id, { text: 'Renamed by hand' })
+    importScope(reconciled)
+
+    expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual(before)
+    const after = db
+      .prepare('SELECT text, source, source_text FROM capabilities WHERE id = ?')
+      .get(target.id) as { text: string; source: string; source_text: string }
+    // The rename stands, and the row still answers to the document's wording.
+    expect(after.text).toBe('Renamed by hand')
+    expect(after.source).toBe('manual')
+    expect(after.source_text).toBe(target.text)
+  })
+
+  it('leaves no orphan carrying the original wording', () => {
+    importScope(reconciled)
+    const target = first()
+    updateCapability(target.id, { text: 'Renamed by hand' })
+    importScope(reconciled)
+
+    const sameText = db
+      .prepare('SELECT COUNT(*) AS n FROM capabilities WHERE mvp_ref = ? AND text = ?')
+      .get(target.mvp_ref, target.text)
+    expect(sameText).toEqual({ n: 0 })
+  })
+
+  it('recognises a row that predates the source_text column', () => {
+    importScope(reconciled)
+    const target = first()
+    // Rows written before migration 005 have no source_text; the lookup
+    // falls back to their text, which is what it was before.
+    db.prepare('UPDATE capabilities SET source_text = NULL WHERE id = ?').run(target.id)
+    const before = db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()
+
+    importScope(reconciled)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual(before)
+  })
+
+  it('never claims a capability created by hand', () => {
+    importScope(reconciled)
+    const before = db.prepare('SELECT COUNT(*) AS n FROM capabilities').get() as { n: number }
+    // No document named it, so source_text is null and no import owns it.
+    db.prepare(
+      `INSERT INTO capabilities (mvp_ref, text, actor, source)
+       VALUES (9999, 'Invented here', 'staff', 'manual')`,
+    ).run()
+
+    importScope(reconciled)
+    expect(
+      db.prepare("SELECT COUNT(*) AS n FROM capabilities WHERE text = 'Invented here'").get(),
+    ).toEqual({ n: 1 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM capabilities').get()).toEqual({
+      n: before.n + 1,
+    })
   })
 })
 

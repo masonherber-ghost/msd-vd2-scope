@@ -17,7 +17,11 @@ const {
   renumberAssumptions,
   replaceImportedAssumptions,
 } = await import('./assumption-repository.js')
-const { upsertImportedCapability, getAllCapabilities, findCapability } = await import(
+const {
+  upsertImportedCapability,
+  getAllCapabilities,
+  findCapabilityByText: findCapability,
+} = await import(
   './capability-repository.js'
 )
 const { findMvpFeature, getAllMvpFeatures, upsertImportedMvpFeature, countMvpFeatureDependents } =
