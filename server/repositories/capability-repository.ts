@@ -31,6 +31,13 @@ let selectDependents: Statement | undefined
 let selectBySourceText: Statement | undefined
 let selectByText: Statement | undefined
 let refreshImported: Statement | undefined
+let selectOwnedByMvp: Statement | undefined
+let releaseOwnership: Statement | undefined
+let claimOwnership: Statement | undefined
+let applyOwnership: ((mvpFeatureId: number, capabilityIds: number[]) => void) | undefined
+let selectOwnedPlacement: Statement | undefined
+let movePlacement: Statement | undefined
+let applyMove: ((mvpFeatureId: number, patch: PlacementPatch) => number[]) | undefined
 
 export function getAllCapabilities(): CapabilityRow[] {
   selectAll ??= db.prepare(`SELECT ${COLUMNS} FROM capabilities ORDER BY mvp_ref, id`)
@@ -188,6 +195,134 @@ export function updateCapability(
         WHERE id = @id RETURNING ${COLUMNS}`,
     )
     .get({ ...patch, id }) as CapabilityRow | undefined
+}
+
+/** The capabilities this MSD feature record owns, in id order. */
+export function getCapabilityIdsForMvpFeature(mvpFeatureId: number): number[] {
+  selectOwnedByMvp ??= db.prepare(
+    'SELECT id FROM capabilities WHERE mvp_feature_id = ? ORDER BY id',
+  )
+  return (selectOwnedByMvp.all(mvpFeatureId) as { id: number }[]).map((row) => row.id)
+}
+
+/**
+ * Makes this MSD feature record the owner of exactly these capabilities, and
+ * of no others. Capabilities it owned and no longer does are left ownerless
+ * rather than moved somewhere — where they belong is the next decision, and
+ * guessing at it is what D-3 exists to stop.
+ *
+ * `mvp_ref` is deliberately untouched. It records the ref the source document
+ * cited; `mvp_feature_id` records which record of that ref owns it. Re-owning
+ * by hand answers the second question, not the first — and keeping the ref is
+ * what lets a later import still recognise the row (it matches on ref plus
+ * source text).
+ *
+ * Either way the owner is now stated rather than chosen by rule, so
+ * `mvp_owner_ambiguous` clears, and `source` becomes manual so the next import
+ * does not quietly hand the row back to the ref's rule-chosen record.
+ */
+export function setMvpFeatureCapabilities(
+  mvpFeatureId: number,
+  capabilityIds: number[],
+): void {
+  releaseOwnership ??= db.prepare(`
+    UPDATE capabilities
+       SET mvp_feature_id = NULL, mvp_owner_ambiguous = 0,
+           source = 'manual', updated_at = datetime('now')
+     WHERE id = ?
+  `)
+  claimOwnership ??= db.prepare(`
+    UPDATE capabilities
+       SET mvp_feature_id = @mvp_feature_id, mvp_owner_ambiguous = 0,
+           source = 'manual', updated_at = datetime('now')
+     WHERE id = @id
+  `)
+
+  // Only what actually changes is written, so re-saving the same set is a
+  // no-op rather than marking every row manual.
+  applyOwnership ??= db.transaction((owner: number, ids: number[]) => {
+    const wanted = new Set(ids)
+    const current = new Set(getCapabilityIdsForMvpFeature(owner))
+    for (const id of current) {
+      if (!wanted.has(id)) releaseOwnership!.run(id)
+    }
+    for (const id of wanted) {
+      if (!current.has(id)) claimOwnership!.run({ id, mvp_feature_id: owner })
+    }
+  })
+
+  applyOwnership(mvpFeatureId, capabilityIds)
+}
+
+type PlacementPatch = {
+  release_id?: string
+  phase_id?: string
+  /** The phase's name, so a hand-moved row carries the label of where it now is. */
+  source_phase_label?: string
+}
+
+/**
+ * Moves every capability this MSD feature record owns to a release, a stage,
+ * or both — which is how an MSD feature is re-assigned. The record has no
+ * placement of its own: it sits where the capabilities it owns sit, so moving
+ * it means moving them.
+ *
+ * Only the axis given moves. Moving a record to another release leaves each
+ * capability in its own stage, so a record whose capabilities straddle two
+ * stages keeps that straddle instead of being silently collapsed into one
+ * cell — the straddle is the kind of thing this app exists to show.
+ *
+ * Rows already at the target are skipped, so a re-save writes nothing and
+ * does not mark an imported row manual.
+ *
+ * Returns the ids actually moved: their placement is shared with every PwC
+ * feature citing them, so the caller has conflicts to recompute (PRD §16 P-2).
+ */
+export function moveCapabilitiesForMvpFeature(
+  mvpFeatureId: number,
+  patch: PlacementPatch,
+): number[] {
+  selectOwnedPlacement ??= db.prepare(
+    `SELECT id, release_id, phase_id FROM capabilities
+      WHERE mvp_feature_id = ? ORDER BY id`,
+  )
+  movePlacement ??= db.prepare(`
+    UPDATE capabilities
+       SET release_id         = COALESCE(@release_id, release_id),
+           phase_id           = COALESCE(@phase_id, phase_id),
+           source_phase_label = CASE WHEN @phase_id IS NULL
+                                     THEN source_phase_label
+                                     ELSE @source_phase_label END,
+           source             = 'manual',
+           updated_at         = datetime('now')
+     WHERE id = @id
+  `)
+
+  applyMove ??= db.transaction((owner: number, values: PlacementPatch) => {
+    const rows = selectOwnedPlacement!.all(owner) as {
+      id: number
+      release_id: string | null
+      phase_id: string | null
+    }[]
+    const moved: number[] = []
+    for (const row of rows) {
+      const changesRelease =
+        values.release_id !== undefined && values.release_id !== row.release_id
+      const changesPhase = values.phase_id !== undefined && values.phase_id !== row.phase_id
+      if (!changesRelease && !changesPhase) continue
+
+      movePlacement!.run({
+        id: row.id,
+        release_id: changesRelease ? values.release_id : null,
+        phase_id: changesPhase ? values.phase_id : null,
+        source_phase_label: values.source_phase_label ?? null,
+      })
+      moved.push(row.id)
+    }
+    return moved
+  })
+
+  return applyMove(mvpFeatureId, patch)
 }
 
 /** Live feature links pointing at this capability (R-9.4). */

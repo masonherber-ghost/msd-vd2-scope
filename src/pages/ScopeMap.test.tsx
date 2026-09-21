@@ -20,6 +20,9 @@ const { state } = await vi.hoisted(async () => ({
     capabilityLinkCalls: [] as { id: string; capabilityIds: number[] }[],
     resolved: [] as { id: number; body: unknown }[],
     capabilityMoves: [] as { id: number; patch: Record<string, unknown> }[],
+    mvpCapabilitySets: [] as { id: number; capabilityIds: number[] }[],
+    mvpPlacements: [] as { id: number; patch: { release_id?: string; phase_id?: string } }[],
+    capabilityDeletes: [] as { id: number; cascade: boolean }[],
   },
 }))
 
@@ -69,7 +72,73 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
           }
         },
       },
+      mvpFeatures: {
+        // Mirrors the server: the record has no placement of its own, so the
+        // move lands on the capabilities it owns — one axis at a time.
+        setPlacement: async (
+          id: number,
+          patch: { release_id?: string; phase_id?: string },
+        ) => {
+          failWrite()
+          state.mvpPlacements.push({ id, patch })
+          const graph = state.graph as ScopeGraph
+          const moved: number[] = []
+          state.graph = {
+            ...graph,
+            capabilities: graph.capabilities.map((c) => {
+              if (c.mvp_feature_id !== id) return c
+              moved.push(c.id)
+              return {
+                ...c,
+                release_id: patch.release_id ?? c.release_id,
+                phase_id: patch.phase_id ?? c.phase_id,
+              }
+            }),
+          } as ScopeGraph
+          return { mvp_feature_id: id, moved: moved.length, capabilityIds: moved } as never
+        },
+
+        // Mirrors the server: this record ends up owning exactly this set,
+        // and anything it owned and no longer does is left ownerless rather
+        // than moved or deleted.
+        setCapabilities: async (id: number, capabilityIds: number[]) => {
+          failWrite()
+          state.mvpCapabilitySets.push({ id, capabilityIds })
+          const graph = state.graph as ScopeGraph
+          const wanted = new Set(capabilityIds)
+          state.graph = {
+            ...graph,
+            capabilities: graph.capabilities.map((c) => {
+              if (wanted.has(c.id)) {
+                return { ...c, mvp_feature_id: id, mvp_owner_ambiguous: 0 }
+              }
+              if (c.mvp_feature_id === id) {
+                return { ...c, mvp_feature_id: null, mvp_owner_ambiguous: 0 }
+              }
+              return c
+            }),
+          } as ScopeGraph
+          return { mvp_feature_id: id, capabilityIds } as never
+        },
+      },
       capabilities: {
+        // The citation rows go with it, the way ON DELETE CASCADE does.
+        remove: async (id: number, cascade: boolean) => {
+          failWrite()
+          state.capabilityDeletes.push({ id, cascade })
+          const graph = state.graph as ScopeGraph
+          const cascaded = graph.featureCapabilityLinks.filter(
+            (link) => link.capability_id === id,
+          ).length
+          state.graph = {
+            ...graph,
+            capabilities: graph.capabilities.filter((c) => c.id !== id),
+            featureCapabilityLinks: graph.featureCapabilityLinks.filter(
+              (link) => link.capability_id !== id,
+            ),
+          } as ScopeGraph
+          return { deleted: 1, cascaded: { features: cascaded } } as never
+        },
         update: async (id: number, patch: Record<string, unknown>) => {
           failWrite()
           state.capabilityMoves.push({ id, patch })
@@ -187,6 +256,9 @@ beforeEach(() => {
   state.capabilityLinkCalls = []
   state.resolved = []
   state.capabilityMoves = []
+  state.mvpCapabilitySets = []
+  state.mvpPlacements = []
+  state.capabilityDeletes = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
 
@@ -2251,5 +2323,327 @@ describe('ScopeMap — raising a question on a capability', () => {
       ).toBeInTheDocument(),
     )
     expect(screen.getAllByRole('button', { name: /MSD feature 9\d\d$/ })).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Reassigning which capabilities an MSD feature record owns, wired end to end.
+// The panel's own contract is covered in MvpDetailPanel.test.tsx; what is
+// asserted here is that the page sends it and that the map shows the result.
+// ---------------------------------------------------------------------------
+
+describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
+  const openRecord = async (
+    user: ReturnType<typeof userEvent.setup>,
+    name: string,
+  ) => {
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name })).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name }))
+  }
+
+  it('stays closed until the shown capability is tapped', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    expect(
+      screen.queryByRole('group', { name: /Capabilities owned by/ }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Invite employer to register' }))
+
+    expect(
+      screen.getByRole('group', { name: 'Capabilities owned by 938 — 2 selected' }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers every capability, saying which record owns each one', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+
+    const picker = screen.getByRole('group', { name: /Capabilities owned by 948 · 1B/ })
+    expect(within(picker).getAllByRole('checkbox')).toHaveLength(3)
+    expect(
+      within(picker).getByRole('checkbox', { name: /Invite employer to register.*owned by 938/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('re-assigns the record to a release by moving what it owns', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    await user.click(screen.getByRole('button', { name: 'Edit release' }))
+    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(state.mvpPlacements).toEqual([{ id: 2, patch: { release_id: '1.4' } }]),
+    )
+  })
+
+  it('shows the record in its new release without a reload', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    await user.click(screen.getByRole('button', { name: 'Edit release' }))
+    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    await waitFor(() =>
+      expect(
+        within(panel).getByText('Release 1.4 · Access & Onboarding'),
+      ).toBeInTheDocument(),
+    )
+  })
+
+  it('offers no placement editor on a record with nothing to move', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 · 1A Additional users')
+
+    // It is placed by the features citing it, which this control cannot move.
+    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
+  })
+
+  it('offers to assign, not change, on a record that owns nothing', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 · 1A Additional users')
+
+    expect(screen.getByRole('button', { name: 'Assign capabilities' })).toBeInTheDocument()
+  })
+
+  it('sends the complete new set when a capability is claimed', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+
+    await waitFor(() =>
+      expect(state.mvpCapabilitySets).toEqual([{ id: 3, capabilityIds: [12, 10] }]),
+    )
+  })
+
+  it('shows the claimed capability under its new record without a reload', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' })
+    await waitFor(() =>
+      expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument(),
+    )
+    expect(within(panel).getByRole('checkbox', { name: /Invite employer to register/ })).toBeChecked()
+  })
+
+  it('takes it off the record that owned it before', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+    await waitFor(() => expect(state.mvpCapabilitySets).toHaveLength(1))
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    expect(within(panel).getByText('Capabilities (1)')).toBeInTheDocument()
+    expect(
+      within(panel).queryByText('Invite employer to register'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('unticking leaves the capability on the map, owned by nothing', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+    await waitFor(() =>
+      expect(state.mvpCapabilitySets).toEqual([{ id: 2, capabilityIds: [11] }]),
+    )
+
+    // Still delivered scope — it simply has no owning record now.
+    await user.click(screen.getByRole('button', { name: 'By capability' }))
+    expect(
+      await screen.findByRole('button', { name: /^Invite employer to register/ }),
+    ).toBeInTheDocument()
+  })
+
+  it("surfaces the server's refusal and keeps the record as it was", async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    state.writeFail = 'No capability with id 10.'
+    await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
+    await user.click(
+      screen.getByRole('checkbox', { name: /Invite employer to register/ }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No capability with id 10.')
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Deleting a capability, and reaching its owning MSD record.
+// ---------------------------------------------------------------------------
+
+describe('ScopeMap — deleting a capability from its panel', () => {
+  const openCapability = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      ).toBeInTheDocument(),
+    )
+    await user.click(screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }))
+    return screen.getByRole('complementary', {
+      name: 'Capability: Electronic T&Cs acceptance',
+    })
+  }
+
+  it('names the citation that goes with it before anything is deleted', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete this capability' }),
+    )
+
+    expect(within(panel).getByText(/removes the citation from F-002/)).toBeInTheDocument()
+    expect(state.capabilityDeletes).toEqual([])
+  })
+
+  it('cancelling deletes nothing', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete this capability' }),
+    )
+    await user.click(within(panel).getByRole('button', { name: 'Cancel' }))
+
+    expect(state.capabilityDeletes).toEqual([])
+    expect(
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('cascades the citations, removes the card and closes the panel', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete this capability' }),
+    )
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete and remove those citations' }),
+    )
+
+    await waitFor(() =>
+      expect(state.capabilityDeletes).toEqual([{ id: 12, cascade: true }]),
+    )
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('complementary', {
+          name: 'Capability: Electronic T&Cs acceptance',
+        }),
+      ).not.toBeInTheDocument(),
+    )
+    expect(
+      screen.queryByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+    ).not.toBeInTheDocument()
+    expect(url()).not.toContain('selectedCapability')
+  })
+
+  it('asks for no cascade when nothing cites it', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      featureCapabilityLinks: base.featureCapabilityLinks.filter(
+        (link) => link.capability_id !== 12,
+      ),
+    }
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete this capability' }),
+    )
+    expect(within(panel).getByText(/Nothing cites it/)).toBeInTheDocument()
+    await user.click(within(panel).getByRole('button', { name: 'Delete it' }))
+
+    await waitFor(() =>
+      expect(state.capabilityDeletes).toEqual([{ id: 12, cascade: false }]),
+    )
+  })
+
+  it("surfaces the server's refusal and keeps the capability", async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    state.writeFail = 'Cannot delete capability 12 — 1 PwC feature cites it.'
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete this capability' }),
+    )
+    await user.click(
+      within(panel).getByRole('button', { name: 'Delete and remove those citations' }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cannot delete capability 12 — 1 PwC feature cites it.',
+    )
+    expect(
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('opens the owning MSD record from the capability panel', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    const panel = await openCapability(user)
+
+    await user.click(
+      within(panel).getByRole('button', { name: /948 · 1B/ }),
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' }),
+      ).toBeInTheDocument(),
+    )
+    expect(url()).toContain('view=mvp')
+    expect(url()).toContain('selectedMvp=3')
+    expect(url()).not.toContain('selectedCapability')
   })
 })

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 export type LinkOption = {
   id: number
@@ -20,6 +20,11 @@ export type LinkPickerProps = {
   searchLabel?: string
   /** Sorts selected options to the top, so the current set reads first. */
   selectedFirst?: boolean
+  /**
+   * Takes focus on mount. Set it where the picker replaces the control that
+   * opened it, or focus falls to <body> (WCAG 2.4.3).
+   */
+  autoFocus?: boolean
 }
 
 /**
@@ -35,12 +40,18 @@ export function LinkPicker({
   onChange,
   searchLabel = 'Search',
   selectedFirst = true,
+  autoFocus = false,
 }: LinkPickerProps) {
+  const searchRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [pendingId, setPendingId] = useState<number | null>(null)
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds])
+
+  useEffect(() => {
+    if (autoFocus) searchRef.current?.focus()
+  }, [autoFocus])
 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -85,6 +96,7 @@ export function LinkPicker({
         {searchLabel}
       </label>
       <input
+        ref={searchRef}
         id={searchId}
         type="search"
         className="link-picker__search"

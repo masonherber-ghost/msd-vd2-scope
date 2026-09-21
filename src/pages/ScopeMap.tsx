@@ -21,8 +21,11 @@ import {
 import {
   useCreateAssumption,
   useDeleteAssumption,
+  useDeleteCapability,
   useMoveAssumption,
   useResolveConflict,
+  useSetMvpCapabilities,
+  useSetMvpPlacement,
   useUpdateAssumption,
   useUpdateCapability,
 } from '@/hooks/useEntityMutations'
@@ -39,6 +42,7 @@ import {
   applyMvpFilters,
   blameMvpGroups,
   buildMvpCards,
+  mvpCardLabel,
   projectMvpCells,
 } from '@/lib/mvp-derive'
 import {
@@ -346,8 +350,11 @@ export default function ScopeMap() {
   const removeAssumption = useDeleteAssumption()
   const resolveConflict = useResolveConflict()
   const updateCapability = useUpdateCapability()
+  const deleteCapability = useDeleteCapability()
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
+  const setMvpCapabilities = useSetMvpCapabilities()
+  const setMvpPlacement = useSetMvpPlacement()
   const nextId = useNextFeatureId(creatingIn !== null)
 
   // ---- Options for the panel's editors ----------------------------------
@@ -407,6 +414,49 @@ export default function ScopeMap() {
         related: ownRefs.has(capability.mvp_ref),
       }))
   }, [scope.data, detail])
+
+  /**
+   * The same lookup for the MSD panel, where ticking a box changes who *owns*
+   * the capability rather than who cites it. Every capability is offered, and
+   * one owned elsewhere says so — reassigning it takes it off that record.
+   */
+  const mvpCapabilityOptions = useMemo(() => {
+    if (!scope.data || !mvpDetail) return []
+    const releaseLabel = new Map(scope.data.releases.map((r) => [r.id, r.label]))
+    const ownerLabel = new Map(
+      scope.data.mvpFeatures.map((m) => [
+        m.id,
+        mvpCardLabel({ ref: m.ref, scopeOption: m.scope_option }),
+      ]),
+    )
+    return scope.data.capabilities
+      .slice()
+      .sort((a, b) => a.mvp_ref - b.mvp_ref || a.text.localeCompare(b.text))
+      .map((capability) => {
+        const owner =
+          capability.mvp_feature_id === null
+            ? 'no MSD feature'
+            : capability.mvp_feature_id === mvpDetail.id
+              ? 'this record'
+              : `owned by ${ownerLabel.get(capability.mvp_feature_id) ?? capability.mvp_feature_id}`
+        return {
+          id: capability.id,
+          label: capability.text,
+          hint: `${capability.mvp_ref} · ${capability.actor} · ${owner}`,
+          badge: capability.release_id
+            ? (releaseLabel.get(capability.release_id) ?? capability.release_id)
+            : 'unplaced',
+          // Cited under this record's ref, which is where its capabilities
+          // would normally come from.
+          related: capability.mvp_ref === mvpDetail.ref,
+        }
+      })
+  }, [scope.data, mvpDetail])
+
+  const ownedCapabilityIds = useMemo(
+    () => (mvpDetail ? mvpDetail.capabilities.map((c) => c.id) : []),
+    [mvpDetail],
+  )
 
   const linkedMvpIds = useMemo(
     () =>
@@ -818,6 +868,14 @@ export default function ScopeMap() {
                 })
               }
               onDirtyChange={setDirty}
+              onDelete={async (cascade) => {
+                await deleteCapability.mutateAsync({
+                  id: capabilityDetail.id,
+                  cascade,
+                })
+                // Nothing left to show, so the panel closes itself.
+                setSelectedCapability(null)
+              }}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
                 // feature panel only exists in the feature views.
@@ -826,6 +884,16 @@ export default function ScopeMap() {
                   next.delete('view')
                   next.delete('selectedCapability')
                   next.set('selected', id)
+                  return next
+                })
+              }}
+              onSelectMvpFeature={(id) => {
+                // The MSD record's own panel lives in the MSD-feature view.
+                setSearchParams((current) => {
+                  const next = new URLSearchParams(current)
+                  next.set('view', 'mvp')
+                  next.delete('selectedCapability')
+                  next.set('selectedMvp', String(id))
                   return next
                 })
               }}
@@ -838,6 +906,17 @@ export default function ScopeMap() {
               onClose={() => setSelectedMvp(null)}
               releaseLabels={releaseLabelMap}
               phaseNames={phaseNameMap}
+              capabilityOptions={mvpCapabilityOptions}
+              ownedCapabilityIds={ownedCapabilityIds}
+              onSetCapabilities={(capabilityIds) =>
+                setMvpCapabilities.mutateAsync({ id: mvpDetail.id, capabilityIds })
+              }
+              releaseOptions={releaseOptions}
+              phaseOptions={phaseOptions}
+              onSetPlacement={(patch) =>
+                setMvpPlacement.mutateAsync({ id: mvpDetail.id, patch })
+              }
+              onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
                 // feature panel only exists in the feature views.

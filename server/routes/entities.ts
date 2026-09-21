@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { z } from 'zod'
 import {
   createAssumptionSchema,
   createCapabilitySchema,
@@ -8,6 +9,8 @@ import {
   moveSchema,
   summariseZodError,
   updateAssumptionSchema,
+  setCapabilityLinksSchema,
+  setMvpPlacementSchema,
   updateCapabilitySchema,
   updateMvpFeatureSchema,
   updatePhaseSchema,
@@ -28,7 +31,10 @@ import {
   deleteCapability,
   getAllCapabilities,
   getCapabilityById,
+  getCapabilityIdsForMvpFeature,
   findCapabilityByText,
+  moveCapabilitiesForMvpFeature,
+  setMvpFeatureCapabilities,
   updateCapability,
 } from '../repositories/capability-repository.js'
 import {
@@ -61,6 +67,11 @@ import {
 import { recomputeConflictsForCapability } from '../services/conflict-recompute.js'
 
 /** Every handler here is synchronous, so `throw` reaches the error middleware. */
+
+/** Cascade is a separate, explicitly confirmed action (R-9.4, R-9.5). */
+const deleteQuerySchema = z.object({
+  cascade: z.enum(['true', 'false']).optional(),
+})
 
 function parseIntId(raw: string, what: string): number {
   const id = Number(raw)
@@ -282,6 +293,70 @@ mvpFeaturesRouter.patch('/:id', (req, res) => {
   res.json(updateMvpFeature(id, parsed.data))
 })
 
+/**
+ * Replaces the capabilities this MSD feature record owns with exactly this
+ * set. Ownership has one home — the record that owns them — so this is the
+ * only place it is edited; a PwC feature edits which capabilities it *cites*,
+ * which is a different relationship.
+ */
+mvpFeaturesRouter.put('/:id/capabilities', (req, res) => {
+  const id = parseIntId(req.params.id, 'MVP feature')
+  if (!getMvpFeatureById(id)) throw new HttpError(404, `There is no MVP feature ${id}.`)
+
+  const parsed = setCapabilityLinksSchema.safeParse(req.body)
+  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
+
+  const known = new Set(getAllCapabilities().map((c) => c.id))
+  const unknown = parsed.data.capabilityIds.filter((capId) => !known.has(capId))
+  if (unknown.length > 0) {
+    throw new HttpError(422, `No capability with id ${unknown.join(', ')}.`)
+  }
+
+  setMvpFeatureCapabilities(id, parsed.data.capabilityIds)
+  res.json({ mvp_feature_id: id, capabilityIds: getCapabilityIdsForMvpFeature(id) })
+})
+
+/**
+ * Re-assigns an MSD feature record to a release, a stage, or both.
+ *
+ * Neither source gives an MSD feature a placement of its own — it sits where
+ * the capabilities it owns sit — so the move is applied to those capabilities.
+ * That placement is shared with every PwC feature citing them, so each moved
+ * capability has its conflicts re-judged (PRD §16 P-2): a move can settle a
+ * disagreement or create one, and both must show.
+ */
+mvpFeaturesRouter.put('/:id/placement', (req, res) => {
+  const id = parseIntId(req.params.id, 'MVP feature')
+  const record = getMvpFeatureById(id)
+  if (!record) throw new HttpError(404, `There is no MVP feature ${id}.`)
+
+  const parsed = setMvpPlacementSchema.safeParse(req.body)
+  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
+  assertCapabilityPlacement(parsed.data.release_id, parsed.data.phase_id)
+
+  // Refused rather than silently doing nothing: a record with no capability is
+  // placed by the features citing it, and this endpoint cannot move those.
+  if (getCapabilityIdsForMvpFeature(id).length === 0) {
+    throw new HttpError(
+      409,
+      `MVP feature ${record.ref} owns no capability, so there is nothing to move. ` +
+        'It is placed by the PwC features that cite it.',
+    )
+  }
+
+  const patch = { ...parsed.data } as Parameters<typeof moveCapabilitiesForMvpFeature>[1]
+  // A phase conflict is measured on the source labels, so a moved capability
+  // has to carry the label of where it now is.
+  if (patch.phase_id !== undefined) {
+    patch.source_phase_label = getPhase(patch.phase_id)?.name ?? patch.phase_id
+  }
+
+  const moved = moveCapabilitiesForMvpFeature(id, patch)
+  for (const capabilityId of moved) recomputeConflictsForCapability(capabilityId)
+
+  res.json({ mvp_feature_id: id, moved: moved.length, capabilityIds: moved })
+})
+
 mvpFeaturesRouter.delete('/:id', (req, res) => {
   const id = parseIntId(req.params.id, 'MVP feature')
   const existing = getMvpFeatureById(id)
@@ -380,14 +455,28 @@ capabilitiesRouter.patch('/:id', (req, res) => {
   res.json(updated)
 })
 
+/**
+ * Deletes a capability. Its citation rows go with it by ON DELETE CASCADE, so
+ * a capability any feature cites is refused until the cascade is confirmed —
+ * the same two-step the PwC feature delete uses (R-9.4, R-9.5).
+ */
 capabilitiesRouter.delete('/:id', (req, res) => {
   const id = parseIntId(req.params.id, 'Capability')
   if (!getCapabilityById(id)) throw new HttpError(404, `There is no capability ${id}.`)
 
-  const dependents = countCapabilityDependents(id)
-  refuseIfDependents(`capability ${id}`, [
-    { count: dependents.features, one: 'PwC feature', many: 'PwC features' },
-  ])
+  const query = deleteQuerySchema.safeParse(req.query)
+  if (!query.success) throw new HttpError(422, summariseZodError(query.error))
+  const cascade = query.data.cascade === 'true'
 
-  res.json({ deleted: deleteCapability(id) })
+  const dependents = countCapabilityDependents(id)
+  if (dependents.features > 0 && !cascade) {
+    throw new HttpError(
+      409,
+      `Cannot delete capability ${id} — ${dependents.features} PwC feature${
+        dependents.features === 1 ? '' : 's'
+      } cite it. Confirm the cascade to remove those citations too.`,
+    )
+  }
+
+  res.json({ deleted: deleteCapability(id), cascaded: dependents })
 })

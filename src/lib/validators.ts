@@ -93,6 +93,23 @@ export const setCapabilityLinksSchema = z.object({
   capabilityIds: idListSchema,
 })
 
+/**
+ * Re-assigns an MSD feature by moving what it owns. Either axis alone is a
+ * valid move — changing only the release leaves each capability in its own
+ * stage — but a body with neither is a no-op worth rejecting.
+ */
+export const setMvpPlacementSchema = z
+  .object({
+    release_id: z.string().trim().min(1, 'Choose a release.'),
+    phase_id: z.string().trim().min(1, 'Choose a stage.'),
+  })
+  .partial()
+  .refine((value) => value.release_id !== undefined || value.phase_id !== undefined, {
+    message: 'Choose a release or a stage to move to.',
+  })
+
+export type SetMvpPlacementInput = z.infer<typeof setMvpPlacementSchema>
+
 export type SetMvpLinksInput = z.infer<typeof setMvpLinksSchema>
 export type SetCapabilityLinksInput = z.infer<typeof setCapabilityLinksSchema>
 

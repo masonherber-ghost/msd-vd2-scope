@@ -156,3 +156,25 @@ button.mvp-detail__feature:focus-visible {
   font-size: 0.6875rem;
   color: var(--color-muted-foreground);
 }
+
+.mvp-detail__capability-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.mvp-detail__capability-button:hover {
+  text-decoration: underline;
+}
+
+.mvp-detail__capability-button:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}

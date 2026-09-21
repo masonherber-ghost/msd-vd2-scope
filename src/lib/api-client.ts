@@ -343,6 +343,23 @@ export const apiClient = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
+    /**
+     * Re-assigns the record by moving the capabilities it owns. Either axis
+     * alone is a valid move.
+     */
+    setPlacement: (id: number, body: { release_id?: string; phase_id?: string }) =>
+      request<{ mvp_feature_id: number; moved: number; capabilityIds: number[] }>(
+        `/api/mvp-features/${id}/placement`,
+        { method: 'PUT', body: JSON.stringify(body) },
+      ),
+
+    /** Replaces the capabilities this record owns with exactly this set. */
+    setCapabilities: (id: number, capabilityIds: number[]) =>
+      request<{ mvp_feature_id: number; capabilityIds: number[] }>(
+        `/api/mvp-features/${id}/capabilities`,
+        { method: 'PUT', body: JSON.stringify({ capabilityIds }) },
+      ),
+
     remove: (id: number) =>
       request<{ deleted: number }>(`/api/mvp-features/${id}`, { method: 'DELETE' }),
   },
@@ -374,8 +391,12 @@ export const apiClient = {
         method: 'PATCH',
         body: JSON.stringify(body),
       }),
-    remove: (id: number) =>
-      request<{ deleted: number }>(`/api/capabilities/${id}`, { method: 'DELETE' }),
+    /** Cascading also removes the citations pointing at it (R-9.5). */
+    remove: (id: number, cascade = false) =>
+      request<{ deleted: number; cascaded: { features: number } }>(
+        `/api/capabilities/${id}?cascade=${cascade ? 'true' : 'false'}`,
+        { method: 'DELETE' },
+      ),
   },
 
   conflicts: {

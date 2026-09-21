@@ -606,7 +606,9 @@ function Capabilities({ scope }: { scope: Scope }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => void run(() => remove.mutateAsync(capability.id))}
+                      onClick={() =>
+                        void run(() => remove.mutateAsync({ id: capability.id }))
+                      }
                     >
                       Delete
                     </Button>

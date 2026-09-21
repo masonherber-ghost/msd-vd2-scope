@@ -83,6 +83,26 @@ export const useUpdateMvpFeature = () =>
       apiClient.mvpFeatures.update(vars.id, vars.patch),
   )
 
+/**
+ * Re-assigns an MSD feature, by moving the capabilities it owns. Their
+ * placement is shared with every PwC feature citing them, so the refetch
+ * brings back re-judged conflicts as well as the moved card.
+ */
+export const useSetMvpPlacement = () =>
+  useGraphMutation(
+    (vars: { id: number; patch: Parameters<typeof apiClient.mvpFeatures.setPlacement>[1] }) =>
+      apiClient.mvpFeatures.setPlacement(vars.id, vars.patch),
+  )
+
+/**
+ * Re-owns capabilities. The card's cells derive from what it owns, so a
+ * change here can move the card — more than is worth mirroring by hand.
+ */
+export const useSetMvpCapabilities = () =>
+  useGraphMutation((vars: { id: number; capabilityIds: number[] }) =>
+    apiClient.mvpFeatures.setCapabilities(vars.id, vars.capabilityIds),
+  )
+
 export const useDeleteMvpFeature = () =>
   useGraphMutation((id: number) => apiClient.mvpFeatures.remove(id))
 
@@ -97,7 +117,9 @@ export const useUpdateCapability = () =>
   )
 
 export const useDeleteCapability = () =>
-  useGraphMutation((id: number) => apiClient.capabilities.remove(id))
+  useGraphMutation((vars: { id: number; cascade?: boolean }) =>
+    apiClient.capabilities.remove(vars.id, vars.cascade ?? false),
+  )
 
 // ---- Conflict resolution --------------------------------------------------
 

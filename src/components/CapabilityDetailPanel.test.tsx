@@ -158,3 +158,178 @@ describe('CapabilityDetailPanel — questions', () => {
     expect(onSaveQuestion).toHaveBeenCalledWith(null)
   })
 })
+
+describe('CapabilityDetailPanel — opening what it links to', () => {
+  it('leaves the MSD feature as plain text with no handler', () => {
+    renderPanel()
+    expect(
+      screen.queryByRole('button', { name: /Verification methods/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens the MSD feature that owns it', async () => {
+    const user = userEvent.setup()
+    const onSelectMvpFeature = vi.fn()
+    renderPanel({ onSelectMvpFeature })
+
+    await user.click(screen.getByRole('button', { name: /Verification methods/ }))
+
+    expect(onSelectMvpFeature).toHaveBeenCalledWith(card.mvpFeature!.id)
+  })
+
+  it('opens a citing PwC feature', async () => {
+    const user = userEvent.setup()
+    const onSelectFeature = vi.fn()
+    renderPanel({ onSelectFeature })
+
+    await user.click(screen.getByRole('button', { name: /F-002/ }))
+
+    expect(onSelectFeature).toHaveBeenCalledWith('F-002')
+  })
+})
+
+describe('CapabilityDetailPanel — deleting', () => {
+  it('offers no delete without a handler', () => {
+    renderPanel()
+    expect(
+      screen.queryByRole('button', { name: 'Delete this capability' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('names the citations that go with it before deleting anything', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onDelete })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+
+    expect(screen.getByText(/removes the citation from F-002/)).toBeInTheDocument()
+    expect(onDelete).not.toHaveBeenCalled()
+  })
+
+  it('cascades when something cites it, because the citations must go too', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onDelete })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Delete and remove those citations' }),
+    )
+
+    expect(onDelete).toHaveBeenCalledWith(true)
+  })
+
+  it('does not cascade when nothing cites it', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ card: { ...card, pwcFeatures: [] }, onDelete })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    expect(screen.getByText(/Nothing cites it/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Delete it' }))
+
+    expect(onDelete).toHaveBeenCalledWith(false)
+  })
+
+  it('surfaces the server’s refusal in place', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockRejectedValue(new Error('Cannot delete capability 12.'))
+    renderPanel({ onDelete })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Delete and remove those citations' }),
+    )
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Cannot delete capability 12.',
+    )
+  })
+
+  it('abandons a pending confirmation when another capability arrives', async () => {
+    const user = userEvent.setup()
+    const { rerender } = renderPanel({ onDelete: vi.fn() })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    rerender(
+      <CapabilityDetailPanel
+        card={cards.find((c) => c.id !== card.id)!}
+        onClose={vi.fn()}
+        releaseLabels={releaseLabels}
+        phaseNames={phaseNames}
+        onDelete={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Delete this capability' })).toBeInTheDocument()
+  })
+})
+
+describe('CapabilityDetailPanel — keyboard and announcement (WCAG 2.4.3, 4.1.3)', () => {
+  it('reaches and opens the confirmation from the keyboard alone', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onDelete })
+
+    const trigger = screen.getByRole('button', { name: 'Delete this capability' })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+
+    expect(
+      screen.getByRole('button', { name: 'Delete and remove those citations' }),
+    ).toBeInTheDocument()
+  })
+
+  it('keeps focus inside the panel when the confirmation replaces the button', async () => {
+    const user = userEvent.setup()
+    renderPanel({ onDelete: vi.fn() })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+
+    // The control that had focus is removed from the DOM. Unless focus is
+    // moved somewhere deliberate, it falls to <body> and a keyboard user has
+    // to tab from the top of the document to reach the confirmation they
+    // just asked for.
+    const panel = screen.getByRole('complementary', { name: /^Capability:/ })
+    expect(document.activeElement).not.toBe(document.body)
+    expect(panel.contains(document.activeElement)).toBe(true)
+  })
+
+  it('returns focus to the delete control when the confirmation is cancelled', async () => {
+    const user = userEvent.setup()
+    renderPanel({ onDelete: vi.fn() })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('button', { name: 'Delete this capability' })).toHaveFocus()
+  })
+})
+
+describe('CapabilityDetailPanel — while the delete is in flight', () => {
+  it('shows it is working and cannot be submitted twice', async () => {
+    const user = userEvent.setup()
+    let release: (() => void) | undefined
+    const onDelete = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = () => resolve()
+        }),
+    )
+    renderPanel({ onDelete })
+
+    await user.click(screen.getByRole('button', { name: 'Delete this capability' }))
+    await user.click(
+      screen.getByRole('button', { name: 'Delete and remove those citations' }),
+    )
+
+    const pending = screen.getByRole('button', { name: 'Deleting…' })
+    expect(pending).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    await user.click(pending)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+
+    release?.()
+  })
+})

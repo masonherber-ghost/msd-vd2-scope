@@ -90,9 +90,14 @@
 }
 
 /* Options outside the feature's own MVP refs are still selectable, but the
-   distinction is worth showing rather than hiding. */
-.link-picker__option--unrelated .link-picker__label {
-  opacity: 0.72;
+   distinction is worth showing rather than hiding.
+
+   Marked with a rule down the side rather than by dimming the text: on the
+   MSD panel nearly every option is "unrelated", and fading the label took its
+   hint — the line that says who owns the capability — below AA contrast. */
+.link-picker__option--unrelated {
+  border-left: 2px solid var(--color-border);
+  padding-left: calc(var(--spacing-2) - 2px);
 }
 
 .link-picker__badge {

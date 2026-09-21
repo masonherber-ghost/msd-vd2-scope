@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { ConflictBadge } from '@/components/ConflictBadge'
 import { InlineEditField } from '@/components/InlineEditField'
@@ -16,6 +17,8 @@ export type CapabilityDetailPanelProps = {
   onClose: () => void
   /** Opens a PwC feature in the feature view (R-8.16). */
   onSelectFeature?: (featureId: string) => void
+  /** Opens the owning MSD feature in the MSD-feature view (R-8.16). */
+  onSelectMvpFeature?: (mvpFeatureId: number) => void
   releaseLabels?: Map<string, string>
   phaseNames?: Map<string, string>
   /** Rejects with the server's message, which the field surfaces. */
@@ -23,15 +26,22 @@ export type CapabilityDetailPanelProps = {
   /** Saves a question, or clears it when the text is emptied. */
   onSaveQuestion?: (question: string | null) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
+  /**
+   * Deletes the capability. `cascade` also removes the citations pointing at
+   * it, so the panel has to ask for it explicitly. Rejects with the server's
+   * message.
+   */
+  onDelete?: (cascade: boolean) => Promise<unknown>
 }
 
 /**
  * A capability's own page: where the table puts it, the MSD feature it
  * belongs to, and the PwC features that asked for it.
  *
- * The text is editable in place — click the title. Placement is not: it is
- * edited from the feature whose conflict it causes, so offering a second
- * editor here would give the same decision two homes with no shared context.
+ * The text is editable in place — click the title — and the capability can be
+ * deleted from here. Placement is not editable: it is edited from the feature
+ * whose conflict it causes, so offering a second editor here would give the
+ * same decision two homes with no shared context.
  */
 export function CapabilityDetailPanel({
   card,
@@ -39,10 +49,67 @@ export function CapabilityDetailPanel({
   onSelectFeature,
   releaseLabels,
   phaseNames,
+  onSelectMvpFeature,
   onSaveText,
   onSaveQuestion,
   onDirtyChange,
+  onDelete,
 }: CapabilityDetailPanelProps) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  // A different capability arriving abandons a pending confirmation.
+  const [confirmingFor, setConfirmingFor] = useState(card.id)
+  const deleteTriggerRef = useRef<HTMLButtonElement>(null)
+  const confirmationRef = useRef<HTMLParagraphElement>(null)
+  const confirmationWasOpen = useRef(false)
+  const lastCardId = useRef(card.id)
+
+  if (confirmingFor !== card.id) {
+    setConfirmingFor(card.id)
+    setConfirmingDelete(false)
+    setDeleteError(null)
+  }
+
+  /**
+   * The control that was clicked is unmounted by its own confirmation, and
+   * focus would land on <body> — a keyboard user would have to tab from the
+   * top of the document to reach the question they just asked. Focus moves to
+   * the confirmation text, which states what will be deleted before the
+   * buttons that do it, and returns to the trigger when it is dismissed
+   * (WCAG 2.4.3, 4.1.3).
+   *
+   * A capability arriving from elsewhere also closes the confirmation, and
+   * that is not a dismissal — nobody asked for focus to move, so it doesn't.
+   */
+  useEffect(() => {
+    const cardChanged = lastCardId.current !== card.id
+    lastCardId.current = card.id
+
+    if (confirmingDelete) {
+      confirmationWasOpen.current = true
+      confirmationRef.current?.focus()
+      return
+    }
+    if (confirmationWasOpen.current && !cardChanged) deleteTriggerRef.current?.focus()
+    confirmationWasOpen.current = false
+  }, [confirmingDelete, card.id])
+
+  const runDelete = async (cascade: boolean) => {
+    if (!onDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await onDelete(cascade)
+    } catch (caught) {
+      setDeleteError(
+        caught instanceof Error ? caught.message : 'Could not delete that capability.',
+      )
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   const placement =
     card.releaseId && card.phaseId
       ? `${releaseLabels?.get(card.releaseId) ?? card.releaseId} · ${
@@ -124,19 +191,35 @@ export function CapabilityDetailPanel({
       <section className="capability-detail__section">
         <h3 className="capability-detail__section-title">MSD feature</h3>
         {card.mvpFeature ? (
-          <div className="capability-detail__mvp">
-            <span className="capability-detail__mvp-ref">
-              {card.mvpFeature.ref}
-              {card.mvpFeature.scopeOption ? ` · ${card.mvpFeature.scopeOption}` : ''}
-            </span>
-            <span className="capability-detail__mvp-title">{card.mvpFeature.title}</span>
-            {card.ownerAmbiguous ? (
-              <span className="capability-detail__note">
-                Ref {card.ref} carries more than one record, so the owner was chosen by
-                rule rather than stated (D-3).
-              </span>
-            ) : null}
-          </div>
+          (() => {
+            const owner = card.mvpFeature
+            const body = (
+              <>
+                <span className="capability-detail__mvp-ref">
+                  {owner.ref}
+                  {owner.scopeOption ? ` · ${owner.scopeOption}` : ''}
+                </span>
+                <span className="capability-detail__mvp-title">{owner.title}</span>
+                {card.ownerAmbiguous ? (
+                  <span className="capability-detail__note">
+                    Ref {card.ref} carries more than one record, so the owner was chosen
+                    by rule rather than stated (D-3).
+                  </span>
+                ) : null}
+              </>
+            )
+            return onSelectMvpFeature ? (
+              <button
+                type="button"
+                className="capability-detail__mvp"
+                onClick={() => onSelectMvpFeature(owner.id)}
+              >
+                {body}
+              </button>
+            ) : (
+              <div className="capability-detail__mvp">{body}</div>
+            )
+          })()
         ) : (
           <p className="capability-detail__note">
             Ref {card.ref} did not resolve to an MSD feature record.
@@ -191,6 +274,66 @@ export function CapabilityDetailPanel({
           </ul>
         )}
       </section>
+
+      {onDelete ? (
+        <section className="capability-detail__section">
+          <h3 className="capability-detail__section-title">Delete</h3>
+          {!confirmingDelete ? (
+            <Button
+              ref={deleteTriggerRef}
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmingDelete(true)}
+            >
+              Delete this capability
+            </Button>
+          ) : (
+            <>
+              {/* States exactly what goes with it and how many (R-9.5), and
+                  is what focus moves to, so it is read before the buttons. */}
+              <p className="capability-detail__prose" ref={confirmationRef} tabIndex={-1}>
+                Delete “{card.text}”?{' '}
+                {card.pwcFeatures.length > 0
+                  ? `This also removes the citation${
+                      card.pwcFeatures.length === 1 ? '' : 's'
+                    } from ${card.pwcFeatures
+                      .map((feature) => feature.id)
+                      .join(', ')}, and any conflict decision recorded against ${
+                      card.pwcFeatures.length === 1 ? 'it' : 'them'
+                    }. Those features are kept.`
+                  : 'Nothing cites it.'}{' '}
+                A re-import of the {SOURCE_LABEL.sequencing} would bring it back.
+              </p>
+              {deleteError ? (
+                <p role="alert" className="capability-detail__note">
+                  {deleteError}
+                </p>
+              ) : null}
+              <div className="capability-detail__actions">
+                <Button
+                  size="sm"
+                  onClick={() => void runDelete(card.pwcFeatures.length > 0)}
+                  disabled={deleting}
+                >
+                  {deleting
+                    ? 'Deleting…'
+                    : card.pwcFeatures.length > 0
+                      ? 'Delete and remove those citations'
+                      : 'Delete it'}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(false)}
+                  disabled={deleting}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </>
+          )}
+        </section>
+      ) : null}
     </aside>
   )
 }

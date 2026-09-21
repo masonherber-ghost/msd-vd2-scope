@@ -19,6 +19,9 @@ const {
   createCapability,
   deleteCapability,
   getCapabilityById,
+  getCapabilityIdsForMvpFeature,
+  moveCapabilitiesForMvpFeature,
+  setMvpFeatureCapabilities,
   updateCapability,
 } = await import('./capability-repository.js')
 const {
@@ -342,5 +345,177 @@ describe('capabilities', () => {
     const created = make()
     expect(deleteCapability(created.id)).toBe(1)
     expect(getCapabilityById(created.id)).toBeUndefined()
+  })
+})
+
+describe('capability ownership by MSD feature', () => {
+  const owner = () => createMvpFeature({ ref: 994, scope_option: null, title: 'Owner' })
+  const make = (text: string, mvp_feature_id: number | null = null) =>
+    createCapability({
+      mvp_ref: 994,
+      mvp_feature_id,
+      text,
+      actor: 'staff',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+
+  it('claims the capabilities in the set and no others', () => {
+    const record = owner()
+    const mine = make('Mine')
+    const theirs = make('Theirs')
+
+    setMvpFeatureCapabilities(record.id, [mine.id])
+
+    expect(getCapabilityIdsForMvpFeature(record.id)).toEqual([mine.id])
+    expect(getCapabilityById(theirs.id)?.mvp_feature_id).toBeNull()
+  })
+
+  it('leaves a dropped capability ownerless rather than deleting it', () => {
+    const record = owner()
+    const capability = make('Mine', record.id)
+
+    setMvpFeatureCapabilities(record.id, [])
+
+    expect(getCapabilityById(capability.id)).toMatchObject({ mvp_feature_id: null })
+  })
+
+  it('keeps mvp_ref — the ref is what the document cited, not the owner', () => {
+    const other = createMvpFeature({ ref: 995, scope_option: null, title: 'Other' })
+    const capability = make('Mine')
+
+    setMvpFeatureCapabilities(other.id, [capability.id])
+
+    expect(getCapabilityById(capability.id)).toMatchObject({
+      mvp_feature_id: other.id,
+      mvp_ref: 994,
+    })
+  })
+
+  it('clears the rule-chosen flag, because a person has now stated the owner', () => {
+    const record = owner()
+    const capability = make('Mine')
+    db.prepare('UPDATE capabilities SET mvp_owner_ambiguous = 1 WHERE id = ?').run(
+      capability.id,
+    )
+
+    setMvpFeatureCapabilities(record.id, [capability.id])
+
+    expect(getCapabilityById(capability.id)).toMatchObject({
+      mvp_owner_ambiguous: 0,
+      source: 'manual',
+    })
+  })
+
+  it('takes a capability off the record that owned it', () => {
+    const first = owner()
+    const second = createMvpFeature({ ref: 995, scope_option: null, title: 'Second' })
+    const capability = make('Mine', first.id)
+
+    setMvpFeatureCapabilities(second.id, [capability.id])
+
+    expect(getCapabilityIdsForMvpFeature(first.id)).toEqual([])
+    expect(getCapabilityIdsForMvpFeature(second.id)).toEqual([capability.id])
+  })
+
+  it('re-saving the same set leaves an imported row importable', () => {
+    const record = owner()
+    const capability = make('Mine', record.id)
+    db.prepare("UPDATE capabilities SET source = 'sequencing' WHERE id = ?").run(
+      capability.id,
+    )
+
+    setMvpFeatureCapabilities(record.id, [capability.id])
+
+    // Nothing changed, so nothing is written — the row is not marked manual
+    // and the next import can still refresh it.
+    expect(getCapabilityById(capability.id)).toMatchObject({ source: 'sequencing' })
+  })
+})
+
+describe('re-assigning an MSD feature by moving what it owns', () => {
+  const owner = () => createMvpFeature({ ref: 994, scope_option: null, title: 'Owner' })
+  const make = (text: string, mvp_feature_id: number | null, phase = 'manage-vacancies') =>
+    createCapability({
+      mvp_ref: 994,
+      mvp_feature_id,
+      text,
+      actor: 'staff',
+      release_id: '1.1',
+      phase_id: phase,
+    })
+
+  it('moves every capability it owns to the new release', () => {
+    const record = owner()
+    const first = make('First', record.id)
+    const second = make('Second', record.id)
+    createRelease({ id: '1.4', label: 'Release 1.4', name: 'Later', description: '' })
+
+    const moved = moveCapabilitiesForMvpFeature(record.id, { release_id: '1.4' })
+
+    expect(moved).toEqual([first.id, second.id])
+    expect(getCapabilityById(first.id)).toMatchObject({ release_id: '1.4' })
+    expect(getCapabilityById(second.id)).toMatchObject({ release_id: '1.4' })
+  })
+
+  it('leaves a straddle on the other axis alone', () => {
+    const record = owner()
+    const here = make('Here', record.id, 'manage-vacancies')
+    const there = make('There', record.id, 'outcomes-and-support')
+    createRelease({ id: '1.4', label: 'Release 1.4', name: 'Later', description: '' })
+
+    moveCapabilitiesForMvpFeature(record.id, { release_id: '1.4' })
+
+    // Both moved release; neither lost its own stage.
+    expect(getCapabilityById(here.id)).toMatchObject({ phase_id: 'manage-vacancies' })
+    expect(getCapabilityById(there.id)).toMatchObject({ phase_id: 'outcomes-and-support' })
+  })
+
+  it('carries the source phase label when the stage moves', () => {
+    const record = owner()
+    const capability = make('Mine', record.id)
+
+    moveCapabilitiesForMvpFeature(record.id, {
+      phase_id: 'outcomes-and-support',
+      source_phase_label: 'Outcomes & Support',
+    })
+
+    expect(getCapabilityById(capability.id)).toMatchObject({
+      phase_id: 'outcomes-and-support',
+      source_phase_label: 'Outcomes & Support',
+    })
+  })
+
+  it('never touches a capability another record owns', () => {
+    const record = owner()
+    const other = createMvpFeature({ ref: 995, scope_option: null, title: 'Other' })
+    make('Mine', record.id)
+    const theirs = make('Theirs', other.id)
+    createRelease({ id: '1.4', label: 'Release 1.4', name: 'Later', description: '' })
+
+    moveCapabilitiesForMvpFeature(record.id, { release_id: '1.4' })
+
+    expect(getCapabilityById(theirs.id)).toMatchObject({ release_id: '1.1' })
+  })
+
+  it('writes nothing for a row already there, leaving it importable', () => {
+    const record = owner()
+    const capability = make('Mine', record.id)
+    db.prepare("UPDATE capabilities SET source = 'sequencing' WHERE id = ?").run(
+      capability.id,
+    )
+
+    const moved = moveCapabilitiesForMvpFeature(record.id, {
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+
+    expect(moved).toEqual([])
+    expect(getCapabilityById(capability.id)).toMatchObject({ source: 'sequencing' })
+  })
+
+  it('reports nothing moved for a record that owns no capability', () => {
+    const record = owner()
+    expect(moveCapabilitiesForMvpFeature(record.id, { release_id: '1.1' })).toEqual([])
   })
 })
