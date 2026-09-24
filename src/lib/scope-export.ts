@@ -100,11 +100,23 @@ const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim()
  * A section of the document: a release, or an actor in actor view. Phases
  * are the sub-headings inside it, in the canonical journey order.
  */
+type Rendered = {
+  /** The Markdown to emit, headings and blank lines included. */
+  lines: string[]
+  /**
+   * One stable id per record rendered. Counting rendered lines would be
+   * wrong twice over: the capability view emits headings and blanks that are
+   * not records, and two records can render to identical text once the ref
+   * moves up into a heading.
+   */
+  keys: string[]
+}
+
 type Section = {
   heading: string
   /** The release this section is, where it is one — actor view has none. */
   releaseId: string | null
-  groups: { phaseId: string; lines: string[] }[]
+  groups: ({ phaseId: string } & Rendered)[]
 }
 
 // ---------------------------------------------------------------------------
@@ -129,10 +141,67 @@ const mvpLine = (card: MvpCardModel) =>
 /**
  * A capability bullet carries its actor and, where someone raised one, the
  * open question — a list that dropped the question would read as settled.
+ *
+ * The ref is not on the bullet: capabilities are grouped under it, so
+ * repeating it on every line of the group is noise. `capabilityGroup` below
+ * puts it on the heading instead.
  */
 function capabilityLine(card: CapabilityCardModel): string {
   const question = card.question ? ` — **Question:** ${oneLine(card.question)}` : ''
-  return `* **SVD-${card.ref}**: ${oneLine(card.text)} *(${ACTOR_LABEL[card.actor]})*${question}`
+  return `* ${oneLine(card.text)} *(${ACTOR_LABEL[card.actor]})*${question}`
+}
+
+/** `**SVD-941**:`, carrying the scope option where the owner has one. */
+function capabilityHeading(card: CapabilityCardModel): string {
+  const option = card.mvpFeature?.scopeOption
+  return option ? `**SVD-${card.ref} (Option ${option})**:` : `**SVD-${card.ref}**:`
+}
+
+/**
+ * Capabilities under a phase, grouped by the MSD record that owns them.
+ *
+ * Grouping is by record rather than by ref, so the two option variants of a
+ * ref get a heading each — the same distinction the MSD-feature view draws.
+ * A capability whose ref resolved to no record groups under the bare ref.
+ *
+ * Blank lines surround each heading. Without one *before* it, a parser
+ * treats the heading as a lazy continuation of the last bullet above and
+ * swallows it; without one after, the stricter parsers (Python-Markdown and
+ * the importers built on it) render the bullets as paragraph text rather
+ * than as a list. Both render identically to the compact form where they
+ * are not needed.
+ */
+function capabilityGroup(cards: CapabilityCardModel[]): Rendered {
+  const byOwner = new Map<string, CapabilityCardModel[]>()
+  for (const card of cards) {
+    // Falls back to the ref, so a capability owned by nothing still groups.
+    const owner = card.mvpFeature ? `record:${card.mvpFeature.id}` : `ref:${card.ref}`
+    const list = byOwner.get(owner) ?? []
+    list.push(card)
+    byOwner.set(owner, list)
+  }
+
+  const groups = [...byOwner.values()].sort(
+    (a, b) =>
+      a[0].ref - b[0].ref ||
+      (a[0].mvpFeature?.scopeOption ?? '').localeCompare(
+        b[0].mvpFeature?.scopeOption ?? '',
+      ),
+  )
+
+  const lines: string[] = []
+  const keys: string[] = []
+
+  groups.forEach((group, index) => {
+    if (index > 0) lines.push('')
+    lines.push(capabilityHeading(group[0]), '')
+    for (const card of group.sort(byCapability)) {
+      lines.push(capabilityLine(card))
+      keys.push(String(card.id))
+    }
+  })
+
+  return { lines, keys }
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +216,10 @@ function releaseHeading(release: ReleaseRow, position: number): string {
 
 function featureSections(input: ScopeExportInput): Section[] {
   const { view, releases, phases, features } = input
-  const render = (list: FeatureCardModel[]) => list.sort(byFeatureId).map(featureLine)
+  const render = (list: FeatureCardModel[]): Rendered => {
+    const sorted = list.sort(byFeatureId)
+    return { lines: sorted.map(featureLine), keys: sorted.map((f) => f.id) }
+  }
 
   // Actor view puts a feature in a row per distinct actor across its
   // capabilities, exactly as the grid does, so one feature can be listed
@@ -204,9 +276,10 @@ function mvpSections(input: ScopeExportInput): Section[] {
     return {
       heading: releaseHeading(release, index + 1),
       releaseId: release.id,
-      groups: orderPhases(input.phases, byPhase, (list) =>
-        list.sort(byMvpRef).map(mvpLine),
-      ),
+      groups: orderPhases(input.phases, byPhase, (list) => {
+        const sorted = list.sort(byMvpRef)
+        return { lines: sorted.map(mvpLine), keys: sorted.map((card) => String(card.id)) }
+      }),
     }
   })
 }
@@ -226,7 +299,7 @@ function capabilitySections(input: ScopeExportInput): Section[] {
         (card) => card.releaseId === release.id && card.phaseId !== null,
       ),
       (card) => card.phaseId as string,
-      (list) => list.sort(byCapability).map(capabilityLine),
+      capabilityGroup,
     ),
   }))
 }
@@ -249,7 +322,7 @@ function groupByPhase<T>(
   phases: PhaseRow[],
   items: T[],
   phaseOf: (item: T) => string,
-  render: (items: T[]) => string[],
+  render: (items: T[]) => Rendered,
 ): Section['groups'] {
   const byPhase = new Map<string, T[]>()
   for (const item of items) {
@@ -263,11 +336,11 @@ function groupByPhase<T>(
 function orderPhases<T>(
   phases: PhaseRow[],
   byPhase: Map<string, T[]>,
-  render: (items: T[]) => string[],
+  render: (items: T[]) => Rendered,
 ): Section['groups'] {
   return phases
     .filter((phase) => (byPhase.get(phase.id) ?? []).length > 0)
-    .map((phase) => ({ phaseId: phase.id, lines: render(byPhase.get(phase.id) as T[]) }))
+    .map((phase) => ({ phaseId: phase.id, ...render(byPhase.get(phase.id) as T[]) }))
 }
 
 // ---------------------------------------------------------------------------
@@ -328,20 +401,21 @@ function sectionsFor(input: ScopeExportInput): Section[] {
 }
 
 /** The records this view holds that no source places on the map at all. */
-function unplacedLines(input: ScopeExportInput): string[] {
+function unplacedLines(input: ScopeExportInput): Rendered {
   if (input.view === 'mvp') {
-    return input.mvpCards
-      .filter((card) => card.cells.length === 0)
-      .sort(byMvpRef)
-      .map(mvpLine)
+    const cards = input.mvpCards.filter((card) => card.cells.length === 0).sort(byMvpRef)
+    return { lines: cards.map(mvpLine), keys: cards.map((card) => String(card.id)) }
   }
   if (input.view === 'capability') {
-    return input.capabilityCards
-      .filter((card) => card.releaseId === null || card.phaseId === null)
-      .sort(byCapability)
-      .map(capabilityLine)
+    // Grouped under their refs like the placed ones, so the closing section
+    // reads the same way as the rest of the document.
+    return capabilityGroup(
+      input.capabilityCards.filter(
+        (card) => card.releaseId === null || card.phaseId === null,
+      ),
+    )
   }
-  return []
+  return { lines: [], keys: [] }
 }
 
 /**
@@ -365,11 +439,11 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
   // actors, an MSD feature whose capabilities straddle two releases. The
   // header counts the records, not the bullets, and says so when the two
   // differ; a bare bullet count would overstate the scope.
-  const allLines = [
-    ...sections.flatMap((section) => section.groups.flatMap((group) => group.lines)),
-    ...strays,
+  const allKeys = [
+    ...sections.flatMap((section) => section.groups.flatMap((group) => group.keys)),
+    ...strays.keys,
   ]
-  const distinct = new Set(allLines).size
+  const distinct = new Set(allKeys).size
 
   const lines: string[] = ['# Scope for VD2', '']
 
@@ -384,8 +458,8 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
   lines.push(
     [
       count(distinct, subject),
-      allLines.length > distinct
-        ? `${allLines.length} entries (some appear in more than one section)`
+      allKeys.length > distinct
+        ? `${allKeys.length} entries (some appear in more than one section)`
         : null,
       generatedAt ? `exported ${formatDate(generatedAt)}` : null,
     ]
@@ -394,7 +468,7 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
     '',
   )
 
-  if (allLines.length === 0) {
+  if (allKeys.length === 0) {
     // An empty map with no filters set is not a filtering problem, and
     // telling someone to clear a filter they never set sends them looking
     // for a control that is already doing nothing.
@@ -418,7 +492,7 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
     }
   }
 
-  if (strays.length > 0) {
+  if (strays.lines.length > 0) {
     lines.push('## **Not on the map**', '')
     lines.push(
       view === 'mvp'
@@ -426,7 +500,7 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
         : 'The sequencing table never matched these, so they have no release or stage. Listed rather than dropped.',
       '',
     )
-    lines.push(...strays, '')
+    lines.push(...strays.lines, '')
   }
 
   return { filename: filenameFor(view, filters), markdown: lines.join('\n') }

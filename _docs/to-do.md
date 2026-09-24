@@ -24,5 +24,23 @@ Bugs:
 Fix zoom when ever edit bug  
 SCrolls past the end of the grid
 
-#Export PDF
-output a PDf version of a view
+#Capabilities
+- Edit and refine capabilities text
+- Design of capabilities page fixed so export is nicer
+
+# Scope for VD2
+
+Including releases 1.1 – 2
+View by capability
+107 capabilities · exported 2026-09-24
+
+## **1. Release 1.1 — Controlled Pilot (Core Onboarding & Spot Vacancy)**
+
+#### **Access & Onboarding *(TPT179 – Employer Registration & Employer portal onboarding)***
+
+**SVD-941**: 
+* CIAM authentication *(Employer)*
+* Suspension / deactivation alerts *(Employer)*
+**SVD-941**: 
+* View authenticated landing page - delete *(Employer)*
+* View authenticated landing page / dashboard *(Employer)*

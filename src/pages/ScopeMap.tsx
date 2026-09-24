@@ -673,7 +673,7 @@ export default function ScopeMap() {
             disabled={!model}
           >
             <Download aria-hidden="true" />
-            Export
+            Export text
           </Button>
 
           <Button

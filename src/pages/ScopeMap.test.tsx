@@ -2707,7 +2707,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
@@ -2716,7 +2716,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?view=mvp')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('View by MSD feature')
@@ -2730,7 +2730,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     expect((screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value).toContain(
       '* **F-001**: Invite employer',
     )
@@ -2741,7 +2741,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?feature=F-001')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('* **F-001**')
@@ -2755,7 +2755,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?view=capability')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     expect(screen.getByText('vd2-scope-by-capability.md')).toBeInTheDocument()
   })
 })
@@ -2766,7 +2766,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    screen.getByRole('button', { name: 'Export' }).focus()
+    screen.getByRole('button', { name: 'Export text' }).focus()
     await user.keyboard('{Enter}')
     expect(await screen.findByRole('dialog', { name: 'Export this view' })).toBeInTheDocument()
 
@@ -2779,7 +2779,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     // The dialog's own Close sits last; the header's X carries the same name.
     const closes = screen.getAllByRole('button', { name: 'Close' })
     await user.click(closes[closes.length - 1])
@@ -2787,7 +2787,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
 
     // Otherwise a keyboard user is returned to the top of the document and
     // has to tab the whole toolbar again to get back where they were.
-    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Export text' })).toHaveFocus()
   })
 
   it('returns focus to the Export control when the dialog is dismissed with Escape', async () => {
@@ -2795,11 +2795,11 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
 
-    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Export text' })).toHaveFocus()
   })
 
   it('explains an empty map without blaming a filter nobody set', async () => {
@@ -2814,9 +2814,9 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     } as ScopeGraph
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export text' })).toBeEnabled())
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).not.toContain('Clearing a filter will bring some back')
@@ -2837,7 +2837,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     expect(screen.getByText(/Not on the map/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('## **Not on the map**')
@@ -2848,7 +2848,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     state.fail = 'Server unreachable'
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Export text' })).toBeDisabled(),
     )
   })
 })
@@ -2859,7 +2859,7 @@ describe('ScopeMap PDF export (the map as a picture)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     expect(screen.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
   })
 
   it('hands over the legend and the grid, in that order', async () => {

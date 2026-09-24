@@ -116,9 +116,9 @@ describe('buildScopeExport — bullets', () => {
     )
   })
 
-  it('writes a capability with its actor', () => {
+  it('writes a capability with its actor, under its ref rather than repeating it', () => {
     expect(exportFor('capability').markdown).toContain(
-      '* **SVD-938**: Invite employer to register *(MSD staff)*',
+      '* Invite employer to register *(MSD staff)*',
     )
   })
 
@@ -138,6 +138,100 @@ describe('buildScopeExport — bullets', () => {
       capabilityCards: buildCapabilityCards(questioned),
     })
     expect(markdown).toContain('**Question:** Which inbox sends this?')
+  })
+})
+
+describe('buildScopeExport — capabilities group under their ref', () => {
+  it('heads each group with the ref and lists its capabilities beneath', () => {
+    const { markdown } = exportFor('capability')
+    expect(markdown).toContain(
+      [
+        '**SVD-938**:',
+        '',
+        '* Invite employer to register *(MSD staff)*',
+        '* Receive secure email invite *(Employer)*',
+      ].join('\n'),
+    )
+  })
+
+  it('names the ref once per group, not once per capability', () => {
+    // Two capabilities under 938; the ref should appear once above them.
+    const { markdown } = exportFor('capability')
+    expect(markdown.match(/\*\*SVD-938\*\*:/g)).toHaveLength(1)
+  })
+
+  it('separates one group from the next with a blank line', () => {
+    // Without it the next heading is read as a continuation of the last
+    // bullet and disappears into it.
+    const twoRefs = makeScopeGraph({
+      capabilities: graph.capabilities.map((c) =>
+        c.id === 12
+          ? { ...c, release_id: '1.1', phase_id: 'access-and-onboarding' }
+          : c,
+      ),
+    })
+    const { markdown } = buildScopeExport({
+      view: 'capability',
+      releases: model.releases,
+      phases: model.phases,
+      filters: EMPTY_FILTERS,
+      features: [],
+      mvpCards: [],
+      capabilityCards: buildCapabilityCards(twoRefs),
+    })
+    const lines = markdown.split('\n')
+    const second = lines.indexOf('**SVD-948 (Option 1B)**:')
+    expect(second).toBeGreaterThan(0)
+    expect(lines[second - 1]).toBe('')
+    // And a blank line after, so stricter parsers still see a list.
+    expect(lines[second + 1]).toBe('')
+    expect(lines[second + 2]).toMatch(/^\* /)
+  })
+
+  it('gives each option variant of a ref its own heading', () => {
+    const variants = makeScopeGraph({
+      mvpFeatures: [
+        { id: 7, ref: 951, scope_option: '1A', title: 'Register A', source: 'mapping' },
+        { id: 8, ref: 951, scope_option: '1B', title: 'Register B', source: 'mapping' },
+      ],
+      capabilities: [
+        {
+          ...graph.capabilities[0],
+          id: 40,
+          mvp_feature_id: 7,
+          mvp_ref: 951,
+          text: 'Register as a known employer',
+        },
+        {
+          ...graph.capabilities[0],
+          id: 41,
+          mvp_feature_id: 8,
+          mvp_ref: 951,
+          text: 'Register as a new organisation',
+        },
+      ],
+    })
+    const { markdown } = buildScopeExport({
+      view: 'capability',
+      releases: model.releases,
+      phases: model.phases,
+      filters: EMPTY_FILTERS,
+      features: [],
+      mvpCards: [],
+      capabilityCards: buildCapabilityCards(variants),
+    })
+    expect(markdown).toContain('**SVD-951 (Option 1A)**:')
+    expect(markdown).toContain('**SVD-951 (Option 1B)**:')
+  })
+
+  it('counts the capabilities, not the headings and blank lines around them', () => {
+    expect(exportFor('capability').markdown).toContain('3 capabilities')
+  })
+
+  it('leaves the other views’ bullets carrying their own ref', () => {
+    // Only the capability view groups; an MSD feature is one record per
+    // bullet, so its ref belongs on the bullet.
+    expect(exportFor('mvp').markdown).toContain('* **SVD-938**: Additional users')
   })
 })
 
@@ -237,7 +331,8 @@ describe('buildScopeExport — records nothing places', () => {
       capabilityCards: buildCapabilityCards(noPhase),
     })
     expect(markdown).toContain('## **Not on the map**')
-    expect(markdown).toContain('* **SVD-948**: Electronic T&Cs acceptance')
+    expect(markdown).toContain('**SVD-948 (Option 1B)**:')
+    expect(markdown).toContain('* Electronic T&Cs acceptance')
     // Release 1.4 held nothing else, so it gets no section of its own.
     expect(markdown).not.toContain('## **2. Release 1.4**')
   })
