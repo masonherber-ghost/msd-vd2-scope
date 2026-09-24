@@ -182,6 +182,15 @@ export const scopeOptionSchema = z
   .union([z.literal('1A'), z.literal('1B'), z.null()])
   .default(null)
 
+/**
+ * A stated placement. `null` clears it and hands the record back to the
+ * derivation; an empty string is what an unset `<select>` submits, so it is
+ * read as "not stated" rather than rejected.
+ */
+const statedPlacementSchema = z
+  .union([z.string().trim(), z.null()])
+  .transform((value) => (value === null || value === '' ? null : value))
+
 export const createMvpFeatureSchema = z.object({
   ref: z
     .number()
@@ -189,12 +198,16 @@ export const createMvpFeatureSchema = z.object({
     .positive('An MVP ref is a positive number.'),
   scope_option: scopeOptionSchema,
   title: z.string().trim().min(1, 'Give the MVP feature a title.').max(300),
+  release_id: statedPlacementSchema.optional(),
+  phase_id: statedPlacementSchema.optional(),
 })
 
 export const updateMvpFeatureSchema = z
   .object({
     title: z.string().trim().min(1, 'Give the MVP feature a title.').max(300),
     scope_option: z.union([z.literal('1A'), z.literal('1B'), z.null()]),
+    release_id: statedPlacementSchema,
+    phase_id: statedPlacementSchema,
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })

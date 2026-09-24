@@ -68,7 +68,7 @@ describe('buildMvpCards — placement', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, source: 'mapping' },
       ],
     }
     const card = buildMvpCards(orphan).find((c) => c.id === 99)!
@@ -219,7 +219,7 @@ describe('projectMvpCells', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, source: 'mapping' },
       ],
     } as ScopeGraph
     const projection = projectMvpCells(buildMvpCards(orphan))
@@ -241,5 +241,75 @@ describe('projectMvpCells', () => {
     expect(
       projection.cellIndex.get(cellKey('1.4', 'manage-vacancies'))?.map((c) => c.id),
     ).toContain(2)
+  })
+})
+
+/**
+ * A placement stated on the record itself. It outranks both derived ones,
+ * and is the only thing that can place a record owning no capability.
+ */
+describe('buildMvpCards — a stated placement', () => {
+  // Record 2 is the one the fixture's capabilities belong to, so it is the
+  // one where a statement has a derived placement to outrank.
+  const stated = (patch: { release_id?: string | null; phase_id?: string | null }) =>
+    makeScopeGraph({
+      mvpFeatures: makeScopeGraph().mvpFeatures.map((mvp) =>
+        mvp.id === 2 ? { ...mvp, ...patch } : mvp,
+      ),
+    })
+
+  it('outranks the capabilities the record owns', () => {
+    // Capability 10 puts this record in 1.1 · access-and-onboarding.
+    const graph = stated({ release_id: '1.4', phase_id: 'manage-vacancies' })
+    const card = buildMvpCards(graph).find((c) => c.id === 2)
+    expect(card?.cells).toEqual([{ releaseId: '1.4', phaseId: 'manage-vacancies' }])
+    expect(card?.placement).toBe('stated')
+  })
+
+  it('places a record nothing else can place', () => {
+    const graph = makeScopeGraph({
+      mvpFeatures: [
+        {
+          id: 9,
+          ref: 953,
+          scope_option: null,
+          title: 'Compliance view',
+          release_id: '1.4',
+          phase_id: 'manage-vacancies',
+          source: 'sequencing',
+        },
+      ],
+      capabilities: [],
+      featureMvpLinks: [],
+    })
+    const card = buildMvpCards(graph).find((c) => c.id === 9)
+    expect(card?.placement).toBe('stated')
+    expect(card?.cells).toHaveLength(1)
+  })
+
+  it('needs both axes — half a statement places nothing', () => {
+    // A cell is a release AND a stage; a release alone is not a position.
+    const card = buildMvpCards(stated({ release_id: '1.4' })).find((c) => c.id === 2)
+    expect(card?.placement).toBe('capability')
+    expect(card?.stated).toEqual({ releaseId: '1.4', phaseId: null })
+  })
+
+  it('carries the half-statement so the editor can show it', () => {
+    const card = buildMvpCards(stated({ phase_id: 'manage-vacancies' })).find(
+      (c) => c.id === 2,
+    )
+    expect(card?.stated).toEqual({ releaseId: null, phaseId: 'manage-vacancies' })
+  })
+
+  it('leaves the derivation untouched when nothing is stated', () => {
+    const card = buildMvpCards(makeScopeGraph()).find((c) => c.id === 2)
+    expect(card?.placement).toBe('capability')
+    expect(card?.stated).toEqual({ releaseId: null, phaseId: null })
+  })
+
+  it('files the record under the stated release for filtering', () => {
+    const graph = stated({ release_id: '1.4', phase_id: 'manage-vacancies' })
+    const card = buildMvpCards(graph).find((c) => c.id === 2)
+    expect([...(card?.releaseIds ?? [])]).toEqual(['1.4'])
   })
 })

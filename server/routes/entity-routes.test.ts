@@ -352,3 +352,119 @@ describe('PUT /api/mvp-features/:id/placement', () => {
     expect(result.body).toMatchObject({ error: expect.stringContaining('4242') })
   })
 })
+
+/**
+ * A stated placement on the record itself. It is the only thing that can
+ * place a record owning no capability — the move endpoint refuses those,
+ * because it works by moving capabilities and there are none.
+ */
+describe('stated placement on an MSD feature', () => {
+  beforeEach(() => {
+    fixture = seed()
+  })
+
+  it('stores a release and stage given at creation', async () => {
+    const result = await call('POST', '/api/mvp-features', {
+      ref: 994,
+      scope_option: null,
+      title: 'New record',
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+    expect(result.status).toBe(201)
+    expect(result.body).toMatchObject({
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+  })
+
+  it('leaves a record unstated when neither is given', async () => {
+    const result = await call('POST', '/api/mvp-features', {
+      ref: 995,
+      scope_option: null,
+      title: 'Unstated',
+    })
+    expect(result.status).toBe(201)
+    expect(result.body).toMatchObject({ release_id: null, phase_id: null })
+  })
+
+  it('states a placement on an existing record', async () => {
+    const { owner } = fixture
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+  })
+
+  it('clears a statement with null, handing the record back to the sources', async () => {
+    const { owner } = fixture
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { release_id: '1.1' })
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      release_id: null,
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ release_id: null })
+  })
+
+  it('reads an empty string as unstated, which is what a blank select sends', async () => {
+    const { owner } = fixture
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      release_id: '',
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ release_id: null })
+  })
+
+  it('refuses a release that does not exist', async () => {
+    const { owner } = fixture
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      release_id: '9.9',
+    })
+    expect(result.status).toBe(422)
+    expect(result.body).toMatchObject({ error: expect.stringContaining('9.9') })
+  })
+
+  it('refuses a stage that does not exist', async () => {
+    const result = await call('POST', '/api/mvp-features', {
+      ref: 996,
+      scope_option: null,
+      title: 'Bad stage',
+      phase_id: 'no-such-stage',
+    })
+    expect(result.status).toBe(422)
+    expect(result.body).toMatchObject({
+      error: expect.stringContaining('no-such-stage'),
+    })
+  })
+
+  it('places a record that owns no capability, which the move endpoint cannot', async () => {
+    const created = await call('POST', '/api/mvp-features', {
+      ref: 997,
+      scope_option: null,
+      title: 'Owns nothing',
+    })
+    const id = (created.body as { id: number }).id
+
+    // The move endpoint has nothing to move and says so.
+    const moved = await call('PUT', `/api/mvp-features/${id}/placement`, {
+      release_id: '1.1',
+    })
+    expect(moved.status).toBe(409)
+
+    // Stating it on the record works.
+    const stated = await call('PATCH', `/api/mvp-features/${id}`, {
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+    expect(stated.status).toBe(200)
+    expect(stated.body).toMatchObject({
+      release_id: '1.1',
+      phase_id: 'manage-vacancies',
+    })
+  })
+})

@@ -43,6 +43,9 @@ export type MvpFeatureRow = {
   ref: number
   scope_option: '1A' | '1B' | null
   title: string
+  /** A placement stated on the record, which outranks the derived one. */
+  release_id: string | null
+  phase_id: string | null
   source: string
 }
 
@@ -330,14 +333,27 @@ export const apiClient = {
   },
 
   mvpFeatures: {
-    create: (body: { ref: number; scope_option: '1A' | '1B' | null; title: string }) =>
+    create: (body: {
+      ref: number
+      scope_option: '1A' | '1B' | null
+      title: string
+      /** A stated placement, set as the record is created. */
+      release_id?: string | null
+      phase_id?: string | null
+    }) =>
       request<MvpFeatureRow>('/api/mvp-features', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
     update: (
       id: number,
-      body: Partial<{ title: string; scope_option: '1A' | '1B' | null }>,
+      body: Partial<{
+        title: string
+        scope_option: '1A' | '1B' | null
+        /** `null` clears the statement, handing the record back to the sources. */
+        release_id: string | null
+        phase_id: string | null
+      }>,
     ) =>
       request<MvpFeatureRow>(`/api/mvp-features/${id}`, {
         method: 'PATCH',

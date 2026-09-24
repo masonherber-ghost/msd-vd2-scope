@@ -252,6 +252,9 @@ describe('Manage — MVP features', () => {
       ref: 994,
       scope_option: null,
       title: 'Something new',
+      // Unstated, so the record is placed by whatever the sources say.
+      release_id: null,
+      phase_id: null,
     })
   })
 
@@ -362,5 +365,98 @@ describe('Manage — capabilities', () => {
       release_id: '1.1',
       phase_id: 'manage-vacancies',
     })
+  })
+})
+
+/**
+ * A placement stated on the record itself. An MSD feature has none of its
+ * own in either source, so this is the only way to say where one goes — and
+ * the only thing that reaches a record owning no capability.
+ */
+describe('Manage — stating an MSD feature’s placement', () => {
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('offers a release and a stage on every row', async () => {
+    await openTable()
+    expect(screen.getByLabelText('Release for MVP 938 Option 1A')).toBeInTheDocument()
+    expect(screen.getByLabelText('Stage for MVP 938 Option 1A')).toBeInTheDocument()
+  })
+
+  it('states a release on an existing record', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Release for MVP 938'), '1.4')
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    expect(called('mvp.update')[0].args[1]).toEqual({ release_id: '1.4' })
+  })
+
+  it('states a stage on an existing record', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(
+      screen.getByLabelText('Stage for MVP 938'),
+      'manage-vacancies',
+    )
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    expect(called('mvp.update')[0].args[1]).toEqual({ phase_id: 'manage-vacancies' })
+  })
+
+  it('clears a statement with null rather than an empty string', async () => {
+    // Null is what hands the record back to the sources; '' would be stored
+    // as a placement pointing at nothing.
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Release for MVP 938'), '1.4')
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    await user.selectOptions(screen.getByLabelText('Release for MVP 938'), '')
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(2))
+    expect(called('mvp.update')[1].args[1]).toEqual({ release_id: null })
+  })
+
+  it('says what actually placed each record', async () => {
+    await openTable()
+    const rows = screen.getAllByRole('row').slice(1)
+    // Record 2 owns the fixture's capabilities; record 1 is cited by F-001.
+    expect(rows.map((row) => row.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Its capabilities')]),
+    )
+  })
+
+  it('creates a record already placed', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '994')
+    await user.type(screen.getByLabelText('New MVP title'), 'Placed on arrival')
+    await user.selectOptions(screen.getByLabelText('New MVP release'), '1.4')
+    await user.selectOptions(screen.getByLabelText('New MVP stage'), 'manage-vacancies')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    await waitFor(() => expect(called('mvp.create')).toHaveLength(1))
+    expect(called('mvp.create')[0].args[0]).toMatchObject({
+      release_id: '1.4',
+      phase_id: 'manage-vacancies',
+    })
+  })
+
+  it('surfaces a rejected placement', async () => {
+    const user = userEvent.setup()
+    state.writeFail = 'There is no release "9.9".'
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Release for MVP 938'), '1.4')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('There is no release')
   })
 })

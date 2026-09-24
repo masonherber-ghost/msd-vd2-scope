@@ -1,0 +1,24 @@
+-- An explicit release and stage for an MSD feature record.
+--
+-- Until now an MSD feature had no placement of its own: it sat wherever the
+-- capabilities it owns sit, or, failing those, wherever the PwC features
+-- citing it sit. That is the right default — it is what the two source
+-- documents actually say — but it leaves no way to place a record by hand,
+-- and five records own no capability at all (937, 951/1B, 953, 959/1B, 419),
+-- so nothing could place them.
+--
+-- These two columns are a stated placement, which outranks both derived
+-- ones. NULL means "not stated", which is the normal case and keeps the
+-- derivation exactly as it was: nothing here changes where an imported
+-- record lands unless someone sets it.
+--
+-- Deliberately NOT a foreign key to releases/phases. An id can be renamed by
+-- a re-import, and a stated placement pointing at a release that has gone is
+-- information worth keeping visible rather than a row that refuses to load;
+-- the route validates the id exists at write time, and the derive treats an
+-- unknown id as unstated.
+--
+-- SQLite has no ADD COLUMN IF NOT EXISTS. Adding a nullable column is the
+-- normal way to extend a table, and the runner applies this once.
+ALTER TABLE mvp_features ADD COLUMN release_id TEXT;
+ALTER TABLE mvp_features ADD COLUMN phase_id TEXT;

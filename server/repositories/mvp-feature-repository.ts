@@ -6,12 +6,16 @@ export type MvpFeatureRow = {
   ref: number
   scope_option: string | null
   title: string
+  /** A stated placement, which outranks the derived one. NULL = unstated. */
+  release_id: string | null
+  phase_id: string | null
   source: string
   created_at: string
   updated_at: string
 }
 
-const COLUMNS = 'id, ref, scope_option, title, source, created_at, updated_at'
+const COLUMNS =
+  'id, ref, scope_option, title, release_id, phase_id, source, created_at, updated_at'
 
 let selectAll: Statement | undefined
 let selectByRefOption: Statement | undefined
@@ -84,18 +88,31 @@ export function createMvpFeature(row: {
   ref: number
   scope_option: string | null
   title: string
+  release_id?: string | null
+  phase_id?: string | null
 }): MvpFeatureRow {
   insertOne ??= db.prepare(`
-    INSERT INTO mvp_features (ref, scope_option, title, source)
-    VALUES (@ref, @scope_option, @title, 'manual')
+    INSERT INTO mvp_features (ref, scope_option, title, release_id, phase_id, source)
+    VALUES (@ref, @scope_option, @title, @release_id, @phase_id, 'manual')
     RETURNING ${COLUMNS}
   `)
-  return insertOne.get(row) as MvpFeatureRow
+  // better-sqlite3 rejects an absent named parameter, so both are always
+  // bound — unstated is NULL, which is what an unplaced record is.
+  return insertOne.get({
+    ...row,
+    release_id: row.release_id ?? null,
+    phase_id: row.phase_id ?? null,
+  }) as MvpFeatureRow
 }
 
 export function updateMvpFeature(
   id: number,
-  patch: { title?: string; scope_option?: string | null },
+  patch: {
+    title?: string
+    scope_option?: string | null
+    release_id?: string | null
+    phase_id?: string | null
+  },
 ): MvpFeatureRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]
   if (fields.length === 0) return getMvpFeatureById(id)

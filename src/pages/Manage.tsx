@@ -17,6 +17,7 @@ import {
   useUpdateRelease,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
+import { buildMvpCards, type MvpCardModel } from '@/lib/mvp-derive'
 import { sourceLabel } from '@/lib/validators'
 
 const ENTITIES = [
@@ -374,6 +375,38 @@ function Phases({ scope }: { scope: Scope }) {
 
 // ---------------------------------------------------------------------------
 
+const mvpLabel = (mvp: { ref: number; scope_option: string | null }) =>
+  `${mvp.ref}${mvp.scope_option ? ` Option ${mvp.scope_option}` : ''}`
+
+/**
+ * What actually put this record where it is.
+ *
+ * A stated release and stage outrank both derived placements, so the column
+ * has to say which is in force — otherwise someone sets one axis, sees the
+ * card stay where it was, and cannot tell whether the edit took. Naming the
+ * half-set case explicitly is the point: a cell needs both axes.
+ */
+function placementNote(card: MvpCardModel | undefined): string {
+  if (!card) return '—'
+  const half = card.stated.releaseId ? 'stage' : 'release'
+  switch (card.placement) {
+    case 'stated':
+      return 'Stated here'
+    case 'capability':
+      return card.stated.releaseId || card.stated.phaseId
+        ? `Its capabilities — set a ${half} too to override`
+        : 'Its capabilities'
+    case 'feature':
+      return card.stated.releaseId || card.stated.phaseId
+        ? `The features citing it — set a ${half} too to override`
+        : 'The features citing it'
+    default:
+      return card.stated.releaseId || card.stated.phaseId
+        ? `Nothing yet — set a ${half} too`
+        : 'Nothing — unplaced'
+  }
+}
+
 function MvpFeatures({ scope }: { scope: Scope }) {
   const create = useCreateMvpFeature()
   const update = useUpdateMvpFeature()
@@ -383,10 +416,16 @@ function MvpFeatures({ scope }: { scope: Scope }) {
     ref: string
     scope_option: '' | '1A' | '1B'
     title: string
-  }>({ ref: '', scope_option: '', title: '' })
+    release_id: string
+    phase_id: string
+  }>({ ref: '', scope_option: '', title: '', release_id: '', phase_id: '' })
 
   const linkCount = (id: number) =>
     scope.featureMvpLinks.filter((l) => l.mvp_feature_id === id).length
+
+  // The same derivation the map uses, so this table and the map agree on
+  // where a record sits and on what put it there.
+  const cardById = new Map(buildMvpCards(scope).map((card) => [card.id, card]))
 
   return (
     <div className="manage-table">
@@ -400,6 +439,9 @@ function MvpFeatures({ scope }: { scope: Scope }) {
               <th scope="col">Ref</th>
               <th scope="col">Option</th>
               <th scope="col">Title</th>
+              <th scope="col">Release</th>
+              <th scope="col">Stage</th>
+              <th scope="col">Placed by</th>
               <th scope="col">Features</th>
               <th scope="col">Actions</th>
             </tr>
@@ -427,6 +469,55 @@ function MvpFeatures({ scope }: { scope: Scope }) {
                     }}
                   />
                 </td>
+                <td>
+                  <select
+                    className="manage-table__input"
+                    aria-label={`Release for MVP ${mvpLabel(mvp)}`}
+                    value={mvp.release_id ?? ''}
+                    onChange={(event) =>
+                      void run(() =>
+                        update.mutateAsync({
+                          id: mvp.id,
+                          // Empty clears the statement and hands the record
+                          // back to whatever the sources place it by.
+                          patch: { release_id: event.target.value || null },
+                        }),
+                      )
+                    }
+                  >
+                    <option value="">Not stated</option>
+                    {scope.releases.map((release) => (
+                      <option key={release.id} value={release.id}>
+                        {release.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    className="manage-table__input"
+                    aria-label={`Stage for MVP ${mvpLabel(mvp)}`}
+                    value={mvp.phase_id ?? ''}
+                    onChange={(event) =>
+                      void run(() =>
+                        update.mutateAsync({
+                          id: mvp.id,
+                          patch: { phase_id: event.target.value || null },
+                        }),
+                      )
+                    }
+                  >
+                    <option value="">Not stated</option>
+                    {scope.phases.map((phase) => (
+                      <option key={phase.id} value={phase.id}>
+                        {phase.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="manage-table__muted">
+                  {placementNote(cardById.get(mvp.id))}
+                </td>
                 <td className="manage-table__mono">{linkCount(mvp.id)}</td>
                 <td>
                   <div className="manage-table__actions">
@@ -449,7 +540,9 @@ function MvpFeatures({ scope }: { scope: Scope }) {
         <h2 className="text-sm font-semibold">Add an MVP feature</h2>
         <p className="manage-table__muted text-xs">
           Uniqueness is on ref plus option, so the same ref with a different option is a
-          separate record.
+          separate record. A release and stage are optional: leave them unstated and the
+          record is placed by its capabilities, or by the features citing it. Stating both
+          overrides that — stating one does nothing on its own, because a cell needs both.
         </p>
         <div className="manage-table__create-fields">
           <input
@@ -481,6 +574,32 @@ function MvpFeatures({ scope }: { scope: Scope }) {
             value={draft.title}
             onChange={(event) => setDraft({ ...draft, title: event.target.value })}
           />
+          <select
+            className="manage-table__input"
+            aria-label="New MVP release"
+            value={draft.release_id}
+            onChange={(event) => setDraft({ ...draft, release_id: event.target.value })}
+          >
+            <option value="">Release not stated</option>
+            {scope.releases.map((release) => (
+              <option key={release.id} value={release.id}>
+                {release.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="manage-table__input"
+            aria-label="New MVP stage"
+            value={draft.phase_id}
+            onChange={(event) => setDraft({ ...draft, phase_id: event.target.value })}
+          >
+            <option value="">Stage not stated</option>
+            {scope.phases.map((phase) => (
+              <option key={phase.id} value={phase.id}>
+                {phase.name}
+              </option>
+            ))}
+          </select>
         </div>
         <Button
           size="sm"
@@ -490,9 +609,13 @@ function MvpFeatures({ scope }: { scope: Scope }) {
                 ref: Number(draft.ref),
                 scope_option: draft.scope_option === '' ? null : draft.scope_option,
                 title: draft.title,
+                release_id: draft.release_id || null,
+                phase_id: draft.phase_id || null,
               }),
             )
-            if (ok) setDraft({ ref: '', scope_option: '', title: '' })
+            if (ok) {
+              setDraft({ ref: '', scope_option: '', title: '', release_id: '', phase_id: '' })
+            }
           }}
         >
           Add MVP feature

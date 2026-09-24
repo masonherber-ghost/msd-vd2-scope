@@ -248,6 +248,19 @@ assumptionsRouter.delete('/:id', (req, res) => {
 // MVP features
 // ---------------------------------------------------------------------------
 
+/**
+ * A stated placement has to name something real. `null` is always allowed —
+ * it clears the statement and hands the record back to the derivation.
+ */
+function assertStatedPlacement(releaseId?: string | null, phaseId?: string | null): void {
+  if (releaseId != null && !getRelease(releaseId)) {
+    throw new HttpError(422, `There is no release "${releaseId}".`)
+  }
+  if (phaseId != null && !getPhase(phaseId)) {
+    throw new HttpError(422, `There is no phase "${phaseId}".`)
+  }
+}
+
 export const mvpFeaturesRouter = Router()
 
 mvpFeaturesRouter.get('/', (_req, res) => res.json(getAllMvpFeatures()))
@@ -267,6 +280,7 @@ mvpFeaturesRouter.post('/', (req, res) => {
     )
   }
 
+  assertStatedPlacement(parsed.data.release_id, parsed.data.phase_id)
   res.status(201).json(createMvpFeature(parsed.data))
 })
 
@@ -290,6 +304,7 @@ mvpFeaturesRouter.patch('/:id', (req, res) => {
     }
   }
 
+  assertStatedPlacement(parsed.data.release_id, parsed.data.phase_id)
   res.json(updateMvpFeature(id, parsed.data))
 })
 

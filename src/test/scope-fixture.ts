@@ -75,9 +75,9 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
     ],
     assumptions: [],
     mvpFeatures: [
-      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', source: 'mapping' },
-      { id: 2, ref: 938, scope_option: null, title: 'Additional users', source: 'mapping' },
-      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', source: 'mapping' },
+      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', release_id: null, phase_id: null, source: 'mapping' },
+      { id: 2, ref: 938, scope_option: null, title: 'Additional users', release_id: null, phase_id: null, source: 'mapping' },
+      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', release_id: null, phase_id: null, source: 'mapping' },
     ],
     capabilities: [
       {

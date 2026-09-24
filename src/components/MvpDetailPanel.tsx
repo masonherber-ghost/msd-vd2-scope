@@ -13,6 +13,8 @@ const ACTOR_LABEL: Record<string, string> = {
 }
 
 const PLACEMENT_NOTE: Record<MvpCardModel['placement'], string> = {
+  stated:
+    'Placed by hand on the record itself, which outranks both derived placements. Clear the release and stage in Manage to hand it back to the sources.',
   capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a release of its own.`,
   feature:
     `This record owns no placed capability, so it is placed by the PwC features that cite it. That is a weaker footing than the ${SOURCE_LABEL.sequencing}’s own placement.`,
