@@ -58,7 +58,8 @@ export const SCOPE_VIEW_LABEL: Record<ViewMode, string> = {
   capability: 'View by capability',
 }
 
-const VIEW_SLUG: Record<ViewMode, string> = {
+/** The view's part of an export filename, shared with the PDF export. */
+export const SCOPE_VIEW_SLUG: Record<ViewMode, string> = {
   release: 'by-pwc-release',
   actor: 'by-actor',
   mvp: 'by-msd-feature',
@@ -474,7 +475,7 @@ function spanLine(spanned: ReleaseRow[], releases: ReleaseRow[]): string {
  * the browser silently suffixes one.
  */
 const filenameFor = (view: ViewMode, filters: FilterState) =>
-  `vd2-scope-${VIEW_SLUG[view]}${isEmpty(filters) ? '' : '-filtered'}.md`
+  `vd2-scope-${SCOPE_VIEW_SLUG[view]}${isEmpty(filters) ? '' : '-filtered'}.md`
 
 /** `2026-09-24` — sortable, and unambiguous wherever it is read. */
 function formatDate(date: Date): string {

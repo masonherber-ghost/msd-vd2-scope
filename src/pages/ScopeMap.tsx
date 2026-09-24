@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Download, Filter } from 'lucide-react'
+import { Download, FileDown, Filter } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -56,6 +56,7 @@ import {
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { SCOPE_VIEW_LABEL, buildScopeExport } from '@/lib/scope-export'
+import { captureScopeMapPdf } from '@/lib/scope-pdf'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
   EMPTY_FILTERS,
@@ -567,6 +568,35 @@ export default function ScopeMap() {
     ],
   )
 
+  /**
+   * The PDF is a render of the live DOM rather than of the model, so it
+   * reads the two elements off the page: the actor legend, which is the key,
+   * and the grid it explains. Zoom and scroll are undone during the capture
+   * — they describe the screen, not the map.
+   */
+  const [pdfState, setPdfState] = useState<'idle' | 'working' | 'failed'>('idle')
+
+  const exportPdf = useCallback(async () => {
+    const legend = document.querySelector<HTMLElement>('.scope-chrome__legend')
+    const grid = document.querySelector<HTMLElement>('.scope-map-grid')
+    const elements = [legend, grid].filter((node): node is HTMLElement => node !== null)
+    if (elements.length === 0) {
+      setPdfState('failed')
+      return
+    }
+
+    setPdfState('working')
+    try {
+      await captureScopeMapPdf({ elements, view, filters })
+      setPdfState('idle')
+    } catch {
+      // Rendering the DOM to a canvas can fail on a resource the browser
+      // will not let us read. Say so rather than leaving a button that
+      // looks like it did nothing.
+      setPdfState('failed')
+    }
+  }, [view, filters])
+
   /** Scales the grid so its full width fits the viewport (R-8.7). */
   const fitToWidth = useCallback(() => {
     const container = scrollRef.current
@@ -612,7 +642,7 @@ export default function ScopeMap() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant={filtersOpen ? 'default' : 'outline'}
             size="sm"
@@ -649,6 +679,16 @@ export default function ScopeMap() {
           <Button
             variant="outline"
             size="sm"
+            onClick={() => void exportPdf()}
+            disabled={!model || pdfState === 'working'}
+          >
+            <FileDown aria-hidden="true" />
+            {pdfState === 'working' ? 'Building PDF…' : 'Export PDF'}
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setZoom((z) => clamp(z - STEP))}
             disabled={zoom <= MIN_ZOOM}
             aria-label="Zoom out"
@@ -680,6 +720,19 @@ export default function ScopeMap() {
           </Button>
         </div>
       </div>
+
+      {/* Building the PDF takes a few seconds on a full map, so the wait is
+          announced rather than left to the button label alone. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {pdfState === 'working' ? 'Building the PDF of the scope map' : ''}
+      </p>
+
+      {pdfState === 'failed' ? (
+        <p role="alert" className="text-sm text-destructive">
+          The PDF could not be built. The map is still on screen — try again, or use
+          Export for the Markdown list.
+        </p>
+      ) : null}
 
       {scope.isPending ? (
         <p className="text-sm text-muted-foreground">Loading scope…</p>

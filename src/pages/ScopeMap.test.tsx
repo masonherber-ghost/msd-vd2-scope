@@ -27,6 +27,15 @@ const { state } = await vi.hoisted(async () => ({
   },
 }))
 
+const { capturePdf } = vi.hoisted(() => ({ capturePdf: vi.fn() }))
+
+// The canvas render cannot run in jsdom; what the page is responsible for is
+// handing the right elements over and reporting what came back.
+vi.mock('@/lib/scope-pdf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/scope-pdf')>()),
+  captureScopeMapPdf: capturePdf,
+}))
+
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-client')>()
   const failWrite = () => {
@@ -275,6 +284,8 @@ beforeEach(() => {
   state.mvpPatches = []
   state.capabilityDeletes = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
+  capturePdf.mockReset()
+  capturePdf.mockResolvedValue('vd2-scope-map-by-pwc-release.pdf')
 })
 
 describe('ScopeMap page', () => {
@@ -2838,6 +2849,81 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled(),
+    )
+  })
+})
+
+describe('ScopeMap PDF export (the map as a picture)', () => {
+  it('offers it from the toolbar, alongside the Markdown export', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
+  })
+
+  it('hands over the legend and the grid, in that order', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const { elements } = capturePdf.mock.calls[0][0]
+    expect(elements.map((node: HTMLElement) => node.className)).toEqual([
+      'scope-chrome__legend',
+      'scope-map-grid',
+    ])
+  })
+
+  it('captures the view and filters the map is currently showing', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp&release=1.1')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    expect(capturePdf.mock.calls[0][0]).toMatchObject({
+      view: 'mvp',
+      filters: expect.objectContaining({ release: ['1.1'] }),
+    })
+  })
+
+  it('says it is working, and stops saying so when it is done', async () => {
+    const user = userEvent.setup()
+    let finish: (name: string) => void = () => {}
+    capturePdf.mockReturnValue(new Promise<string>((resolve) => { finish = resolve }))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+    // A full map takes a few seconds; a button that looks idle invites a
+    // second click and a second render.
+    expect(await screen.findByRole('button', { name: 'Building PDF…' })).toBeDisabled()
+
+    finish('vd2-scope-map-by-pwc-release.pdf')
+    expect(await screen.findByRole('button', { name: 'Export PDF' })).toBeEnabled()
+  })
+
+  it('reports a failed render instead of looking like it did nothing', async () => {
+    const user = userEvent.setup()
+    capturePdf.mockRejectedValue(new Error('tainted canvas'))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PDF could not be built/i)
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
+  })
+
+  it('offers no PDF while the scope failed to load', async () => {
+    state.fail = 'Server unreachable'
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export PDF' })).toBeDisabled(),
     )
   })
 })
