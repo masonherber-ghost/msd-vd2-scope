@@ -44,6 +44,8 @@
 @import "./components/ConflictQueue.css";
 @import "./components/ScopeSearch.css";
 @import "./components/ScopeExportDialog.css";
+@import "./components/CardDetailBar.css";
+@import "./components/ScopeDetailDialog.css";
 @import "./components/CoverageReport.css";
 
 /* ============================================================

@@ -79,6 +79,16 @@ export function InlineEditField({
     setError(null)
   }
 
+  /**
+   * Escape cancels the edit and stops there. These fields sit inside the
+   * detail panels, which are modals, and a modal closes on Escape too —
+   * without this, cancelling an edit would also close the panel around it.
+   */
+  const cancelOnEscape = (event: { stopPropagation: () => void }) => {
+    event.stopPropagation()
+    cancel()
+  }
+
   const save = async () => {
     const next = draft.trim()
     if (next === value.trim()) {
@@ -143,7 +153,7 @@ export function InlineEditField({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Escape') cancel()
+            if (event.key === 'Escape') cancelOnEscape(event)
           }}
         >
           {options.map((option) => (
@@ -161,7 +171,7 @@ export function InlineEditField({
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Escape') cancel()
+            if (event.key === 'Escape') cancelOnEscape(event)
           }}
         />
       ) : (
@@ -173,7 +183,7 @@ export function InlineEditField({
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') void save()
-            if (event.key === 'Escape') cancel()
+            if (event.key === 'Escape') cancelOnEscape(event)
           }}
         />
       )}

@@ -58,7 +58,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         phase_id: 'access-and-onboarding',
         source_phase_label: 'Access & Onboarding',
         capability_note: null,
-        display_order: 1,
+        question: null, display_order: 1,
         source: 'mapping',
       },
       {
@@ -69,15 +69,15 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         phase_id: 'access-and-onboarding',
         source_phase_label: 'Access & Onboarding',
         capability_note: null,
-        display_order: 2,
+        question: null, display_order: 2,
         source: 'mapping',
       },
     ],
     assumptions: [],
     mvpFeatures: [
-      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', release_id: null, phase_id: null, source: 'mapping' },
-      { id: 2, ref: 938, scope_option: null, title: 'Additional users', release_id: null, phase_id: null, source: 'mapping' },
-      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', release_id: null, phase_id: null, source: 'mapping' },
+      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', release_id: null, phase_id: null, question: null, source: 'mapping' },
+      { id: 2, ref: 938, scope_option: null, title: 'Additional users', release_id: null, phase_id: null, question: null, source: 'mapping' },
+      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', release_id: null, phase_id: null, question: null, source: 'mapping' },
     ],
     capabilities: [
       {

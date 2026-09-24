@@ -423,3 +423,24 @@
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
 }
+
+/* ========================================
+   QUESTION
+   ======================================== */
+
+/* Matches the capability panel's treatment, so an open question reads the
+   same wherever it is raised. */
+.feature-detail__question {
+  display: block;
+  margin: 0;
+  padding: var(--spacing-2);
+  border-left: 3px solid var(--color-destructive);
+  background-color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.feature-detail__question-label {
+  font-weight: 600;
+}

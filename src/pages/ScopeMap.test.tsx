@@ -579,7 +579,7 @@ describe('ScopeMap zero-result state (R-8.10)', () => {
 })
 
 describe('ScopeMap selection and detail panel', () => {
-  it('opens the panel beside the map, keeping the map visible', async () => {
+  it('opens the panel as a modal, leaving the map at full width behind it', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
@@ -589,8 +589,10 @@ describe('ScopeMap selection and detail panel', () => {
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
     )
-    // The map is still there — the panel opened beside it, not over it.
-    expect(screen.getAllByRole('cell')).toHaveLength(4)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    // The grid is still rendered — it is inert behind the modal, not gone,
+    // so closing returns to exactly the map that was there.
+    expect(screen.getAllByRole('cell', { hidden: true })).toHaveLength(4)
   })
 
   it('keeps the active filters when the panel opens', async () => {
@@ -621,13 +623,16 @@ describe('ScopeMap selection and detail panel', () => {
     )
   })
 
-  it('marks the selected card as pressed', async () => {
+  it('marks the selected card as pressed behind the modal', async () => {
+    // The card keeps its selected state while the panel is over it, so
+    // closing lands the reader back on the card they opened.
     renderPage('/?selected=F-002')
-    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('closes on Escape and clears the URL', async () => {
@@ -643,13 +648,32 @@ describe('ScopeMap selection and detail panel', () => {
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
   })
 
-  it('clicking the open card again closes the panel', async () => {
+  it('closes from the panel’s own Close, clearing the selection', async () => {
+    // The card behind a modal cannot be clicked, so closing is the panel's
+    // job — Close, or Escape, both of which clear the URL.
     const user = userEvent.setup()
     renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(url()).not.toContain('selected'))
+  })
+
+  it('returns focus to the card it was opened from', async () => {
+    const user = userEvent.setup()
+    renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
-    await waitFor(() => expect(url()).not.toContain('selected'))
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toHaveFocus()
   })
 
   it('the pivot control filters the map without closing the panel (R-8.16)', async () => {
@@ -835,7 +859,10 @@ describe('ScopeMap inline edit', () => {
     )
     // The typing is not lost, and the map still shows the stored value.
     expect(screen.getByLabelText('Name')).toHaveValue('Rejected name')
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+    // The card is inert behind the modal, but still showing the stored value.
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -898,7 +925,9 @@ describe('ScopeMap delete (R-9.4, R-9.5)', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(/Cannot delete F-002/),
     )
     // Rolled back — the card is still on the map.
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -1531,16 +1560,22 @@ describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
   })
 
   it('keeps selection and filters across a view change', async () => {
+    // The view tabs sit behind the modal, so the panel is closed first —
+    // the selection stays in the URL and the panel comes back with it.
     const user = userEvent.setup()
     renderPage('/?selected=F-002&actor=employer')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'By actor' }))
 
-    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
     expect(url()).toContain('actor=employer')
+    expect(url()).toContain('view=actor')
   })
 })
 
@@ -1739,18 +1774,22 @@ describe('ScopeMap — the MSD feature view', () => {
   })
 
   it('keeps each view its own selection', async () => {
+    // Both selections ride in the URL at once; each view reads only its own,
+    // so switching back restores the panel that was open in it.
     const user = userEvent.setup()
-    renderPage('/?selected=F-002')
+    renderPage('/?view=mvp&selected=F-002')
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /MSD feature 938 Additional users/ }),
+      ).toBeInTheDocument(),
     )
-
-    await openMsdView(user)
     // The PwC panel cannot render here, and no MSD card is selected yet.
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'By PwC release' }))
-    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
   })
 
   it('filters MSD cards with the same rail', async () => {
@@ -1803,7 +1842,8 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
   const openModal = async (user: ReturnType<typeof userEvent.setup>) => {
     const panel = await openPanel()
     await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
-    return screen.getByRole('dialog')
+    // The panel is itself a dialog now, so the modal is addressed by name.
+    return screen.getByRole('dialog', { name: /resolve this capability/i })
   }
 
   it('offers Resolve on a capability that conflicts', async () => {
@@ -1942,7 +1982,9 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const dialog = await openModal(user)
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
     expect(state.resolved).toHaveLength(0)
     expect(state.capabilityMoves).toHaveLength(0)
   })
@@ -1963,20 +2005,24 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
 
   it('clears the conflict on the card once the capability is moved to meet it', async () => {
     const user = userEvent.setup()
+    // The panel is a modal, so the card behind it is inert — still rendered
+    // and still correct, which is what this checks.
     const card = () =>
-      screen.getByRole('button', { name: /^F-002 / }).closest('article') as HTMLElement
+      screen
+        .getByRole('button', { name: /^F-002 /, hidden: true })
+        .closest('article') as HTMLElement
 
     const panel = await openPanel()
-    // Checked before opening: Radix marks the rest of the page inert while
-    // the dialog is up, so the card is not queryable until it closes.
     expect(within(card()).getByTitle('Not yet reviewed')).toHaveTextContent('2 conflicts')
 
     await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
-    const dialog = screen.getByRole('dialog')
+    const dialog = screen.getByRole('dialog', { name: /resolve this capability/i })
     await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // The release conflict is gone because the capability now sits with the
     // feature — the badge drops from 2 to 1, it is not merely marked decided.
@@ -2001,7 +2047,9 @@ describe('ScopeMap — a decided capability stops arguing its case', () => {
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }),
     )
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // The round trip carries the new state back, so the panel re-renders
     // collapsed without a reload.
@@ -2540,7 +2588,10 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
       expect(state.mvpCapabilitySets).toEqual([{ id: 2, capabilityIds: [11] }]),
     )
 
-    // Still delivered scope — it simply has no owning record now.
+    // Still delivered scope — it simply has no owning record now. The view
+    // tabs sit behind the modal, so the panel is closed to reach them.
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'By capability' }))
     expect(
       await screen.findByRole('button', { name: /^Invite employer to register/ }),
@@ -2605,8 +2656,9 @@ describe('ScopeMap — deleting a capability from its panel', () => {
     await user.click(within(panel).getByRole('button', { name: 'Cancel' }))
 
     expect(state.capabilityDeletes).toEqual([])
+    // Still on the map, inert behind the panel that is still open over it.
     expect(
-      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/, hidden: true }),
     ).toBeInTheDocument()
   })
 
@@ -2677,8 +2729,9 @@ describe('ScopeMap — deleting a capability from its panel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Cannot delete capability 12 — 1 PwC feature cites it.',
     )
+    // Still on the map, inert behind the panel that is still open over it.
     expect(
-      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/, hidden: true }),
     ).toBeInTheDocument()
   })
 
@@ -2708,7 +2761,9 @@ describe('ScopeMap export (the map as a document)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the current view as Markdown, in the source document’s shape', async () => {
@@ -2771,7 +2826,9 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     expect(await screen.findByRole('dialog', { name: 'Export this view' })).toBeInTheDocument()
 
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
   })
 
   it('returns focus to the Export control when the dialog closes', async () => {
@@ -2783,7 +2840,9 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     // The dialog's own Close sits last; the header's X carries the same name.
     const closes = screen.getAllByRole('button', { name: 'Close' })
     await user.click(closes[closes.length - 1])
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // Otherwise a keyboard user is returned to the top of the document and
     // has to tab the whole toolbar again to get back where they were.
@@ -2797,7 +2856,9 @@ describe('ScopeMap export — reaching it and leaving it', () => {
 
     await user.click(screen.getByRole('button', { name: 'Export text' }))
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     expect(screen.getByRole('button', { name: 'Export text' })).toHaveFocus()
   })
@@ -2925,5 +2986,92 @@ describe('ScopeMap PDF export (the map as a picture)', () => {
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Export PDF' })).toBeDisabled(),
     )
+  })
+})
+
+/**
+ * The map fits itself to the viewport once, on arrival.
+ *
+ * It used to re-fit whenever the model changed — and every write invalidates
+ * the scope query, so saving any edit handed back a fresh model and snapped
+ * the zoom back to fit. Someone reading at 100% lost their place on every
+ * keystroke they committed.
+ *
+ * jsdom reports no layout, so the two measurements `fitToWidth` divides are
+ * stubbed; without them the fit is a no-op and the regression is invisible.
+ */
+describe('ScopeMap zoom survives a save', () => {
+  /** Makes the grid measurable: a 1400px viewport over a 2800px map. */
+  const stubLayout = () => [
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('scope-map-grid') ? 1400 : 0
+    }),
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('scope-map-grid__table') ? 2800 : 0
+    }),
+  ]
+
+  it('fits to the viewport on arrival', async () => {
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    // 1400 / 2800 = 50%.
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('50%')
+  })
+
+  it('keeps a chosen zoom when a feature edit is saved', async () => {
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    // Zoom first: the toolbar is inert once the panel is over it.
+    await user.click(screen.getByRole('button', { name: '100%' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+
+    await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    const input = screen.getByLabelText('Name')
+    await user.clear(input)
+    await user.type(input, 'Renamed')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(state.patched).toHaveLength(1))
+    // The zoom readout sits behind the modal, so it is read there.
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+  })
+
+  it('keeps a chosen zoom when the filters change', async () => {
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await user.click(screen.getByRole('button', { name: '100%' }))
+
+    const rail = await openFilters(user)
+    await user.click(within(rail).getByRole('checkbox', { name: /Release 1\.1/ }))
+
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+  })
+
+  it('still fits on demand', async () => {
+    // The button is the way back, now that nothing re-fits on its own.
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await user.click(screen.getByRole('button', { name: '100%' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+
+    await user.click(screen.getByRole('button', { name: 'Fit' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('50%')
   })
 })

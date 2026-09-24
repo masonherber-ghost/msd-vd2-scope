@@ -73,6 +73,8 @@ export type FeatureDetail = {
   capabilityCount: number
   /** The source's own qualifier when there are no capabilities (R-8.18). */
   capabilityNote: string | null
+  /** A question someone raised about this feature, or null. */
+  question: string | null
   connected: ConnectedFeature[]
   conflicts: { release: number; phase: number; unmatched: number; unreviewed: number }
 }
@@ -240,6 +242,7 @@ export function buildFeatureDetail(
     actorGroups,
     capabilityCount: capabilities.length,
     capabilityNote: feature.capability_note,
+    question: feature.question,
     connected,
     conflicts: {
       release: releaseConflicts,

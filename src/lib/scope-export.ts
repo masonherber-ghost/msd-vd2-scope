@@ -132,11 +132,18 @@ function featureLine(feature: FeatureCardModel): string {
     m.scopeOption ? `SVD-${m.ref} (Option ${m.scopeOption})` : `SVD-${m.ref}`,
   )
   const cited = refs.length > 0 ? ` *(${refs.join(', ')})*` : ''
-  return `* **${feature.id}**: ${oneLine(feature.name)}${cited}`
+  // Carried for the same reason the capability's is: a list that dropped an
+  // open question would read as settled.
+  const question = feature.question ? ` — **Question:** ${oneLine(feature.question)}` : ''
+  return `* **${feature.id}**: ${oneLine(feature.name)}${cited}${question}`
 }
 
-const mvpLine = (card: MvpCardModel) =>
-  `* **${mvpRefLabel(card)}**: ${oneLine(card.title)}`
+const mvpLine = (card: MvpCardModel) => {
+  // Carried for the same reason the feature's and capability's are: a list
+  // that dropped an open question would read as settled.
+  const question = card.question ? ` — **Question:** ${oneLine(card.question)}` : ''
+  return `* **${mvpRefLabel(card)}**: ${oneLine(card.title)}${question}`
+}
 
 /**
  * A capability bullet carries its actor and, where someone raised one, the

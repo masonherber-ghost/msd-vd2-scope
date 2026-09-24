@@ -60,7 +60,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
       makeScopeGraph({
         mvpFeatures: [
           ...graph.mvpFeatures,
-          { id: 9, ref: 937, scope_option: null, title: 'Access recovery', release_id: null, phase_id: null, source: 'mapping' },
+          { id: 9, ref: 937, scope_option: null, title: 'Access recovery', release_id: null, phase_id: null, question: null, source: 'mapping' },
         ],
       }),
     )
@@ -74,7 +74,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
       makeScopeGraph({
         mvpFeatures: [
           ...graph.mvpFeatures,
-          { id: 9, ref: 950, scope_option: null, title: 'Audit histories', release_id: null, phase_id: null, source: 'sequencing' },
+          { id: 9, ref: 950, scope_option: null, title: 'Audit histories', release_id: null, phase_id: null, question: null, source: 'sequencing' },
         ],
         featureMvpLinks: [],
       }),
@@ -94,7 +94,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
             phase_id: 'access-and-onboarding',
             source_phase_label: null,
             capability_note: 'Mapped under Release 2+ in table',
-            display_order: 1,
+            question: null, display_order: 1,
             source: 'mapping',
           },
         ],

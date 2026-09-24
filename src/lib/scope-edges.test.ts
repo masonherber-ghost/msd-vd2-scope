@@ -84,7 +84,7 @@ describe('buildEdges', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 1,
+          question: null, display_order: 1,
           source: 'mapping',
         },
         {
@@ -95,7 +95,7 @@ describe('buildEdges', () => {
           phase_id: 'manage-vacancies',
           source_phase_label: null,
           capability_note: null,
-          display_order: 2,
+          question: null, display_order: 2,
           source: 'mapping',
         },
       ],

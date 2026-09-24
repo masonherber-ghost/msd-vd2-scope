@@ -175,8 +175,10 @@ function matchesConflict(feature: FeatureCardModel, wanted: ConflictFilter[]): b
         return unreviewed > 0
       case 'corrected':
         return feature.overridden
+      case 'question':
+        return feature.question !== null
       case 'none':
-        return !any && !feature.overridden
+        return !any && !feature.overridden && feature.question === null
     }
   })
 }

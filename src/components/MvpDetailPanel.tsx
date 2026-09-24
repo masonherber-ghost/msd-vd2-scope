@@ -44,6 +44,8 @@ export type MvpDetailPanelProps = {
   onSetPlacement?: (patch: { release_id?: string; phase_id?: string }) => Promise<unknown>
   /** Renames the record. Rejects with the server's message. */
   onSaveTitle?: (title: string) => Promise<unknown>
+  /** Saves a question, or clears it when the text is emptied. */
+  onSaveQuestion?: (question: string | null) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
 }
 
@@ -69,6 +71,7 @@ export function MvpDetailPanel({
   phaseOptions,
   onSetPlacement,
   onSaveTitle,
+  onSaveQuestion,
   onDirtyChange,
 }: MvpDetailPanelProps) {
   const label = mvpCardLabel(card)
@@ -176,6 +179,27 @@ export function MvpDetailPanel({
       </div>
 
       <p className="mvp-detail__note">{PLACEMENT_NOTE[card.placement]}</p>
+
+      {card.question ? (
+        <p className="mvp-detail__question" role="note">
+          <span className="mvp-detail__question-label">Question:</span> {card.question}
+        </p>
+      ) : null}
+
+      {onSaveQuestion ? (
+        <section className="mvp-detail__section">
+          <h3 className="mvp-detail__section-title">Question</h3>
+          <InlineEditField
+            label="Question"
+            value={card.question ?? ''}
+            multiline
+            addLabel="Add a question"
+            // Emptying it clears the question rather than storing a blank one.
+            onSave={(next) => onSaveQuestion(next.trim() === '' ? null : next)}
+            onDirtyChange={onDirtyChange}
+          />
+        </section>
+      ) : null}
 
       {canPlace && releaseOptions && phaseOptions && onSetPlacement ? (
         <section className="mvp-detail__section">

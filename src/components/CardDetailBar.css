@@ -1,0 +1,125 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.card-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2) var(--spacing-4);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-card);
+}
+
+.card-detail__title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   TOGGLES
+   ======================================== */
+
+.card-detail__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Pressed is the default, so an "off" toggle is the thing that stands out —
+   and it says so in a word, never by colour alone (R-10.6). */
+.card-detail__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-1);
+  min-height: var(--spacing-8);
+  padding: 0 var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background-color: var(--color-background);
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.card-detail__toggle::before {
+  content: "hidden";
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.card-detail__toggle[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-primary-foreground);
+}
+
+.card-detail__toggle[aria-pressed="true"]::before {
+  content: "shown";
+}
+
+.card-detail__toggle:hover {
+  border-color: var(--color-primary);
+}
+
+.card-detail__toggle:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   ACTIONS
+   ======================================== */
+
+.card-detail__actions {
+  display: flex;
+  gap: var(--spacing-3);
+  margin-inline-start: auto;
+}
+
+.card-detail__link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--color-muted-foreground);
+  font-size: 0.75rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.card-detail__link:hover:not(:disabled) {
+  color: var(--color-foreground);
+}
+
+.card-detail__link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.card-detail__link:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+@media (min-width: 640px) {
+  .card-detail {
+    flex-wrap: nowrap;
+  }
+}

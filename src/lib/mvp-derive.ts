@@ -67,6 +67,12 @@ export type MvpCardModel = {
    * here for the editor to show rather than silently discarded.
    */
   stated: { releaseId: string | null; phaseId: string | null }
+  /**
+   * A question someone raised about this record. Not a disagreement between
+   * the sources — a person flagging something that needs an answer — but it
+   * is flagged on the card like one, because it is the same kind of item.
+   */
+  question: string | null
   pwcFeatures: MvpPwcFeature[]
   capabilities: MvpCapability[]
   actorCounts: { actor: Actor; count: number }[]
@@ -142,6 +148,7 @@ function buildCard(
     cells,
     placement,
     stated,
+    question: mvp.question,
     pwcFeatures,
     capabilities: capabilities
       .map((c) => ({

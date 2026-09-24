@@ -7,9 +7,8 @@ Filters:
 - Add abiluty to as question
 
 #New Phase
-- Add another phase: 1. Portal structure & navigation (no epic number)
-- move some features into that phase
-- Change Release 2 to Release 1.5+
+- /manage releases: add ability to change the release label
+- Change Release 2 to Release 2+
 
 #Edit feature data:
 - review and update the users for each feature
@@ -18,10 +17,11 @@ Filters:
 
 
 Bugs:
-Fix zoom when ever edit bug  
-SCrolls past the end of the grid
 
 #Capabilities
 - Edit and refine capabilities text
 - Design of capabilities page fixed so export is nicer
+
+scope map view by feature: 
+
 

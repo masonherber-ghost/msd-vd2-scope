@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { buildScopeMap, rowsFor } from '@/lib/scope-derive'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
@@ -216,7 +216,7 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
             phase_id: 'access-and-onboarding',
             source_phase_label: null,
             capability_note: null,
-            display_order: 1,
+            question: null, display_order: 1,
             source: 'mapping',
           },
           {
@@ -227,7 +227,7 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
             phase_id: 'access-and-onboarding',
             source_phase_label: null,
             capability_note: null,
-            display_order: 2,
+            question: null, display_order: 2,
             source: 'mapping',
           },
         ],
@@ -276,5 +276,65 @@ describe('ScopeMapGrid — connection density (R-8.3)', () => {
     renderConnected()
     const card = screen.getByLabelText('F-002 Verify employer')
     expect(card).toHaveTextContent('1 link')
+  })
+})
+
+/**
+ * The scroll box has to match the map that is painted.
+ *
+ * A CSS transform paints the grid smaller but leaves its layout box at the
+ * natural size, so the scroller reserved room for a map far bigger than the
+ * one on screen — at 40% you could scroll about 1400px past the right-hand
+ * edge, with a thousand pixels of blank space under it. The component
+ * measures the table and sizes the scaler to `natural × zoom`.
+ *
+ * jsdom has no layout, so the measurement is stubbed; that the box then
+ * *scrolls* correctly is a browser check, not one this can make.
+ */
+describe('ScopeMapGrid — the scaler is sized to what is painted', () => {
+  const NATURAL = { width: 3000, height: 2000 }
+
+  const withMeasuredTable = (zoom: number) => {
+    const spies = (['offsetWidth', 'offsetHeight'] as const).map((prop) =>
+      vi.spyOn(HTMLElement.prototype, prop, 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains('scope-map-grid__table')
+          ? NATURAL[prop === 'offsetWidth' ? 'width' : 'height']
+          : 0
+      }),
+    )
+    try {
+      renderGrid(zoom)
+      return document.querySelector('.scope-map-grid__scaler') as HTMLElement
+    } finally {
+      spies.forEach((spy) => spy.mockRestore())
+    }
+  }
+
+  it('sizes the scaler to the scaled map, not the natural one', () => {
+    const scaler = withMeasuredTable(0.4)
+    expect(scaler.style.width).toBe('1200px')
+    expect(scaler.style.height).toBe('800px')
+  })
+
+  it('matches the natural size at 100%', () => {
+    const scaler = withMeasuredTable(1)
+    expect(scaler.style.width).toBe('3000px')
+    expect(scaler.style.height).toBe('2000px')
+  })
+
+  it('falls back to max-content before the table has been measured', () => {
+    // Nothing is stubbed here, so the table measures 0 in jsdom — the CSS
+    // fallback has to hold rather than collapsing the grid to nothing.
+    renderGrid(0.5)
+    const scaler = document.querySelector('.scope-map-grid__scaler') as HTMLElement
+    expect(scaler.style.width).toBe('')
+    expect(scaler.style.height).toBe('')
+  })
+
+  it('still carries the zoom for the transform to read', () => {
+    const scaler = withMeasuredTable(0.4)
+    expect(scaler.style.getPropertyValue('--scope-zoom')).toBe('0.4')
   })
 })

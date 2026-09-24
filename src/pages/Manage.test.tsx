@@ -109,7 +109,8 @@ describe('Manage — releases', () => {
     const rows = screen.getAllByRole('row')
     // Header plus two releases.
     expect(rows).toHaveLength(3)
-    expect(rows[1]).toHaveTextContent('Release 1.1')
+    // The label is an editable field now, so it reads as a value not as text.
+    expect(screen.getByLabelText('Label for release 1.1')).toHaveValue('Release 1.1')
     expect(rows[1]).toHaveTextContent('2')
   })
 
@@ -120,7 +121,7 @@ describe('Manage — releases', () => {
       expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
     )
 
-    const input = screen.getByLabelText('Name for Release 1.1')
+    const input = screen.getByLabelText('Name for release 1.1')
     await user.clear(input)
     await user.type(input, 'Controlled Pilot')
     await user.tab()
@@ -136,7 +137,7 @@ describe('Manage — releases', () => {
       expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByLabelText('Name for Release 1.1'))
+    await user.click(screen.getByLabelText('Name for release 1.1'))
     await user.tab()
 
     expect(called('releases.update')).toHaveLength(0)
@@ -458,5 +459,76 @@ describe('Manage — stating an MSD feature’s placement', () => {
     await user.selectOptions(screen.getByLabelText('Release for MVP 938'), '1.4')
 
     expect(await screen.findByRole('alert')).toHaveTextContent('There is no release')
+  })
+})
+
+/**
+ * The label is what every view calls the release — the chips, the row
+ * headers, the export headings — so it is the field most likely to need
+ * correcting, and it was the one cell in the table that could not be.
+ */
+describe('Manage — renaming a release label', () => {
+  const openTable = async () => {
+    renderManage('/manage/releases')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('offers the label as an editable field on every row', async () => {
+    await openTable()
+    expect(screen.getByLabelText('Label for release 1.1')).toHaveValue('Release 1.1')
+    expect(screen.getByLabelText('Label for release 1.4')).toHaveValue('Release 1.4')
+  })
+
+  it('saves a new label on blur', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    const input = screen.getByLabelText('Label for release 1.1')
+    await user.clear(input)
+    await user.type(input, 'Pilot 1.1')
+    await user.tab()
+
+    await waitFor(() => expect(called('releases.update')).toHaveLength(1))
+    expect(called('releases.update')[0].args).toEqual(['1.1', { label: 'Pilot 1.1' }])
+  })
+
+  it('writes nothing when the label is left alone', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(screen.getByLabelText('Label for release 1.1'))
+    await user.tab()
+
+    expect(called('releases.update')).toHaveLength(0)
+  })
+
+  it('surfaces the server’s refusal of an empty label', async () => {
+    // The label is what the release is called everywhere; a blank one would
+    // leave every chip and heading nameless.
+    const user = userEvent.setup()
+    state.writeFail = 'label: Give the release a label.'
+    await openTable()
+
+    const input = screen.getByLabelText('Label for release 1.1')
+    await user.clear(input)
+    await user.tab()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Give the release a label')
+  })
+
+  it('keeps the label and the name as separate fields', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    const label = screen.getByLabelText('Label for release 1.1')
+    await user.clear(label)
+    await user.type(label, 'Pilot')
+    await user.tab()
+
+    await waitFor(() => expect(called('releases.update')).toHaveLength(1))
+    // Only the label moved; the name is untouched.
+    expect(called('releases.update')[0].args[1]).toEqual({ label: 'Pilot' })
   })
 })

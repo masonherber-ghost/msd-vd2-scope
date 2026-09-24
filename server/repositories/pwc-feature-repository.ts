@@ -9,6 +9,8 @@ export type PwcFeatureRow = {
   phase_id: string
   source_phase_label: string | null
   capability_note: string | null
+  /** A question someone raised about this feature, or null. */
+  question: string | null
   display_order: number
   source: string
   created_at: string
@@ -16,7 +18,8 @@ export type PwcFeatureRow = {
 }
 
 const COLUMNS = `id, name, foundational_build, release_id, phase_id,
-  source_phase_label, capability_note, display_order, source, created_at, updated_at`
+  source_phase_label, capability_note, question, display_order, source,
+  created_at, updated_at`
 
 let selectAll: Statement | undefined
 let selectOne: Statement | undefined
@@ -140,6 +143,7 @@ export function updatePwcFeature(
     release_id?: string
     phase_id?: string
     capability_note?: string | null
+    question?: string | null
   },
 ): PwcFeatureRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]

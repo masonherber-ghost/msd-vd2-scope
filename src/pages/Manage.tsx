@@ -149,11 +149,29 @@ function Releases({ scope }: { scope: Scope }) {
             {scope.releases.map((release) => (
               <tr key={release.id}>
                 <td className="manage-table__mono">{release.id}</td>
-                <td>{release.label}</td>
+                <td>
+                  {/* Both fields are labelled by the release **id**, not by
+                      its label: the label is now editable, and two releases
+                      sharing one would leave the fields indistinguishable. */}
+                  <input
+                    className="manage-table__input"
+                    aria-label={`Label for release ${release.id}`}
+                    defaultValue={release.label}
+                    onBlur={(event) => {
+                      if (event.target.value === release.label) return
+                      void run(() =>
+                        update.mutateAsync({
+                          id: release.id,
+                          patch: { label: event.target.value },
+                        }),
+                      )
+                    }}
+                  />
+                </td>
                 <td>
                   <input
                     className="manage-table__input"
-                    aria-label={`Name for ${release.label}`}
+                    aria-label={`Name for release ${release.id}`}
                     defaultValue={release.name}
                     onBlur={(event) => {
                       if (event.target.value === release.name) return

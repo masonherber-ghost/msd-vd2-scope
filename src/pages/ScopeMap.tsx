@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Download, FileDown, Filter } from 'lucide-react'
+import { Download, Eye, FileDown, Filter } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -9,6 +9,8 @@ import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { ReleaseHorizons, ScopeMapChrome } from '@/components/ScopeMapChrome'
+import { CardDetailBar } from '@/components/CardDetailBar'
+import { ScopeDetailDialog } from '@/components/ScopeDetailDialog'
 import { ScopeExportDialog } from '@/components/ScopeExportDialog'
 import { ScopeSearch } from '@/components/ScopeSearch'
 import {
@@ -56,6 +58,14 @@ import {
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { SCOPE_VIEW_LABEL, buildScopeExport } from '@/lib/scope-export'
+import {
+  hiddenCount,
+  parseDetail,
+  toggleDetail,
+  writeDetail,
+  ALL_DETAIL,
+  type DetailKey,
+} from '@/lib/card-detail'
 import { captureScopeMapPdf } from '@/lib/scope-pdf'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
@@ -89,6 +99,20 @@ export default function ScopeMap() {
   // pasted link reproduces the view and browser back steps through it.
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])
+
+  /**
+   * Which regions of a card are showing. URL state like everything else, so
+   * a pasted link reproduces the map the sender was reading — a stripped-back
+   * map is a different reading of the same data, not a private preference.
+   */
+  const cardDetail = useMemo(() => parseDetail(searchParams), [searchParams])
+
+  const setCardDetail = useCallback(
+    (next: typeof ALL_DETAIL) => {
+      setSearchParams((current) => writeDetail(next, current), { replace: false })
+    },
+    [setSearchParams],
+  )
 
   const setFilters = useCallback(
     (next: FilterState) => {
@@ -334,7 +358,9 @@ export default function ScopeMap() {
   // Each view has its own panel; only one can be open at a time.
   const mvpDetail = isMvpView ? selectedMvpCard : null
   const capabilityDetail = isCapabilityView ? selectedCapabilityCard : null
-  const panelOpen = detail !== null || mvpDetail !== null || capabilityDetail !== null
+  // Kept as the single answer to "is a panel open", which the edge overlay
+  // and the create flow both read even though the layout no longer does.
+  void (detail !== null || mvpDetail !== null || capabilityDetail !== null)
 
   // ---- Create / edit / delete -------------------------------------------
   const [creatingIn, setCreatingIn] = useState<{
@@ -344,6 +370,8 @@ export default function ScopeMap() {
   const [dirty, setDirty] = useState(false)
   // The rail is hidden until asked for, then opens as a column beside the map.
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // Same idea for the card-detail toggles, which sit above the grid.
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
@@ -496,6 +524,30 @@ export default function ScopeMap() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [dirty])
 
+  /**
+   * The card a panel was opened from, so focus goes back to it when the
+   * dialog closes rather than to `<body>` — the grid is long, and a keyboard
+   * user would otherwise restart at the top of the page (WCAG 2.4.3).
+   */
+  const cardButton = useCallback(
+    (selector: string) =>
+      document.querySelector<HTMLElement>(`${selector} button`) ??
+      document.querySelector<HTMLElement>(selector),
+    [],
+  )
+
+  const closeCapabilityPanel = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setSelectedCapability(null)
+  }, [confirmDiscard, setSelectedCapability])
+
+  const closeMvpPanel = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setSelectedMvp(null)
+  }, [confirmDiscard, setSelectedMvp])
+
   const closePanel = useCallback(() => {
     if (!confirmDiscard()) return
     setDirty(false)
@@ -597,21 +649,33 @@ export default function ScopeMap() {
     }
   }, [view, filters])
 
-  /** Scales the grid so its full width fits the viewport (R-8.7). */
+  /**
+   * Scales the grid so its full width fits the viewport (R-8.7). Returns
+   * whether it could — the refs are not populated on the first pass.
+   */
   const fitToWidth = useCallback(() => {
     const container = scrollRef.current
     const content = contentRef.current
-    if (!container || !content) return
+    if (!container || !content) return false
     const available = container.clientWidth
     // offsetWidth is the unscaled width, so the ratio is the scale we need.
     const natural = content.offsetWidth
-    if (!available || !natural) return
+    if (!available || !natural) return false
     setZoom(clamp(available / natural))
+    return true
   }, [])
 
-  // Fit once the grid has rendered at its natural size.
+  /**
+   * Fit once, when the grid first has a size — not on every model.
+   *
+   * Every write invalidates the scope query, so `model` is a fresh object
+   * after each save. Fitting on that discarded whatever zoom someone had
+   * chosen: edit a feature at 100% and the map snapped back to 43%.
+   */
+  const hasFitted = useRef(false)
   useLayoutEffect(() => {
-    if (model) fitToWidth()
+    if (!model || hasFitted.current) return
+    hasFitted.current = fitToWidth()
   }, [model, fitToWidth])
 
   return (
@@ -661,6 +725,28 @@ export default function ScopeMap() {
             {activeFilterCount > 0 ? (
               <span className="rounded-full bg-background px-1.5 text-foreground tabular-nums">
                 {activeFilterCount}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
+            variant={detailOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDetailOpen((open) => !open)}
+            aria-pressed={detailOpen}
+            aria-expanded={detailOpen}
+            aria-controls="scope-card-detail"
+            aria-label={
+              hiddenCount(view, cardDetail) > 0
+                ? `Card detail, ${hiddenCount(view, cardDetail)} hidden`
+                : 'Card detail'
+            }
+          >
+            <Eye aria-hidden="true" />
+            Detail
+            {hiddenCount(view, cardDetail) > 0 ? (
+              <span className="rounded-full bg-background px-1.5 text-foreground tabular-nums">
+                {hiddenCount(view, cardDetail)}
               </span>
             ) : null}
           </Button>
@@ -734,6 +820,17 @@ export default function ScopeMap() {
         </p>
       ) : null}
 
+      {detailOpen ? (
+        <CardDetailBar
+          id="scope-card-detail"
+          view={view}
+          state={cardDetail}
+          onToggle={(key: DetailKey) => setCardDetail(toggleDetail(cardDetail, key))}
+          onShowAll={() => setCardDetail(ALL_DETAIL)}
+          onClose={() => setDetailOpen(false)}
+        />
+      ) : null}
+
       {scope.isPending ? (
         <p className="text-sm text-muted-foreground">Loading scope…</p>
       ) : scope.isError ? (
@@ -746,13 +843,7 @@ export default function ScopeMap() {
       ) : model && projected ? (
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start ${
-            filtersOpen && panelOpen
-              ? 'lg:grid-cols-[14rem_minmax(0,1fr)_22rem]'
-              : filtersOpen
-                ? 'lg:grid-cols-[16rem_minmax(0,1fr)]'
-                : panelOpen
-                  ? 'lg:grid-cols-[minmax(0,1fr)_22rem]'
-                  : 'lg:grid-cols-1'
+            filtersOpen ? 'lg:grid-cols-[16rem_minmax(0,1fr)]' : 'lg:grid-cols-1'
           }`}
         >
           {filtersOpen ? (
@@ -823,6 +914,7 @@ export default function ScopeMap() {
                 edges={isMvpView ? [] : edges}
                 density={density}
                 unreviewedIds={unreviewedIds}
+                detail={cardDetail}
                 selectedId={selectedId}
                 onSelect={(id) => {
                   if (!confirmDiscard()) return
@@ -952,6 +1044,14 @@ export default function ScopeMap() {
           </div>
 
           {capabilityDetail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closeCapabilityPanel()
+              }}
+              label={`Capability ${capabilityDetail.text}`}
+              returnFocusTo={() => cardButton(`[data-capability-id="${capabilityDetail.id}"]`)}
+            >
             <CapabilityDetailPanel
               card={capabilityDetail}
               onClose={() => setSelectedCapability(null)}
@@ -1000,9 +1100,18 @@ export default function ScopeMap() {
                 })
               }}
             />
+            </ScopeDetailDialog>
           ) : null}
 
           {mvpDetail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closeMvpPanel()
+              }}
+              label={`MSD feature ${mvpCardLabel(mvpDetail)} ${mvpDetail.title}`}
+              returnFocusTo={() => cardButton(`[data-mvp-id="${mvpDetail.id}"]`)}
+            >
             <MvpDetailPanel
               card={mvpDetail}
               onClose={() => setSelectedMvp(null)}
@@ -1021,6 +1130,9 @@ export default function ScopeMap() {
               onSaveTitle={(title) =>
                 updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { title } })
               }
+              onSaveQuestion={(question) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { question } })
+              }
               onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
@@ -1034,9 +1146,18 @@ export default function ScopeMap() {
                 })
               }}
             />
+            </ScopeDetailDialog>
           ) : null}
 
           {detail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closePanel()
+              }}
+              label={`${detail.id} ${detail.name}`}
+              returnFocusTo={() => cardButton(`[data-feature-id="${detail.id}"]`)}
+            >
             <FeatureDetailPanel
               detail={detail}
               onClose={closePanel}
@@ -1088,6 +1209,7 @@ export default function ScopeMap() {
               }
               onDeleteAssumption={(id) => removeAssumption.mutateAsync(id)}
             />
+            </ScopeDetailDialog>
           ) : null}
         </div>
       ) : null}

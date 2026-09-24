@@ -191,8 +191,8 @@ describe('buildScopeExport — capabilities group under their ref', () => {
   it('gives each option variant of a ref its own heading', () => {
     const variants = makeScopeGraph({
       mvpFeatures: [
-        { id: 7, ref: 951, scope_option: '1A', title: 'Register A', release_id: null, phase_id: null, source: 'mapping' },
-        { id: 8, ref: 951, scope_option: '1B', title: 'Register B', release_id: null, phase_id: null, source: 'mapping' },
+        { id: 7, ref: 951, scope_option: '1A', title: 'Register A', release_id: null, phase_id: null, question: null, source: 'mapping' },
+        { id: 8, ref: 951, scope_option: '1B', title: 'Register B', release_id: null, phase_id: null, question: null, source: 'mapping' },
       ],
       capabilities: [
         {
@@ -296,7 +296,7 @@ describe('buildScopeExport — records nothing places', () => {
     const orphan = makeScopeGraph({
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 9, ref: 953, scope_option: null, title: 'Compliance view', release_id: null, phase_id: null, source: 'sequencing' },
+        { id: 9, ref: 953, scope_option: null, title: 'Compliance view', release_id: null, phase_id: null, question: null, source: 'sequencing' },
       ],
     })
     const { markdown } = buildScopeExport({

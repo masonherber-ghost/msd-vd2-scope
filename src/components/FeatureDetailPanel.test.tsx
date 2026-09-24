@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -97,7 +97,7 @@ describe('FeatureDetailPanel — no capabilities (R-8.18)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: 'Access & onboarding',
           capability_note: 'Mapped under Release 2+ in table',
-          display_order: 1,
+          question: null, display_order: 1,
           source: 'mapping',
         },
       ],
@@ -163,7 +163,7 @@ describe('FeatureDetailPanel — connected features (R-8.17)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 3,
+          question: null, display_order: 3,
           source: 'mapping',
         },
       ],
@@ -321,5 +321,63 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
     )
 
     expect(resolvers.onKeepCapability).toHaveBeenCalled()
+  })
+})
+
+/**
+ * A question raised against a PwC feature. Capabilities have carried one
+ * since 006; a feature could not, so a question about a feature had to be
+ * hung off one of its capabilities or written down elsewhere.
+ */
+describe('FeatureDetailPanel — questions', () => {
+  const renderEditable = (question: string | null = null) => {
+    const base = buildFeatureDetail(graph, 'F-002')!
+    const onSaveField = vi.fn().mockResolvedValue(undefined)
+    render(
+      <FeatureDetailPanel
+        detail={{ ...base, question }}
+        onClose={vi.fn()}
+        onPivotToMvp={vi.fn()}
+        onSelectFeature={vi.fn()}
+        activeMvpRefs={[]}
+        onSaveField={onSaveField}
+      />,
+    )
+    return { onSaveField }
+  }
+
+  it('shows a question that has been raised', () => {
+    renderEditable('Is this still in 1.1?')
+    expect(screen.getByRole('note')).toHaveTextContent('Is this still in 1.1?')
+  })
+
+  it('offers to add one when there is none', () => {
+    renderEditable()
+    expect(screen.getByRole('button', { name: /add a question/i })).toBeInTheDocument()
+  })
+
+  it('saves a question against the feature', async () => {
+    const user = userEvent.setup()
+    const { onSaveField } = renderEditable()
+
+    await user.click(screen.getByRole('button', { name: /add a question/i }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() =>
+      expect(onSaveField).toHaveBeenCalledWith({ question: 'Who owns this?' }),
+    )
+  })
+
+  it('clears the question when the field is emptied', async () => {
+    // Otherwise an answered question lingers as a blank flag on the card.
+    const user = userEvent.setup()
+    const { onSaveField } = renderEditable('Old question')
+
+    await user.click(screen.getByRole('button', { name: /edit question/i }))
+    await user.clear(screen.getByLabelText('Question'))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith({ question: null }))
   })
 })

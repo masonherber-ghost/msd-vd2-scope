@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react'
 import { ConflictBadge } from '@/components/ConflictBadge'
+import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
 import type { CapabilityCardModel } from '@/lib/capability-derive'
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -15,6 +16,8 @@ export type CapabilityCardProps = {
   compact?: boolean
   selected?: boolean
   onSelect?: (capabilityId: number) => void
+  /** Which regions of the card are showing. Defaults to all of them. */
+  detail?: DetailState
 }
 
 /**
@@ -27,6 +30,7 @@ export function CapabilityCard({
   compact = false,
   selected = false,
   onSelect,
+  detail = ALL_DETAIL,
 }: CapabilityCardProps) {
   const conflicts = card.conflicts.release + card.conflicts.phase
   const style = {
@@ -62,11 +66,16 @@ export function CapabilityCard({
         <span className="capability-card__text">{card.text}</span>
       )}
 
+      {detail.actors || detail.refs ? (
       <div className="capability-card__meta">
         {/* The actor is named, never colour alone (R-10.6). */}
+        {detail.actors ? (
         <span className={`capability-card__actor capability-card__actor--${card.actor}`}>
           {ACTOR_LABEL[card.actor]}
         </span>
+        ) : null}
+        {detail.refs ? (
+        <>
         <span className="capability-card__ref">{card.ref}</span>
         {card.pwcFeatures.length > 0 ? (
           <span className="capability-card__citers">
@@ -77,18 +86,24 @@ export function CapabilityCard({
             no PwC feature
           </span>
         )}
+        </>
+        ) : null}
       </div>
+      ) : null}
 
-      {conflicts > 0 || card.conflicts.unmatched > 0 || card.question !== null ? (
+      {(detail.questions && card.question !== null) ||
+      (detail.conflicts && (conflicts > 0 || card.conflicts.unmatched > 0)) ? (
         <div className="capability-card__badges">
-          {card.question !== null ? <ConflictBadge count={1} kind="question" /> : null}
-          {conflicts > 0 ? (
+          {detail.questions && card.question !== null ? (
+            <ConflictBadge count={1} kind="question" />
+          ) : null}
+          {detail.conflicts && conflicts > 0 ? (
             <ConflictBadge
               count={conflicts}
               state={card.conflicts.unreviewed > 0 ? 'unreviewed' : 'both_correct'}
             />
           ) : null}
-          {card.conflicts.unmatched > 0 ? (
+          {detail.conflicts && card.conflicts.unmatched > 0 ? (
             <ConflictBadge count={card.conflicts.unmatched} kind="unmatched" />
           ) : null}
         </div>

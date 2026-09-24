@@ -26,6 +26,12 @@ export type FeatureCardModel = {
   conflicts: { release: number; phase: number; unmatched: number; unreviewed: number }
   /** True when the source documents were corrected for this feature. */
   overridden: boolean
+  /**
+   * A question someone raised about this feature. Not a disagreement between
+   * the sources — a person flagging something that needs an answer — but it
+   * is shown on the card like one, because it is the same kind of open item.
+   */
+  question: string | null
   /** Provenance: mapping | sequencing | both | manual (R-9.9). */
   source: string
   /** Distinct actors across this feature's capabilities, for filtering. */
@@ -214,6 +220,7 @@ function buildFeatureCard(
     capabilityCount: links.length,
     conflicts: { release, phase, unmatched, unreviewed },
     overridden: overriddenIds.has(feature.id),
+    question: feature.question,
   }
 }
 

@@ -9,13 +9,16 @@ export type MvpFeatureRow = {
   /** A stated placement, which outranks the derived one. NULL = unstated. */
   release_id: string | null
   phase_id: string | null
+  /** A question someone raised about this record, or null. */
+  question: string | null
   source: string
   created_at: string
   updated_at: string
 }
 
 const COLUMNS =
-  'id, ref, scope_option, title, release_id, phase_id, source, created_at, updated_at'
+  `id, ref, scope_option, title, release_id, phase_id, question, source,
+   created_at, updated_at`
 
 let selectAll: Statement | undefined
 let selectByRefOption: Statement | undefined
@@ -112,6 +115,7 @@ export function updateMvpFeature(
     scope_option?: string | null
     release_id?: string | null
     phase_id?: string | null
+    question?: string | null
   },
 ): MvpFeatureRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]

@@ -87,6 +87,7 @@ export function useCreateFeature() {
             ...body,
             source_phase_label: null,
             capability_note: null,
+            question: null,
             display_order: graph.pwcFeatures.length + 1,
             source: 'manual',
           },

@@ -49,6 +49,9 @@ export const updateFeatureSchema = z
     release_id: releaseIdSchema,
     phase_id: phaseIdSchema,
     capability_note: z.string().trim().max(500).nullable(),
+    // Emptying the field clears the question rather than storing a blank
+    // one, the same contract the capability's question uses.
+    question: z.string().trim().max(1000).nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -208,6 +211,9 @@ export const updateMvpFeatureSchema = z
     scope_option: z.union([z.literal('1A'), z.literal('1B'), z.null()]),
     release_id: statedPlacementSchema,
     phase_id: statedPlacementSchema,
+    // Emptying the field clears the question rather than storing a blank
+    // one — the same contract the feature's and capability's questions use.
+    question: z.string().trim().max(1000).nullable(),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })

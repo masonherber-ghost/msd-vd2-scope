@@ -26,6 +26,8 @@ export type PwcFeatureRow = {
   phase_id: string
   source_phase_label: string | null
   capability_note: string | null
+  /** A question someone raised about this feature, or null. */
+  question: string | null
   display_order: number
   source: string
 }
@@ -46,6 +48,8 @@ export type MvpFeatureRow = {
   /** A placement stated on the record, which outranks the derived one. */
   release_id: string | null
   phase_id: string | null
+  /** A question someone raised about this record, or null. */
+  question: string | null
   source: string
 }
 
@@ -214,6 +218,8 @@ export type CreateFeatureBody = {
 
 export type UpdateFeatureBody = Partial<Omit<CreateFeatureBody, 'id'>> & {
   capability_note?: string | null
+  /** Null clears the question rather than storing a blank one. */
+  question?: string | null
 }
 
 export type DeleteFeatureResult = {
@@ -353,6 +359,8 @@ export const apiClient = {
         /** `null` clears the statement, handing the record back to the sources. */
         release_id: string | null
         phase_id: string | null
+        /** `null` clears the question rather than storing a blank one. */
+        question: string | null
       }>,
     ) =>
       request<MvpFeatureRow>(`/api/mvp-features/${id}`, {

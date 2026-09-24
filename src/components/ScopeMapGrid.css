@@ -12,7 +12,11 @@
 .scope-map-grid__scaler {
   transform: scale(var(--scope-zoom, 1));
   transform-origin: top left;
-  /* Keeps the scroll box the size of the scaled content. */
+  /* A transform paints the content smaller but leaves the layout box at its
+     natural size, so the scroll box would reserve room for a map bigger than
+     the one on screen. The component measures the table and sets width and
+     height inline to `natural × zoom`; this is the pre-measurement fallback,
+     and the table inside keeps its own `max-content` width regardless. */
   width: max-content;
 }
 

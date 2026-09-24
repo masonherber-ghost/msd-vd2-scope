@@ -31,6 +31,8 @@ export type FeatureDetailPanelProps = {
     foundational_build?: string
     release_id?: string
     phase_id?: string
+    /** Null clears the question rather than storing a blank one. */
+    question?: string | null
   }) => Promise<unknown>
   onDelete?: (cascade: boolean) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
@@ -179,6 +181,29 @@ export function FeatureDetailPanel({
         <div className="feature-detail__section">
           <h3 className="feature-detail__section-title">Corrected source</h3>
           <p className="feature-detail__note">{detail.overrideRationale}</p>
+        </div>
+      ) : null}
+
+      {detail.question ? (
+        <p className="feature-detail__question" role="note">
+          <span className="feature-detail__question-label">Question:</span>{' '}
+          {detail.question}
+        </p>
+      ) : null}
+
+      {onSaveField ? (
+        <div className="feature-detail__section">
+          <h3 className="feature-detail__section-title">Question</h3>
+          <InlineEditField
+            label="Question"
+            value={detail.question ?? ''}
+            multiline
+            addLabel="Add a question"
+            // Emptying it clears the question rather than storing a blank
+            // one — the same contract the capability's question uses.
+            onSave={(next) => onSaveField({ question: next.trim() === '' ? null : next })}
+            onDirtyChange={onDirtyChange}
+          />
         </div>
       ) : null}
 

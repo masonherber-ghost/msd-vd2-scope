@@ -468,3 +468,53 @@ describe('stated placement on an MSD feature', () => {
     })
   })
 })
+
+/** A question raised against an MSD feature record. */
+describe('a question on an MSD feature', () => {
+  beforeEach(() => {
+    fixture = seed()
+  })
+
+  it('saves one against the record', async () => {
+    const { owner } = fixture
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      question: 'Is this still in 1.1?',
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ question: 'Is this still in 1.1?' })
+  })
+
+  it('clears it with null rather than storing a blank', async () => {
+    const { owner } = fixture
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { question: 'Anything?' })
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, { question: null })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ question: null })
+  })
+
+  it('reaches a record that owns no capability', async () => {
+    // Those five records are exactly the ones a question is most likely
+    // about, and they have nowhere else to hang one.
+    const created = await call('POST', '/api/mvp-features', {
+      ref: 998,
+      scope_option: null,
+      title: 'Owns nothing',
+    })
+    const id = (created.body as { id: number }).id
+
+    const result = await call('PATCH', `/api/mvp-features/${id}`, {
+      question: 'Is this a feature at all?',
+    })
+    expect(result.status).toBe(200)
+    expect(result.body).toMatchObject({ question: 'Is this a feature at all?' })
+  })
+
+  it('starts life without one', async () => {
+    const result = await call('POST', '/api/mvp-features', {
+      ref: 999,
+      scope_option: null,
+      title: 'Fresh',
+    })
+    expect(result.body).toMatchObject({ question: null })
+  })
+})

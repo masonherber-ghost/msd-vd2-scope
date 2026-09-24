@@ -326,3 +326,40 @@ describe('the question filter value', () => {
     ).toEqual([])
   })
 })
+
+/**
+ * A question is raised by a person, not found between the two documents.
+ * Features can carry one now, so the filter has to match them — before, the
+ * `question` case was missing from the switch and narrowed to nothing.
+ */
+describe('conflict filter — questions on a feature', () => {
+  const withQuestion = (question: string | null) =>
+    buildScopeMap(
+      makeScopeGraph({
+        pwcFeatures: makeScopeGraph().pwcFeatures.map((f) =>
+          f.id === 'F-001' ? { ...f, question } : f,
+        ),
+      }),
+    ).features
+
+  it('matches the feature carrying a question', () => {
+    const features = withQuestion('Is this in scope?')
+    const shown = applyFilters(features, { ...EMPTY_FILTERS, conflict: ['question'] })
+    expect(shown.map((f) => f.id)).toEqual(['F-001'])
+  })
+
+  it('matches nothing when no feature carries one', () => {
+    const shown = applyFilters(withQuestion(null), {
+      ...EMPTY_FILTERS,
+      conflict: ['question'],
+    })
+    expect(shown).toEqual([])
+  })
+
+  it('excludes a questioned feature from "No conflict"', () => {
+    // An open question is an open item; a feature with one is not clean.
+    const features = withQuestion('Is this in scope?')
+    const clean = applyFilters(features, { ...EMPTY_FILTERS, conflict: ['none'] })
+    expect(clean.map((f) => f.id)).not.toContain('F-001')
+  })
+})

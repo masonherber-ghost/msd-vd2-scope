@@ -52,8 +52,7 @@ const CONFLICT_OPTIONS: Option[] = [
   { value: 'unmatched', label: 'Unmatched link' },
   { value: 'unreviewed', label: 'Unreviewed' },
   { value: 'corrected', label: 'Corrected source' },
-  // Capabilities only: a question is raised against a capability, so in the
-  // feature views this narrows to nothing rather than matching everything.
+  // Raised against a feature or a capability; each view matches its own.
   { value: 'question', label: 'Question raised' },
   { value: 'none', label: 'No conflict' },
 ]

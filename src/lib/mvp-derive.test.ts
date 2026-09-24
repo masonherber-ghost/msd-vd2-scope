@@ -68,7 +68,7 @@ describe('buildMvpCards — placement', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, source: 'mapping' },
       ],
     }
     const card = buildMvpCards(orphan).find((c) => c.id === 99)!
@@ -219,7 +219,7 @@ describe('projectMvpCells', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, source: 'mapping' },
       ],
     } as ScopeGraph
     const projection = projectMvpCells(buildMvpCards(orphan))
@@ -276,6 +276,7 @@ describe('buildMvpCards — a stated placement', () => {
           title: 'Compliance view',
           release_id: '1.4',
           phase_id: 'manage-vacancies',
+          question: null,
           source: 'sequencing',
         },
       ],
@@ -311,5 +312,54 @@ describe('buildMvpCards — a stated placement', () => {
     const graph = stated({ release_id: '1.4', phase_id: 'manage-vacancies' })
     const card = buildMvpCards(graph).find((c) => c.id === 2)
     expect([...(card?.releaseIds ?? [])]).toEqual(['1.4'])
+  })
+})
+
+/**
+ * A question raised against an MSD feature record. Capabilities have carried
+ * one since 006 and PwC features since 009; hanging a question about a
+ * record off one of its capabilities attributed it to the wrong thing, and
+ * left the five capability-less records with nowhere to put one.
+ */
+describe('buildMvpCards — a question on the record', () => {
+  const withQuestion = (question: string | null) =>
+    buildMvpCards(
+      makeScopeGraph({
+        mvpFeatures: makeScopeGraph().mvpFeatures.map((mvp) =>
+          mvp.id === 2 ? { ...mvp, question } : mvp,
+        ),
+      }),
+    ).find((card) => card.id === 2)
+
+  it('carries the question onto the card', () => {
+    expect(withQuestion('Is this still 1.1?')?.question).toBe('Is this still 1.1?')
+  })
+
+  it('is null when nobody has raised one', () => {
+    expect(withQuestion(null)?.question).toBeNull()
+  })
+
+  it('reaches a record that owns no capability, which has no other home', () => {
+    const orphan = buildMvpCards(
+      makeScopeGraph({
+        mvpFeatures: [
+          {
+            id: 9,
+            ref: 953,
+            scope_option: null,
+            title: 'Compliance view',
+            release_id: null,
+            phase_id: null,
+            question: 'Is this in scope at all?',
+            source: 'sequencing',
+          },
+        ],
+        capabilities: [],
+        featureMvpLinks: [],
+      }),
+    ).find((card) => card.id === 9)
+
+    expect(orphan?.capabilities).toEqual([])
+    expect(orphan?.question).toBe('Is this in scope at all?')
   })
 })

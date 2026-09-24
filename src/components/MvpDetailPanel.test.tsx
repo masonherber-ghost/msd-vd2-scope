@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
@@ -346,5 +346,63 @@ describe('MvpDetailPanel — keyboard (WCAG 2.4.3)', () => {
     const panel = screen.getByRole('complementary', { name: /^MSD feature/ })
     expect(document.activeElement).not.toBe(document.body)
     expect(panel.contains(document.activeElement)).toBe(true)
+  })
+})
+
+/**
+ * A question raised against an MSD feature record — the third thing on the
+ * map that can carry one, after capabilities and PwC features.
+ */
+describe('MvpDetailPanel — questions', () => {
+  const renderEditable = (question: string | null = null) => {
+    const base = buildMvpCards(graph).find((c) => c.id === 2)!
+    const onSaveQuestion = vi.fn().mockResolvedValue(undefined)
+    render(
+      <MvpDetailPanel
+        card={{ ...base, question }}
+        onClose={vi.fn()}
+        onSaveQuestion={onSaveQuestion}
+      />,
+    )
+    return { onSaveQuestion }
+  }
+
+  it('shows a question that has been raised', () => {
+    renderEditable('Does this belong in 1.4?')
+    expect(screen.getByRole('note')).toHaveTextContent('Does this belong in 1.4?')
+  })
+
+  it('offers to add one when there is none', () => {
+    renderEditable()
+    expect(screen.getByRole('button', { name: /add a question/i })).toBeInTheDocument()
+  })
+
+  it('saves a question against the record', async () => {
+    const user = userEvent.setup()
+    const { onSaveQuestion } = renderEditable()
+
+    await user.click(screen.getByRole('button', { name: /add a question/i }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveQuestion).toHaveBeenCalledWith('Who owns this?'))
+  })
+
+  it('clears the question when the field is emptied', async () => {
+    // Otherwise an answered question lingers as a blank flag on the card.
+    const user = userEvent.setup()
+    const { onSaveQuestion } = renderEditable('Old question')
+
+    await user.click(screen.getByRole('button', { name: /edit question/i }))
+    await user.clear(screen.getByLabelText('Question'))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveQuestion).toHaveBeenCalledWith(null))
+  })
+
+  it('offers no editor when the panel is read-only', () => {
+    const base = buildMvpCards(graph).find((c) => c.id === 2)!
+    render(<MvpDetailPanel card={base} onClose={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /add a question/i })).not.toBeInTheDocument()
   })
 })
