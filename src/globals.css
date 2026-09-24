@@ -43,6 +43,7 @@
 @import "./components/ConflictBadge.css";
 @import "./components/ConflictQueue.css";
 @import "./components/ScopeSearch.css";
+@import "./components/ScopeExportDialog.css";
 @import "./components/CoverageReport.css";
 
 /* ============================================================

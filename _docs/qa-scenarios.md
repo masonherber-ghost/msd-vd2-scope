@@ -20,6 +20,7 @@ rewritten wholesale.
 **Route:** `/?view=mvp&selectedMvp=:id` · **Source:** `src/components/MvpDetailPanel.tsx`, wired in `src/pages/ScopeMap.tsx` ·
 **Tests:** `src/components/MvpDetailPanel.test.tsx`, `src/pages/ScopeMap.test.tsx`, `server/routes/entity-routes.test.ts`, `server/repositories/entity-crud.test.ts`
 **Brief:** "View By MSD Feature: need to be able to edit the capabilities in the details panel (same as how it is done on the PwC feature detail)" — resolved as reassigning which capabilities the record *owns* (`capabilities.mvp_feature_id`), via the same LinkPicker interaction the PwC panel uses. Server path `PUT /api/mvp-features/:id/capabilities`.
+**Also covers:** "Need to be able to edit the title of the MSD feature in the detail panel when you tap the title" — `PATCH /api/mvp-features/:id`, the same in-place heading edit the capability panel uses.
 **Also covers:** "Need to be able to re-assign an MSD feature to a release" — resolved as moving the capabilities the record owns, since neither source gives an MSD feature a placement of its own. Release and stage move independently. Server path `PUT /api/mvp-features/:id/placement`. ·
 **Last reviewed:** 2026-09-18
 
@@ -80,6 +81,9 @@ rewritten wholesale.
 | MDP-36 | Re-saving the same placement writes nothing | P2 | automated | `entity-crud.test.ts` › writes nothing for a row already there, leaving it importable |
 | MDP-37 | The moved record appears in its new cell without a reload | P1 | automated | `ScopeMap.test.tsx` › shows the record in its new release without a reload |
 | MDP-38 | A rejected move surfaces the server's message in place | P2 | automated | `MvpDetailPanel.test.tsx` › surfaces the server's refusal in place · `entity-routes.test.ts` › refuses a release that does not exist, moving nothing |
+| MDP-39 | The title is renamed by clicking it | P1 | automated | `MvpDetailPanel.test.tsx` › makes the title itself the control when there is · › passes the trimmed title to the handler · `ScopeMap.test.tsx` › renames the record from its title, and shows the new name at once |
+| MDP-40 | A rename that saves nothing new does not call the server | P3 | automated | `MvpDetailPanel.test.tsx` › does not call the handler when nothing changed |
+| MDP-41 | A failed rename keeps the typing and shows why | P2 | automated | `MvpDetailPanel.test.tsx` › keeps the typing and surfaces the server's refusal when a save fails |
 
 ### Scenarios
 #### MDP-03 — The lookup offers every capability and says who owns each · P1
@@ -210,3 +214,128 @@ and `selectedCapability` is cleared from the URL.
 **When** they activate "Delete this capability"
 **Then** focus moves into the confirmation, rather than falling to `<body>` and forcing a tab
 from the top of the document to reach the confirm and cancel controls they just asked for.
+
+---
+
+## Scope Map — Markdown export of the current view
+
+**Route:** `/` (all four views) · **Source:** `src/lib/scope-export.ts`, `src/components/ScopeExportDialog.tsx`, toolbar button in `src/pages/ScopeMap.tsx` ·
+**Tests:** `src/lib/scope-export.test.ts`, `src/components/ScopeExportDialog.test.tsx`, `src/pages/ScopeMap.test.tsx`
+**Brief:** "Create a button that generates a formatted text list of the view in .md format. Based on the format in the doc `_inputs/VD1 features list scope.md` and allows for export in .md format." Confirmed: (1) the export is the **current view plus its active filters** — exactly what is on screen; (2) the button opens a **preview dialog** with Copy and Download .md. ·
+**Last reviewed:** 2026-09-24 (reviewed, then fixed and re-verified the same day)
+
+### Assumptions
+- The source document `_inputs/VD1 features list scope.md` fixes the *structure* — `# Scope for VD2`,
+  a "Including releases…" line, a "View by…" line, `##` release sections, `####` phase headings
+  carrying the epic ref, one bullet per record — not its exact wording. The build reorders the
+  release heading (`1. Release 1.1 — Pilot` where the source reads `1. Pilot 1.1`) and makes the
+  source's stray `# Release 2` an `##` like every other release. Both read as improvements and are
+  accepted.
+- The source's Google-Docs escaping (`1\.`, `\-`) and trailing double-spaces are export artefacts,
+  not format requirements. Not reproduced, correctly.
+- "The current view" means the cards the view is showing, filed the way the view files them. A
+  capability needs both a release and a phase to reach a cell, so one missing either is unplaced
+  on screen *and* in the export — the document and the map agree on what is on the map. Settled
+  under SX-34; the export previously split the two cases.
+- No dark theme exists in this app, so contrast is judged against the single token set in
+  `src/globals.css`.
+- Hardcoded `font-size` values in `ScopeExportDialog.css` match established practice across all 20+
+  component CSS files (there are no type tokens in `@theme`), so they are not counted against this
+  build.
+
+### Traceability
+| ID | Scenario | Priority | Coverage | Covered by |
+|----|----------|----------|----------|-----------|
+| SX-01 | The export is offered from the toolbar and stays closed until asked for | P1 | automated | `ScopeMap.test.tsx` › offers the export from the toolbar, closed until asked for |
+| SX-02 | The dialog shows the current view as Markdown in the source document's shape | P1 | automated | `ScopeMap.test.tsx` › shows the current view as Markdown, in the source document's shape |
+| SX-03 | Switching view changes what is exported | P1 | automated | `ScopeMap.test.tsx` › follows the view, so switching tab changes what is exported |
+| SX-04 | Active filters narrow the export, and the document states the narrowing in words | P1 | automated | `ScopeMap.test.tsx` › exports only what the filters left on the map · `scope-export.test.ts` › states the narrowing in words so the list is not read as the whole scope |
+| SX-05 | The file is named after the view it was taken from | P2 | automated | `ScopeMap.test.tsx` › names the file after the view it was taken from · `scope-export.test.ts` › names the file after the view |
+| SX-06 | Copy puts the whole document on the clipboard and confirms it | P1 | automated | `ScopeExportDialog.test.tsx` › copies the markdown and confirms it |
+| SX-07 | A blocked clipboard gives an actionable instruction, not a silent failure | P2 | automated | `ScopeExportDialog.test.tsx` › tells the reader what to do when the clipboard is blocked |
+| SX-08 | Download saves the document under the view's filename | P1 | automated | `ScopeExportDialog.test.tsx` › saves the markdown under the document filename |
+| SX-09 | The file is offered as `text/markdown` and the blob URL is released | P2 | automated | `ScopeExportDialog.test.tsx` › offers the file as markdown, not as plain text |
+| SX-10 | A release section carries its number, label and name; the label alone where there is no name | P2 | automated | `scope-export.test.ts` › heads each release section with its number, label and name · › falls back to the label alone |
+| SX-11 | A phase heading carries its epic ref, as the source document does | P1 | automated | `scope-export.test.ts` › heads each phase with its epic, as the source document does |
+| SX-11b | A phase with no epic ref is headed by its name alone, with no empty parenthetical | P2 | automated | `scope-export.test.ts` › heads a phase with no epic by its name alone |
+| SX-12 | Phases run in journey order; a phase nothing lands in is omitted | P2 | automated | `scope-export.test.ts` › orders phases by the journey · › omits a phase nothing lands in · › omits a release nothing lands in |
+| SX-13 | Actor view repeats a feature under each actor and counts records, not bullets | P2 | automated | `scope-export.test.ts` › groups by actor in actor view · › counts records rather than bullets |
+| SX-14 | A record no source places is listed rather than dropped | P2 | automated | `scope-export.test.ts` › lists an unplaced MSD feature rather than dropping it · `ScopeMap.test.tsx` › carries a record the map itself lists as unplaced |
+| SX-15 | An empty result explains itself instead of printing bare headings | P2 | automated | `scope-export.test.ts` › explains an empty result instead of returning bare headings |
+| SX-16 | An empty map with **no** filters set does not tell the reader to clear a filter | P2 | automated | `scope-export.test.ts` › does not blame a filter that was never set when the map is simply empty · `ScopeMap.test.tsx` › explains an empty map without blaming a filter nobody set |
+| SX-17 | Actor view narrows its release span to what the filters left, like every other view | P2 | automated | `scope-export.test.ts` › narrows the release span in actor view too |
+| SX-18 | The span line does not claim a release the export skipped | P3 | automated | `scope-export.test.ts` › does not span a release the export skipped |
+| SX-19 | A capability whose text or question runs to more than one line stays on one bullet | P3 | automated | `scope-export.test.ts` › keeps a capability whose text runs to more than one line on one bullet |
+| SX-20 | Closing the dialog returns focus to the Export control | P1 | automated | `ScopeMap.test.tsx` › returns focus to the Export control when the dialog closes |
+| SX-21 | Dismissing with Escape returns focus to the Export control | P1 | automated | `ScopeMap.test.tsx` › returns focus to the Export control when the dialog is dismissed with Escape |
+| SX-22 | The export opens and closes from the keyboard alone | P1 | automated | `ScopeMap.test.tsx` › opens and closes the export from the keyboard alone |
+| SX-23 | The dialog names itself, and the copy is announced rather than signalled by icon alone | P2 | automated | `ScopeExportDialog.test.tsx` › names itself · › announces the copy rather than signalling it with an icon alone |
+| SX-24 | Tab order runs preview → Close → Copy → Download | P2 | automated | `ScopeExportDialog.test.tsx` › reaches both ways out of the dialog from the keyboard |
+| SX-25 | A blocked-copy message clears once a copy succeeds | P3 | automated | `ScopeExportDialog.test.tsx` › clears the blocked-copy message once a copy succeeds |
+| SX-26 | The blocked-copy message meets AA text contrast | P2 | **manual — fails by measurement** | `--color-destructive` on `--color-background` = **3.01:1** at 13px regular; AA needs 4.5:1 |
+| SX-27 | The preview's boundary is distinguishable from the dialog behind it | P3 | manual | border `1.35:1`, fill `1.08:1` against the dialog background — browser check against WCAG 1.4.11 |
+| SX-28 | The toolbar still exposes every control at tablet and phone width now Export is in it | P2 | manual | browser check — the button row does not wrap (`flex items-center gap-2`) |
+| SX-29 | No export is offered while the scope failed to load | P3 | automated | `ScopeMap.test.tsx` › offers no export while the scope failed to load |
+| SX-30 | The preview shows the document's own line breaks rather than soft-wrapping them | P3 | manual | browser check (`white-space: pre`, horizontal scroll) |
+| SX-31 | The preview and the three actions show a visible focus ring | P2 | manual | browser check |
+| SX-32 | Two exports of the same view under different filters are distinguishable as files | P3 | automated | `scope-export.test.ts` › marks a filtered export in its filename |
+| SX-33 | Markdown-significant characters in a record's name do not change how the bullet renders | P3 | gap | — `*`, `_` and `` ` `` in a title pass through unescaped |
+| SX-34 | A capability with a release but no phase is filed the same way on screen and in the export | P3 | automated | `scope-export.test.ts` › files a capability missing a phase where the map files it — off the map |
+
+### Scenarios
+
+#### SX-04 — The export is the screen, filters and all · P1
+**Given** the Scope Map in the PwC-release view, filtered to feature F-001
+**When** the user presses Export
+**Then** the preview lists F-001 and no other feature, and a line near the top reads
+`Filtered by — PwC feature: F-001`, so the list cannot be mistaken for the whole scope.
+
+#### SX-16 — An empty map does not blame a filter nobody set · P2
+**Given** a scope with no records at all, and no filters active
+**When** the user presses Export
+**Then** the document says the map is empty — not "No PwC features match the current filters.
+Clearing a filter will bring some back", which names a cause that does not exist and offers an
+action the user cannot take.
+**Fixed:** the message branches on `isEmpty(filters)` and reads "There are no … to export — the map
+itself is empty."
+
+#### SX-17 — A filtered export claims no more than it holds · P2
+**Given** the actor view, filtered to Release 1.1
+**When** the user presses Export
+**Then** the "Including releases…" line names 1.1 alone.
+**Fixed:** `releasesCovered` reads actor view's span off the features being listed rather than off
+the release table, so every view answers the question from the document's own contents.
+
+#### SX-18 — The span line does not cover a release the export skipped · P3
+**Given** five releases (1.1 … 2) and a filter leaving only 1.1 and 2 on the map
+**When** the user presses Export
+**Then** the header names the releases the document covers.
+**Fixed:** `spanLine` uses a range only where the releases are contiguous in the release table, and
+lists them otherwise — `Including releases 1.1, 2`.
+
+#### SX-19 — A wrapped capability stays one bullet · P3
+**Given** a capability whose text was edited in the panel's textarea to run over two lines
+**When** the view is exported
+**Then** the bullet holds the whole text.
+**Fixed:** every field going into a bullet passes through `oneLine`, which collapses runs of
+whitespace — a bullet is one line, so what goes in one has to be.
+
+#### SX-20 / SX-21 — The export returns the keyboard user where they were · P1
+**Given** a keyboard user who opened the export from the toolbar
+**When** they close it, with Close or with Escape
+**Then** focus returns to the Export button.
+**Cause:** `<Dialog>` is driven by external state with no `DialogTrigger`, and Radix's
+`onCloseAutoFocus` prevents the default restore in favour of focusing a trigger that does not
+exist, so focus fell to `<body>`.
+**Fixed:** the page passes the toolbar button's ref as `returnFocusRef` and the dialog's
+`onCloseAutoFocus` focuses it.
+**Still open, not this feature:** `CapabilityResolutionModal` is mounted the same way
+(`src/components/FeatureDetailPanel.tsx`) and has the same behaviour.
+
+#### SX-26 — The one error message in the feature is legible · P2
+**Given** a browser where clipboard access is refused (insecure context, or permission denied)
+**When** the user presses Copy Markdown
+**Then** the explanation is readable. Observed: `.scope-export__error` renders
+`var(--color-destructive)` on `var(--color-background)` at 13px regular — **3.01:1**, below the
+4.5:1 AA minimum. The token is shared with eight other components, so the fix is a token change,
+not a change to this dialog. **Open** — left for a decision on the token rather than fixed here.

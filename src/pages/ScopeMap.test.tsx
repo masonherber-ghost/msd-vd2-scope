@@ -22,6 +22,7 @@ const { state } = await vi.hoisted(async () => ({
     capabilityMoves: [] as { id: number; patch: Record<string, unknown> }[],
     mvpCapabilitySets: [] as { id: number; capabilityIds: number[] }[],
     mvpPlacements: [] as { id: number; patch: { release_id?: string; phase_id?: string } }[],
+    mvpPatches: [] as { id: number; patch: Record<string, unknown> }[],
     capabilityDeletes: [] as { id: number; cascade: boolean }[],
   },
 }))
@@ -73,6 +74,19 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
         },
       },
       mvpFeatures: {
+        update: async (id: number, patch: Record<string, unknown>) => {
+          failWrite()
+          state.mvpPatches.push({ id, patch })
+          const graph = state.graph as ScopeGraph
+          state.graph = {
+            ...graph,
+            mvpFeatures: graph.mvpFeatures.map((m) =>
+              m.id === id ? { ...m, ...patch, source: 'manual' } : m,
+            ),
+          } as ScopeGraph
+          return { id, ...patch, source: 'manual' } as never
+        },
+
         // Mirrors the server: the record has no placement of its own, so the
         // move lands on the capabilities it owns — one axis at a time.
         setPlacement: async (
@@ -258,6 +272,7 @@ beforeEach(() => {
   state.capabilityMoves = []
   state.mvpCapabilitySets = []
   state.mvpPlacements = []
+  state.mvpPatches = []
   state.capabilityDeletes = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
 })
@@ -2373,6 +2388,34 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     ).toBeInTheDocument()
   })
 
+  it('renames the record from its title, and shows the new name at once', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await openRecord(user, 'MSD feature 938 Additional users')
+
+    await user.click(
+      screen.getByRole('button', { name: 'Edit msd feature title: Additional users' }),
+    )
+    const input = screen.getByLabelText('MSD feature title')
+    await user.clear(input)
+    await user.type(input, 'Additional employer portal users')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(state.mvpPatches).toEqual([
+        { id: 2, patch: { title: 'Additional employer portal users' } },
+      ]),
+    )
+    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    await waitFor(() =>
+      expect(
+        within(panel).getByRole('button', {
+          name: 'Edit msd feature title: Additional employer portal users',
+        }),
+      ).toBeInTheDocument(),
+    )
+  })
+
   it('re-assigns the record to a release by moving what it owns', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
@@ -2645,5 +2688,156 @@ describe('ScopeMap — deleting a capability from its panel', () => {
     expect(url()).toContain('view=mvp')
     expect(url()).toContain('selectedMvp=3')
     expect(url()).not.toContain('selectedCapability')
+  })
+})
+
+describe('ScopeMap export (the map as a document)', () => {
+  it('offers the export from the toolbar, closed until asked for', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows the current view as Markdown, in the source document’s shape', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+
+    const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
+    expect(markdown).toContain('View by MSD feature')
+    expect(markdown).toContain('## **1. Release 1.1 — Pilot**')
+    expect(markdown).toContain('#### **Access & Onboarding')
+    expect(markdown).toContain('* **SVD-938**: Additional users')
+  })
+
+  it('follows the view, so switching tab changes what is exported', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    expect((screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value).toContain(
+      '* **F-001**: Invite employer',
+    )
+  })
+
+  it('exports only what the filters left on the map', async () => {
+    const user = userEvent.setup()
+    renderPage('/?feature=F-001')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+
+    const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
+    expect(markdown).toContain('* **F-001**')
+    expect(markdown).not.toContain('* **F-002**')
+    // And it says so, so the list is not mistaken for the whole scope.
+    expect(markdown).toContain('Filtered by — PwC feature: F-001')
+  })
+
+  it('names the file after the view it was taken from', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    expect(screen.getByText('vd2-scope-by-capability.md')).toBeInTheDocument()
+  })
+})
+
+describe('ScopeMap export — reaching it and leaving it', () => {
+  it('opens and closes the export from the keyboard alone', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    screen.getByRole('button', { name: 'Export' }).focus()
+    await user.keyboard('{Enter}')
+    expect(await screen.findByRole('dialog', { name: 'Export this view' })).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('returns focus to the Export control when the dialog closes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    // The dialog's own Close sits last; the header's X carries the same name.
+    const closes = screen.getAllByRole('button', { name: 'Close' })
+    await user.click(closes[closes.length - 1])
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    // Otherwise a keyboard user is returned to the top of the document and
+    // has to tab the whole toolbar again to get back where they were.
+    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+  })
+
+  it('returns focus to the Export control when the dialog is dismissed with Escape', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+
+    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+  })
+
+  it('explains an empty map without blaming a filter nobody set', async () => {
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      pwcFeatures: [],
+      mvpFeatures: [],
+      capabilities: [],
+      featureCapabilityLinks: [],
+      featureMvpLinks: [],
+    } as ScopeGraph
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled())
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+
+    const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
+    expect(markdown).not.toContain('Clearing a filter will bring some back')
+  })
+
+  it('carries a record the map itself lists as unplaced', async () => {
+    // The capability view's "Not on the map" panel is part of the view, so
+    // an export of that view has to account for what is in it.
+    const base = makeScopeGraph()
+    state.graph = {
+      ...base,
+      capabilities: base.capabilities.map((c) =>
+        c.id === 12 ? { ...c, release_id: null, phase_id: null } : c,
+      ),
+    } as ScopeGraph
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    expect(screen.getByText(/Not on the map/)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Export' }))
+
+    const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
+    expect(markdown).toContain('## **Not on the map**')
+    expect(markdown).toContain('Electronic T&Cs acceptance')
+  })
+
+  it('offers no export while the scope failed to load', async () => {
+    state.fail = 'Server unreachable'
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled(),
+    )
   })
 })

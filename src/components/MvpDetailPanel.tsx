@@ -40,13 +40,16 @@ export type MvpDetailPanelProps = {
    * the server's message, which the field surfaces.
    */
   onSetPlacement?: (patch: { release_id?: string; phase_id?: string }) => Promise<unknown>
+  /** Renames the record. Rejects with the server's message. */
+  onSaveTitle?: (title: string) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
 }
 
 /**
  * The MSD-feature side of the detail panel.
  *
- * Capabilities are editable here and nowhere else: a capability is owned by
+ * The title is editable in place — click it. Capabilities are editable here
+ * and nowhere else: a capability is owned by
  * one MSD feature record, so this panel is that relationship's only home. The
  * PwC features are not — they *cite* this record, which is a different
  * relationship, and it is edited from the feature that does the citing.
@@ -63,6 +66,7 @@ export function MvpDetailPanel({
   releaseOptions,
   phaseOptions,
   onSetPlacement,
+  onSaveTitle,
   onDirtyChange,
 }: MvpDetailPanelProps) {
   const label = mvpCardLabel(card)
@@ -144,7 +148,20 @@ export function MvpDetailPanel({
             MSD feature {label}
             {card.scopeOption ? null : ' · no scope option'}
           </span>
-          <h2 className="mvp-detail__name">{card.title}</h2>
+          {onSaveTitle ? (
+            // The title is the thing you click — a separate Edit button beside
+            // a heading reads as a second title.
+            <InlineEditField
+              label="MSD feature title"
+              value={card.title}
+              variant="heading"
+              headingClassName="mvp-detail__name"
+              onSave={onSaveTitle}
+              onDirtyChange={onDirtyChange}
+            />
+          ) : (
+            <h2 className="mvp-detail__name">{card.title}</h2>
+          )}
           <span className="mvp-detail__placement">
             {card.cells.length === 0
               ? 'Not placed'

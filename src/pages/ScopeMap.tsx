@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Filter } from 'lucide-react'
+import { Download, Filter } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -9,6 +9,7 @@ import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { ReleaseHorizons, ScopeMapChrome } from '@/components/ScopeMapChrome'
+import { ScopeExportDialog } from '@/components/ScopeExportDialog'
 import { ScopeSearch } from '@/components/ScopeSearch'
 import {
   useCreateFeature,
@@ -28,6 +29,7 @@ import {
   useSetMvpPlacement,
   useUpdateAssumption,
   useUpdateCapability,
+  useUpdateMvpFeature,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
 import { buildFeatureDetail } from '@/lib/feature-detail'
@@ -53,6 +55,7 @@ import {
 } from '@/lib/capability-derive'
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
+import { SCOPE_VIEW_LABEL, buildScopeExport } from '@/lib/scope-export'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
   EMPTY_FILTERS,
@@ -355,6 +358,7 @@ export default function ScopeMap() {
   const setCapabilityLinks = useSetCapabilityLinks()
   const setMvpCapabilities = useSetMvpCapabilities()
   const setMvpPlacement = useSetMvpPlacement()
+  const updateMvpFeature = useUpdateMvpFeature()
   const nextId = useNextFeatureId(creatingIn !== null)
 
   // ---- Options for the panel's editors ----------------------------------
@@ -529,6 +533,40 @@ export default function ScopeMap() {
     [createFeature, setSelected],
   )
 
+  // ---- Export ------------------------------------------------------------
+  // The document is built from the cards the view is already showing, so an
+  // export is the screen in words — filters, view and all. Built only while
+  // the dialog is open: nothing else needs it, and it is the one derivation
+  // here that walks every card to produce a string.
+  const [exportOpen, setExportOpen] = useState(false)
+  // Closing the dialog hands focus back to the control that opened it.
+  const exportButtonRef = useRef<HTMLButtonElement>(null)
+
+  const exportDocument = useMemo(
+    () =>
+      model && exportOpen
+        ? buildScopeExport({
+            view,
+            releases: model.releases,
+            phases: model.phases,
+            filters,
+            features: visible,
+            mvpCards: visibleMvpCards,
+            capabilityCards: visibleCapabilityCards,
+            generatedAt: new Date(),
+          })
+        : null,
+    [
+      exportOpen,
+      model,
+      view,
+      filters,
+      visible,
+      visibleMvpCards,
+      visibleCapabilityCards,
+    ],
+  )
+
   /** Scales the grid so its full width fits the viewport (R-8.7). */
   const fitToWidth = useCallback(() => {
     const container = scrollRef.current
@@ -595,6 +633,17 @@ export default function ScopeMap() {
                 {activeFilterCount}
               </span>
             ) : null}
+          </Button>
+
+          <Button
+            ref={exportButtonRef}
+            variant="outline"
+            size="sm"
+            onClick={() => setExportOpen(true)}
+            disabled={!model}
+          >
+            <Download aria-hidden="true" />
+            Export
           </Button>
 
           <Button
@@ -916,6 +965,9 @@ export default function ScopeMap() {
               onSetPlacement={(patch) =>
                 setMvpPlacement.mutateAsync({ id: mvpDetail.id, patch })
               }
+              onSaveTitle={(title) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { title } })
+              }
               onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
@@ -985,6 +1037,16 @@ export default function ScopeMap() {
             />
           ) : null}
         </div>
+      ) : null}
+
+      {exportDocument ? (
+        <ScopeExportDialog
+          open={exportOpen}
+          onOpenChange={setExportOpen}
+          document={exportDocument}
+          viewLabel={SCOPE_VIEW_LABEL[view]}
+          returnFocusRef={exportButtonRef}
+        />
       ) : null}
     </div>
   )

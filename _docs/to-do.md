@@ -8,3 +8,18 @@ Data:
 Capabilities: 
 - Add ability to move them from detail
 - Add abiluty to as question
+
+
+- Add another phase: 1. Portal structure & navigation (no epic number)
+- move some features into that phase
+
+Edit features:
+- review and update the users for each feature
+
+
+Output text list of all features 
+Fix zoom when ever edit bug  
+Update the data based on confirmed PWC view
+Compare output list with documetns 
+
+output a PDf version of a view

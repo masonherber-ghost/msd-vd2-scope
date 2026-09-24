@@ -1,0 +1,72 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.scope-export {
+  max-height: 90vh;
+}
+
+/* ========================================
+   META LINE
+   ======================================== */
+
+.scope-export__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-2);
+  margin: 0;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   PREVIEW
+   ======================================== */
+
+/* Monospaced and unwrapped: the markdown's own line breaks are the
+   structure, so soft-wrapping them would misrepresent what is copied. */
+.scope-export__preview {
+  width: 100%;
+  min-height: 14rem;
+  max-height: 50vh;
+  padding: var(--spacing-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-muted);
+  color: var(--color-foreground);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: auto;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.scope-export__preview:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* ========================================
+   ERROR
+   ======================================== */
+
+.scope-export__error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-destructive);
+}
+
+/* ========================================
+   RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+@media (min-width: 640px) {
+  .scope-export__preview {
+    min-height: 20rem;
+    font-size: 0.8125rem;
+  }
+}

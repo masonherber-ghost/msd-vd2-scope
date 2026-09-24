@@ -47,6 +47,78 @@ const placeable = (onSetPlacement = vi.fn().mockResolvedValue(undefined)) => ({
   onSetPlacement,
 })
 
+describe('MvpDetailPanel — renaming the record', () => {
+  it('renders a plain heading when there is no save handler', () => {
+    renderPanel()
+    const heading = screen.getByRole('heading', { name: 'Additional users' })
+    expect(heading).toHaveClass('mvp-detail__name')
+  })
+
+  it('makes the title itself the control when there is', () => {
+    renderPanel({ onSaveTitle: vi.fn().mockResolvedValue(undefined) })
+    const trigger = screen.getByRole('button', {
+      name: 'Edit msd feature title: Additional users',
+    })
+    // No second Edit button beside it — the title is the thing you click.
+    expect(trigger.closest('h2')).toHaveClass('mvp-detail__name')
+  })
+
+  it('passes the trimmed title to the handler', async () => {
+    const user = userEvent.setup()
+    const onSaveTitle = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onSaveTitle })
+
+    await user.click(screen.getByRole('button', { name: /^Edit msd feature title:/ }))
+    const input = screen.getByLabelText('MSD feature title')
+    await user.clear(input)
+    await user.type(input, '  Additional portal users  ')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSaveTitle).toHaveBeenCalledWith('Additional portal users')
+  })
+
+  it('does not call the handler when nothing changed', async () => {
+    const user = userEvent.setup()
+    const onSaveTitle = vi.fn().mockResolvedValue(undefined)
+    renderPanel({ onSaveTitle })
+
+    await user.click(screen.getByRole('button', { name: /^Edit msd feature title:/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSaveTitle).not.toHaveBeenCalled()
+  })
+
+  it('reports an edit in progress, so navigation can warn', async () => {
+    const user = userEvent.setup()
+    const onDirtyChange = vi.fn()
+    renderPanel({ onSaveTitle: vi.fn().mockResolvedValue(undefined), onDirtyChange })
+
+    await user.click(screen.getByRole('button', { name: /^Edit msd feature title:/ }))
+    await user.type(screen.getByLabelText('MSD feature title'), '!')
+
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true)
+  })
+
+  it('keeps the typing and surfaces the server’s refusal when a save fails', async () => {
+    const user = userEvent.setup()
+    const onSaveTitle = vi
+      .fn()
+      .mockRejectedValue(new Error('Give the MVP feature a title.'))
+    renderPanel({ onSaveTitle })
+
+    await user.click(screen.getByRole('button', { name: /^Edit msd feature title:/ }))
+    const input = screen.getByLabelText('MSD feature title')
+    await user.clear(input)
+    await user.type(input, 'Renamed')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Give the MVP feature a title.',
+    )
+    expect(screen.getByLabelText('MSD feature title')).toHaveValue('Renamed')
+  })
+})
+
 describe('MvpDetailPanel — re-assigning the record', () => {
   it('offers nothing without a placement handler', () => {
     renderPanel()
