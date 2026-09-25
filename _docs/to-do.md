@@ -17,6 +17,8 @@ Filters:
 
 
 Bugs:
+- Width of cols in scope map
+- show on each card filter buttons do not need to state 'shown' or 'hidden' in the label
 
 #Capabilities
 - Edit and refine capabilities text

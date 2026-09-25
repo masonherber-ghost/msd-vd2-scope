@@ -132,6 +132,9 @@ describe('captureScopeMapPdf — undoing the screen', () => {
     const scaler = document.createElement('div')
     scaler.className = 'scope-map-grid__scaler'
     scaler.style.setProperty('--scope-zoom', '0.6')
+    // The scaler is sized to what is painted, so the scroll box matches it.
+    scaler.style.width = '1200px'
+    scaler.style.height = '420px'
     grid.appendChild(scaler)
     grid.style.overflow = 'auto'
 
@@ -158,9 +161,21 @@ describe('captureScopeMapPdf — undoing the screen', () => {
     expect(grid?.style.width).toBe('max-content')
   })
 
+  it('undoes the scaler’s painted size along with the zoom', async () => {
+    // Undoing one without the other leaves a box smaller than the content it
+    // now renders at full size, and the capture clips the right-hand columns
+    // and the bottom rows.
+    const { cloned } = await cloneAfterCapture()
+    const scaler = cloned.querySelector<HTMLElement>('.scope-map-grid__scaler')
+    expect(scaler?.style.width).toBe('max-content')
+    expect(scaler?.style.height).toBe('auto')
+  })
+
   it('leaves the live page exactly as it was, so nothing flickers', async () => {
     const { live } = await cloneAfterCapture()
     expect(live.scaler.style.getPropertyValue('--scope-zoom')).toBe('0.6')
+    expect(live.scaler.style.width).toBe('1200px')
+    expect(live.scaler.style.height).toBe('420px')
     expect(live.grid.style.overflow).toBe('auto')
   })
 })

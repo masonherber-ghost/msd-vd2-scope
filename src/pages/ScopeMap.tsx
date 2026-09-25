@@ -28,7 +28,6 @@ import {
   useMoveAssumption,
   useResolveConflict,
   useSetMvpCapabilities,
-  useSetMvpPlacement,
   useUpdateAssumption,
   useUpdateCapability,
   useUpdateMvpFeature,
@@ -386,7 +385,6 @@ export default function ScopeMap() {
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
   const setMvpCapabilities = useSetMvpCapabilities()
-  const setMvpPlacement = useSetMvpPlacement()
   const updateMvpFeature = useUpdateMvpFeature()
   const nextId = useNextFeatureId(creatingIn !== null)
 
@@ -1124,8 +1122,10 @@ export default function ScopeMap() {
               }
               releaseOptions={releaseOptions}
               phaseOptions={phaseOptions}
-              onSetPlacement={(patch) =>
-                setMvpPlacement.mutateAsync({ id: mvpDetail.id, patch })
+              // The same field Manage writes, so the two agree and the card
+              // moves on the map.
+              onSetStatedPlacement={(patch) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch })
               }
               onSaveTitle={(title) =>
                 updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { title } })

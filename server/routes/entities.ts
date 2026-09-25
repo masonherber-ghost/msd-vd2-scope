@@ -305,7 +305,31 @@ mvpFeaturesRouter.patch('/:id', (req, res) => {
   }
 
   assertStatedPlacement(parsed.data.release_id, parsed.data.phase_id)
-  res.json(updateMvpFeature(id, parsed.data))
+  const updated = updateMvpFeature(id, parsed.data)
+
+  // The record's placement drives its capabilities, not the other way round:
+  // setting a release or stage here moves everything it owns to match, so the
+  // card and the capabilities under it can never disagree.
+  //
+  // That placement is shared with every PwC feature citing those
+  // capabilities, so each moved one has its conflicts re-judged (PRD §16
+  // P-2) — a move can settle a disagreement or create one, and both must show.
+  const moveTo: Parameters<typeof moveCapabilitiesForMvpFeature>[1] = {}
+  if (parsed.data.release_id != null) moveTo.release_id = parsed.data.release_id
+  if (parsed.data.phase_id != null) {
+    moveTo.phase_id = parsed.data.phase_id
+    // A phase conflict is measured on the source labels, so a moved
+    // capability has to carry the label of where it now is.
+    moveTo.source_phase_label = getPhase(parsed.data.phase_id)?.name ?? parsed.data.phase_id
+  }
+  // Clearing a statement moves nothing: there is no placement to inherit,
+  // and the record goes back to being placed by what it owns.
+  if (Object.keys(moveTo).length > 0) {
+    const moved = moveCapabilitiesForMvpFeature(id, moveTo)
+    for (const capabilityId of moved) recomputeConflictsForCapability(capabilityId)
+  }
+
+  res.json(updated)
 })
 
 /**

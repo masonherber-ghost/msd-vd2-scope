@@ -187,7 +187,11 @@
 
   /* ---- Layout ---- */
   --content-max-width: 2080px;
-  --scope-card-min-width: 13.75rem;
+  --scope-card-min-width: 8.75rem;
+  /* Phase columns used to be `1fr` in a max-content grid, so each grew to
+     its widest card — 307px, pinned by a card header that could neither
+     wrap nor shrink. Capped here instead, and the card reflows to fit. */
+  --scope-card-max-width: 24.5rem;
   --scope-row-min-height: 6rem;
 }
 

@@ -2475,7 +2475,9 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     )
   })
 
-  it('re-assigns the record to a release by moving what it owns', async () => {
+  it('places the record by writing the record’s own release', async () => {
+    // The same field Manage writes, so the two pages cannot disagree — and
+    // the server moves the capabilities it owns to match.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
     await openRecord(user, 'MSD feature 938 Additional users')
@@ -2485,34 +2487,21 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
-      expect(state.mvpPlacements).toEqual([{ id: 2, patch: { release_id: '1.4' } }]),
+      expect(state.mvpPatches).toEqual([{ id: 2, patch: { release_id: '1.4' } }]),
     )
+    // The old capability-moving endpoint is no longer what places a record.
+    expect(state.mvpPlacements).toEqual([])
   })
 
-  it('shows the record in its new release without a reload', async () => {
-    const user = userEvent.setup()
-    renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
-
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
-    await waitFor(() =>
-      expect(
-        within(panel).getByText('Release 1.4 · Access & Onboarding'),
-      ).toBeInTheDocument(),
-    )
-  })
-
-  it('offers no placement editor on a record with nothing to move', async () => {
+  it('offers the placement editor on a record that owns nothing', async () => {
+    // Those five records could not be placed at all before: the old control
+    // worked by moving capabilities, and they have none.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
     await openRecord(user, 'MSD feature 938 · 1A Additional users')
 
-    // It is placed by the features citing it, which this control cannot move.
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit release' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
   it('offers to assign, not change, on a record that owns nothing', async () => {

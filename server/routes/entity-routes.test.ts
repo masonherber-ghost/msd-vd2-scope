@@ -518,3 +518,89 @@ describe('a question on an MSD feature', () => {
     expect(result.body).toMatchObject({ question: null })
   })
 })
+
+/**
+ * The record's placement drives its capabilities, not the other way round.
+ *
+ * Before, the two could disagree: a record stated in 1.2 whose capabilities
+ * sat in 1.4 showed one release on the card and another in the editor, and
+ * moving the capabilities could not move the card. Setting the record now
+ * moves everything it owns to match.
+ */
+describe('placing an MSD feature moves its capabilities', () => {
+  beforeEach(() => {
+    fixture = seed()
+  })
+
+  it('moves every capability it owns to the stated release', async () => {
+    const { owner, owned, alsoOwned } = fixture
+    // The releases router is not mounted here, so the row is seeded directly.
+    createRelease({ id: '1.4', label: 'Release 1.4', name: '', description: '' })
+
+    const result = await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      release_id: '1.4',
+    })
+
+    expect(result.status).toBe(200)
+    expect(getCapabilityById(owned.id)).toMatchObject({ release_id: '1.4' })
+    expect(getCapabilityById(alsoOwned.id)).toMatchObject({ release_id: '1.4' })
+  })
+
+  it('carries the stage label with a stage move, so conflicts stay measurable', async () => {
+    const { owner, owned } = fixture
+    createPhase({
+      id: 'outcomes-and-support',
+      name: 'Outcomes & Support',
+      epic_ref: '192',
+      epic_description: '',
+    })
+
+    await call('PATCH', `/api/mvp-features/${owner.id}`, {
+      phase_id: 'outcomes-and-support',
+    })
+
+    expect(getCapabilityById(owned.id)).toMatchObject({
+      phase_id: 'outcomes-and-support',
+      source_phase_label: 'Outcomes & Support',
+    })
+  })
+
+  it('leaves capabilities where they are when the statement is cleared', async () => {
+    // There is no placement to inherit, and the record goes back to being
+    // placed by what it owns — which means leaving what it owns alone.
+    const { owner, owned } = fixture
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { release_id: '1.1' })
+    const before = getCapabilityById(owned.id)
+
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { release_id: null })
+
+    expect(getCapabilityById(owned.id)).toMatchObject({
+      release_id: before?.release_id,
+      phase_id: before?.phase_id,
+    })
+  })
+
+  it('touches no capability when only the title changes', async () => {
+    const { owner, owned } = fixture
+    const before = getCapabilityById(owned.id)
+
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { title: 'Renamed' })
+
+    expect(getCapabilityById(owned.id)).toMatchObject({
+      release_id: before?.release_id,
+      phase_id: before?.phase_id,
+    })
+  })
+
+  it('does not touch a capability the record does not own', async () => {
+    const { owner, free } = fixture
+    createRelease({ id: '1.4', label: 'Release 1.4', name: '', description: '' })
+    const before = getCapabilityById(free.id)
+
+    await call('PATCH', `/api/mvp-features/${owner.id}`, { release_id: '1.4' })
+
+    expect(getCapabilityById(free.id)).toMatchObject({
+      release_id: before?.release_id,
+    })
+  })
+})

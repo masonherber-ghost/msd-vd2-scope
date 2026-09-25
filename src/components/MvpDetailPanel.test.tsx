@@ -41,10 +41,10 @@ const editable = (onSetCapabilities = vi.fn().mockResolvedValue(undefined)) => (
 const releaseOptions = graph.releases.map((r) => ({ value: r.id, label: r.label }))
 const phaseOptions = graph.phases.map((p) => ({ value: p.id, label: p.name }))
 
-const placeable = (onSetPlacement = vi.fn().mockResolvedValue(undefined)) => ({
+const placeable = (onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)) => ({
   releaseOptions,
   phaseOptions,
-  onSetPlacement,
+  onSetStatedPlacement,
 })
 
 describe('MvpDetailPanel — renaming the record', () => {
@@ -119,88 +119,127 @@ describe('MvpDetailPanel — renaming the record', () => {
   })
 })
 
-describe('MvpDetailPanel — re-assigning the record', () => {
+describe('MvpDetailPanel — placing the record', () => {
   it('offers nothing without a placement handler', () => {
     renderPanel()
     expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
   })
 
-  it('offers a release and a stage when it owns capabilities to move', () => {
+  it('offers a release and a stage on any record', () => {
+    // Including one that owns no capability: the record's own placement is
+    // the only thing that can reach those.
     renderPanel(placeable())
     expect(screen.getByRole('button', { name: 'Edit release' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
-  it('shows where its capabilities currently sit', () => {
+  it('shows "Not stated" until someone places it', () => {
     renderPanel(placeable())
-    // Both owned capabilities are in 1.1 · Access & Onboarding.
-    expect(screen.getAllByText('Release 1.1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Not stated').length).toBeGreaterThan(0)
   })
 
-  it('moves the record by moving what it owns', async () => {
+  it('shows the placement stated on the record, not where its capabilities are', () => {
+    // The fixture's capabilities sit in 1.1; the statement says 1.4. The
+    // statement is what places the card, so it is what the field shows.
+    renderPanel({
+      ...placeable(),
+      card: {
+        ...card,
+        stated: { releaseId: '1.4', phaseId: 'manage-vacancies' },
+      },
+    })
+    expect(screen.getByText('Release 1.4')).toBeInTheDocument()
+    expect(screen.getByText('Manage Vacancies')).toBeInTheDocument()
+  })
+
+  it('places the record by writing its own release', async () => {
     const user = userEvent.setup()
-    const onSetPlacement = vi.fn().mockResolvedValue(undefined)
-    renderPanel(placeable(onSetPlacement))
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel(placeable(onSetStatedPlacement))
 
     await user.click(screen.getByRole('button', { name: 'Edit release' }))
     await user.selectOptions(screen.getByLabelText('Release'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    // One axis at a time: the stage each capability sits in is left alone.
-    expect(onSetPlacement).toHaveBeenCalledWith({ release_id: '1.4' })
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ release_id: '1.4' }),
+    )
   })
 
-  it('moves the stage without touching the release', async () => {
+  it('sets the stage without touching the release', async () => {
     const user = userEvent.setup()
-    const onSetPlacement = vi.fn().mockResolvedValue(undefined)
-    renderPanel(placeable(onSetPlacement))
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel(placeable(onSetStatedPlacement))
 
     await user.click(screen.getByRole('button', { name: 'Edit stage' }))
     await user.selectOptions(screen.getByLabelText('Stage'), 'manage-vacancies')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(onSetPlacement).toHaveBeenCalledWith({ phase_id: 'manage-vacancies' })
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ phase_id: 'manage-vacancies' }),
+    )
   })
 
-  it('says a straddling record is mixed rather than naming one release', () => {
+  it('hands the record back to the sources when set to "Not stated"', async () => {
+    const user = userEvent.setup()
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel({
+      ...placeable(onSetStatedPlacement),
+      card: { ...card, stated: { releaseId: '1.4', phaseId: null } },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Edit release' }))
+    await user.selectOptions(screen.getByLabelText('Release'), '')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    // Null, not an empty string — an empty string would be a placement
+    // pointing at nothing.
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ release_id: null }),
+    )
+  })
+
+  it('says half a statement places nothing', async () => {
+    renderPanel({
+      ...placeable(),
+      card: { ...card, stated: { releaseId: '1.4', phaseId: null } },
+    })
+    expect(screen.getByText(/Set the stage too/)).toBeInTheDocument()
+  })
+
+  it('says a stated placement outranks the derived ones', () => {
     renderPanel({
       ...placeable(),
       card: {
         ...card,
-        capabilities: [
-          { ...card.capabilities[0], releaseId: '1.1' },
-          { ...card.capabilities[1], releaseId: '1.4' },
-        ],
+        placement: 'stated' as const,
+        stated: { releaseId: '1.4', phaseId: 'manage-vacancies' },
       },
     })
-
-    expect(screen.getByText(/Mixed — Release 1.1, Release 1.4/)).toBeInTheDocument()
-  })
-
-  it('says what a move actually does, since the record has no release of its own', () => {
-    renderPanel(placeable())
     expect(
-      screen.getByText(/moves the 2 capabilities this record owns/),
+      screen.getByText(/outranks where its capabilities and citing features are/),
     ).toBeInTheDocument()
-  })
-
-  it('offers no placement editor when the record owns nothing to move', () => {
-    renderPanel({ ...placeable(), card: { ...card, capabilities: [] } })
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
   })
 
   it('surfaces the server’s refusal in place', async () => {
     const user = userEvent.setup()
-    const onSetPlacement = vi
+    const onSetStatedPlacement = vi
       .fn()
       .mockRejectedValue(new Error('There is no release "9.9".'))
-    renderPanel(placeable(onSetPlacement))
+    renderPanel(placeable(onSetStatedPlacement))
 
     await user.click(screen.getByRole('button', { name: 'Edit release' }))
     await user.selectOptions(screen.getByLabelText('Release'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('There is no release "9.9".')
+  })
+
+  it('no longer offers a separate control for moving its capabilities', () => {
+    // Capabilities follow the record now; a control that moved them apart
+    // would put the two back out of step.
+    renderPanel(placeable())
+    expect(screen.queryByText(/Where its capabilities sit/i)).not.toBeInTheDocument()
   })
 })
 

@@ -28,7 +28,7 @@
   /* One row-header column, then one column per canonical phase. */
   grid-template-columns: 12.5rem repeat(
       var(--scope-phase-count, 7),
-      minmax(var(--scope-card-min-width), 1fr)
+      minmax(var(--scope-card-min-width), var(--scope-card-max-width))
     );
   gap: var(--spacing-3);
   width: max-content;
@@ -194,7 +194,7 @@
   .scope-map-grid__table {
     grid-template-columns: 13.75rem repeat(
         var(--scope-phase-count, 7),
-        minmax(var(--scope-card-min-width), 1fr)
+        minmax(var(--scope-card-min-width), var(--scope-card-max-width))
       );
   }
 }

@@ -148,7 +148,16 @@ export async function captureScopeMapPdf(input: CaptureInput): Promise<string> {
           })
           cloned
             .querySelectorAll<HTMLElement>('.scope-map-grid__scaler')
-            .forEach((node) => node.style.setProperty('--scope-zoom', '1'))
+            .forEach((node) => {
+              node.style.setProperty('--scope-zoom', '1')
+              // The scaler carries an inline `natural × zoom` size so the
+              // scroll box matches what is painted. Undoing the zoom without
+              // undoing that leaves a box smaller than the content it now
+              // renders at full size, and the capture clips the right-hand
+              // columns and the bottom rows.
+              node.style.width = 'max-content'
+              node.style.height = 'auto'
+            })
         },
       }),
     )

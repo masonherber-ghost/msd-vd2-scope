@@ -24,7 +24,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-2);
+  gap: var(--spacing-1) var(--spacing-2);
+  /* The id and its meta sat on one unbreakable line, which is what forced
+     every phase column to the width of its widest header. They wrap now. */
+  flex-wrap: wrap;
 }
 
 .feature-card__id {
@@ -96,8 +99,8 @@
 .feature-card__meta {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
-  flex-shrink: 0;
+  gap: var(--spacing-1) var(--spacing-2);
+  flex-wrap: wrap;
 }
 
 .feature-card__density {
