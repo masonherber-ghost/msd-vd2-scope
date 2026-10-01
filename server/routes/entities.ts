@@ -1,14 +1,12 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import {
-  createAssumptionSchema,
   createCapabilitySchema,
   createMvpFeatureSchema,
   createPhaseSchema,
   createReleaseSchema,
   moveSchema,
   summariseZodError,
-  updateAssumptionSchema,
   setCapabilityLinksSchema,
   setMvpPlacementSchema,
   updateCapabilitySchema,
@@ -17,14 +15,6 @@ import {
   updateReleaseSchema,
 } from '../../src/lib/validators.js'
 import { HttpError } from '../middleware/error-handler.js'
-import {
-  appendAssumption,
-  deleteAssumption,
-  getAssumption,
-  getAssumptionsForFeature,
-  moveAssumption,
-  updateAssumptionText,
-} from '../repositories/assumption-repository.js'
 import {
   countCapabilityDependents,
   createCapability,
@@ -55,7 +45,6 @@ import {
   movePhase,
   updatePhase,
 } from '../repositories/phase-repository.js'
-import { getPwcFeature } from '../repositories/pwc-feature-repository.js'
 import {
   countReleaseDependents,
   createRelease,
@@ -112,14 +101,14 @@ releasesRouter.post('/', (req, res) => {
   const parsed = createReleaseSchema.safeParse(req.body)
   if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
   if (getRelease(parsed.data.id)) {
-    throw new HttpError(409, `Release ${parsed.data.id} already exists.`)
+    throw new HttpError(409, `Package ${parsed.data.id} already exists.`)
   }
   res.status(201).json(createRelease(parsed.data))
 })
 
 releasesRouter.patch('/:id', (req, res) => {
   if (!getRelease(req.params.id)) {
-    throw new HttpError(404, `There is no release ${req.params.id}.`)
+    throw new HttpError(404, `There is no package ${req.params.id}.`)
   }
   const parsed = updateReleaseSchema.safeParse(req.body)
   if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
@@ -128,11 +117,11 @@ releasesRouter.patch('/:id', (req, res) => {
 
 releasesRouter.delete('/:id', (req, res) => {
   const id = req.params.id
-  if (!getRelease(id)) throw new HttpError(404, `There is no release ${id}.`)
+  if (!getRelease(id)) throw new HttpError(404, `There is no package ${id}.`)
 
   const dependents = countReleaseDependents(id)
   // Releases never cascade: a feature with no release cannot be drawn.
-  refuseIfDependents(`release ${id}`, [
+  refuseIfDependents(`package ${id}`, [
     { count: dependents.features, one: 'PwC feature', many: 'PwC features' },
     { count: dependents.capabilities, one: 'capability', many: 'capabilities' },
   ])
@@ -192,59 +181,6 @@ phasesRouter.delete('/:id', (req, res) => {
 })
 
 // ---------------------------------------------------------------------------
-// Assumptions
-// ---------------------------------------------------------------------------
-
-export const assumptionsRouter = Router()
-
-assumptionsRouter.post('/', (req, res) => {
-  const parsed = createAssumptionSchema.safeParse(req.body)
-  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
-  if (!getPwcFeature(parsed.data.pwc_feature_id)) {
-    throw new HttpError(422, `There is no feature ${parsed.data.pwc_feature_id}.`)
-  }
-
-  const created = appendAssumption(parsed.data.pwc_feature_id, parsed.data.text)
-  res.status(201).json({
-    assumption: created,
-    assumptions: getAssumptionsForFeature(parsed.data.pwc_feature_id),
-  })
-})
-
-assumptionsRouter.patch('/:id', (req, res) => {
-  const id = parseIntId(req.params.id, 'Assumption')
-  if (!getAssumption(id)) throw new HttpError(404, `There is no assumption ${id}.`)
-
-  const parsed = updateAssumptionSchema.safeParse(req.body)
-  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
-  res.json(updateAssumptionText(id, parsed.data.text))
-})
-
-assumptionsRouter.post('/:id/move', (req, res) => {
-  const id = parseIntId(req.params.id, 'Assumption')
-  const existing = getAssumption(id)
-  if (!existing) throw new HttpError(404, `There is no assumption ${id}.`)
-
-  const parsed = moveSchema.safeParse(req.body)
-  if (!parsed.success) throw new HttpError(422, summariseZodError(parsed.error))
-
-  const moved = moveAssumption(id, parsed.data.direction)
-  res.json({ moved, assumptions: getAssumptionsForFeature(existing.pwc_feature_id) })
-})
-
-assumptionsRouter.delete('/:id', (req, res) => {
-  const id = parseIntId(req.params.id, 'Assumption')
-  const existing = getAssumption(id)
-  if (!existing) throw new HttpError(404, `There is no assumption ${id}.`)
-
-  deleteAssumption(id)
-  res.json({
-    deleted: 1,
-    assumptions: getAssumptionsForFeature(existing.pwc_feature_id),
-  })
-})
-
-// ---------------------------------------------------------------------------
 // MVP features
 // ---------------------------------------------------------------------------
 
@@ -254,7 +190,7 @@ assumptionsRouter.delete('/:id', (req, res) => {
  */
 function assertStatedPlacement(releaseId?: string | null, phaseId?: string | null): void {
   if (releaseId != null && !getRelease(releaseId)) {
-    throw new HttpError(422, `There is no release "${releaseId}".`)
+    throw new HttpError(422, `There is no package "${releaseId}".`)
   }
   if (phaseId != null && !getPhase(phaseId)) {
     throw new HttpError(422, `There is no phase "${phaseId}".`)
@@ -420,7 +356,7 @@ capabilitiesRouter.get('/', (_req, res) => res.json(getAllCapabilities()))
 
 function assertCapabilityPlacement(releaseId?: string, phaseId?: string): void {
   if (releaseId !== undefined && !getRelease(releaseId)) {
-    throw new HttpError(422, `There is no release "${releaseId}".`)
+    throw new HttpError(422, `There is no package "${releaseId}".`)
   }
   if (phaseId !== undefined && !getPhase(phaseId)) {
     throw new HttpError(422, `There is no phase "${phaseId}".`)

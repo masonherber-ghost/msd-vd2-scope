@@ -1,0 +1,87 @@
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+/* Tailwind's preflight strips list markers and heading sizes, so rendered
+   markdown needs its own structure back. Sizes are relative to the
+   surrounding text, so the block reads at whatever size its parent sets. */
+.markdown-text {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.markdown-text > * + * {
+  margin-top: var(--spacing-2);
+}
+
+/* ========================================
+   LISTS
+   ======================================== */
+
+.markdown-text ol,
+.markdown-text ul {
+  padding-left: var(--spacing-6);
+}
+
+.markdown-text ol {
+  list-style: decimal;
+}
+
+.markdown-text ul {
+  list-style: disc;
+}
+
+.markdown-text li + li {
+  margin-top: var(--spacing-1);
+}
+
+.markdown-text li > ol,
+.markdown-text li > ul {
+  margin-top: var(--spacing-1);
+}
+
+.markdown-text li::marker {
+  color: var(--color-muted-foreground);
+}
+
+/* ========================================
+   INLINE AND HEADINGS
+   ======================================== */
+
+.markdown-text h1,
+.markdown-text h2,
+.markdown-text h3,
+.markdown-text h4 {
+  font-size: 1em;
+  font-weight: 700;
+}
+
+.markdown-text strong {
+  font-weight: 700;
+}
+
+.markdown-text em {
+  font-style: italic;
+}
+
+.markdown-text a {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.markdown-text a:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 1px;
+  border-radius: var(--radius-sm);
+}
+
+.markdown-text code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.markdown-text blockquote {
+  padding-left: var(--spacing-3);
+  border-left: 2px solid var(--color-border);
+  color: var(--color-muted-foreground);
+}

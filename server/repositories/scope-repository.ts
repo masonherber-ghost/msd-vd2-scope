@@ -1,4 +1,3 @@
-import { getAllAssumptions } from './assumption-repository.js'
 import { getAllCapabilities } from './capability-repository.js'
 import {
   getAllFeatureCapabilityLinks,
@@ -21,7 +20,6 @@ export function getScopeGraph() {
   const releases = getAllReleases()
   const phases = getAllPhases()
   const pwcFeatures = getAllPwcFeatures()
-  const assumptions = getAllAssumptions()
   const mvpFeatures = getAllMvpFeatures()
   const capabilities = getAllCapabilities()
   const featureMvpLinks = getAllFeatureMvpLinks()
@@ -37,7 +35,6 @@ export function getScopeGraph() {
     releases,
     phases,
     pwcFeatures,
-    assumptions,
     mvpFeatures,
     capabilities,
     featureMvpLinks,
@@ -46,7 +43,6 @@ export function getScopeGraph() {
       releases: releases.length,
       phases: phases.length,
       pwcFeatures: pwcFeatures.length,
-      assumptions: assumptions.length,
       mvpFeatures: mvpFeatures.length,
       capabilities: capabilities.length,
       featureMvpLinks: featureMvpLinks.length,

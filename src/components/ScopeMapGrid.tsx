@@ -150,7 +150,7 @@ export function ScopeMapGrid({
         >
           <div className="scope-map-grid__corner" role="columnheader">
             <span className="scope-map-grid__axis-label">
-              {rowMode === 'actor' ? 'Actor' : 'Release'} / Stage
+              {rowMode === 'actor' ? 'Actor' : 'Package'} / Stage
             </span>
           </div>
 

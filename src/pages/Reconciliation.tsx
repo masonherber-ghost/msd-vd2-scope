@@ -86,7 +86,7 @@ export default function Reconciliation() {
 
       <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
         <div className="flex gap-2">
-          <dt>Release conflicts</dt>
+          <dt>Package conflicts</dt>
           <dd className="font-medium text-foreground">{model.counts.release}</dd>
         </div>
         <div className="flex gap-2">
@@ -109,11 +109,11 @@ export default function Reconciliation() {
           aria-labelledby="decomposition"
         >
           <h2 className="text-sm font-semibold" id="decomposition">
-            {model.decompositionRelease?.label ?? 'This release'} decomposes across other
-            releases
+            {model.decompositionRelease?.label ?? 'This package'} decomposes across other
+            packages
           </h2>
           <p className="text-sm text-muted-foreground">
-            The {SOURCE_LABEL.mapping} files these features under one release, but the{' '}
+            The {SOURCE_LABEL.mapping} files these features under one package, but the{' '}
             {SOURCE_LABEL.sequencing} schedules the capabilities they cite in several. The counts below are the
             capability links the {SOURCE_LABEL.sequencing} places somewhere else.
           </p>
@@ -132,10 +132,10 @@ export default function Reconciliation() {
           </ul>
           {alias ? (
             <p className="text-xs text-muted-foreground">
-              The {SOURCE_LABEL.mapping} calls this release {alias.from}; {alias.id}{' '}
+              The {SOURCE_LABEL.mapping} calls this package {alias.from}; {alias.id}{' '}
               declares{' '}
               {alias.from} and the {SOURCE_LABEL.sequencing}&rsquo;s {alias.to} to be one
-              release.
+              package.
             </p>
           ) : null}
         </section>
@@ -163,13 +163,13 @@ export default function Reconciliation() {
       </div>
 
       <ConflictQueue
-        title="Release conflicts"
-        note={`The feature ships in one release; the ${SOURCE_LABEL.sequencing} delivers the capability in another.`}
+        title="Package conflicts"
+        note={`The feature ships in one package; the ${SOURCE_LABEL.sequencing} delivers the capability in another.`}
         rows={release}
         featureSourceLabel={`${SOURCE_LABEL.mapping} — feature ships in`}
         tableSourceLabel={`${SOURCE_LABEL.sequencing} — capability delivered in`}
         onResolve={onResolve}
-        emptyMessage="No release conflicts match this filter."
+        emptyMessage="No package conflicts match this filter."
       />
 
       <ConflictQueue

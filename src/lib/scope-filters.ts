@@ -26,7 +26,7 @@ export const FILTER_GROUPS: readonly FilterGroup[] = [
 ]
 
 export const GROUP_LABEL: Record<FilterGroup, string> = {
-  release: 'Release',
+  release: 'Package',
   phase: 'Phase',
   actor: 'Actor',
   mvp: 'MVP feature',

@@ -66,7 +66,6 @@ function recount(graph: ScopeGraph): ScopeGraph {
     counts: {
       ...graph.counts,
       pwcFeatures: graph.pwcFeatures.length,
-      assumptions: graph.assumptions.length,
       featureMvpLinks: graph.featureMvpLinks.length,
       featureCapabilityEdges: graph.featureCapabilityLinks.length,
     },
@@ -88,6 +87,8 @@ export function useCreateFeature() {
             source_phase_label: null,
             capability_note: null,
             question: null,
+            notes: '',
+            notes_edited: 0,
             display_order: graph.pwcFeatures.length + 1,
             source: 'manual',
           },
@@ -100,6 +101,20 @@ export function useCreateFeature() {
   })
 }
 
+/**
+ * Mirrors the server: a notes edit protects the notes from re-import, any
+ * other edit marks the row manual.
+ */
+function applyFeaturePatch(feature: PwcFeatureRow, patch: UpdateFeatureBody): PwcFeatureRow {
+  const touchesOther = Object.keys(patch).some((key) => key !== 'notes')
+  return {
+    ...feature,
+    ...patch,
+    notes_edited: patch.notes !== undefined ? 1 : feature.notes_edited,
+    source: touchesOther ? 'manual' : feature.source,
+  }
+}
+
 export function useUpdateFeature() {
   return useOptimisticScopeMutation<
     { id: string; patch: UpdateFeatureBody },
@@ -109,7 +124,7 @@ export function useUpdateFeature() {
     optimistic: (graph, { id, patch }) => ({
       ...graph,
       pwcFeatures: graph.pwcFeatures.map((feature) =>
-        feature.id === id ? { ...feature, ...patch, source: 'manual' } : feature,
+        feature.id === id ? applyFeaturePatch(feature, patch) : feature,
       ),
     }),
   })
@@ -125,9 +140,8 @@ export function useDeleteFeature() {
       recount({
         ...graph,
         pwcFeatures: graph.pwcFeatures.filter((feature) => feature.id !== id),
-        // Assumptions and join rows cascade in the database; mirror that so
-        // the optimistic view matches what the server will do.
-        assumptions: graph.assumptions.filter((a) => a.pwc_feature_id !== id),
+        // Join rows cascade in the database; mirror that so the optimistic
+        // view matches what the server will do.
         featureMvpLinks: graph.featureMvpLinks.filter((l) => l.pwc_feature_id !== id),
         featureCapabilityLinks: graph.featureCapabilityLinks.filter(
           (l) => l.pwc_feature_id !== id,

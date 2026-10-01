@@ -39,7 +39,7 @@ describe('detailGroupsFor — the toggles follow the cards', () => {
 
   it('offers the five the MSD card draws', () => {
     expect(detailGroupsFor('mvp').map((g) => g.label)).toEqual([
-      'Release',
+      'Package',
       'PwC features',
       'Actors',
       'Capabilities',

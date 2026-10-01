@@ -67,7 +67,8 @@ export type FeatureDetail = {
   source: string
   overridden: boolean
   overrideRationale: string | null
-  assumptions: { id: number; position: number; text: string; source: string }[]
+  /** Assumptions and notes, as markdown. */
+  notes: string
   mvpFeatures: { id: number; ref: number; scopeOption: '1A' | '1B' | null; title: string }[]
   actorGroups: DetailActorGroup[]
   capabilityCount: number
@@ -219,10 +220,6 @@ export function buildFeatureDetail(
 
   const override = graph.overrides.find((o) => o.featureId === feature.id)
 
-  const assumptions = graph.assumptions
-    .filter((a) => a.pwc_feature_id === feature.id)
-    .sort((a, b) => a.position - b.position)
-
   return {
     id: feature.id,
     name: feature.name,
@@ -237,7 +234,7 @@ export function buildFeatureDetail(
     source: feature.source,
     overridden: Boolean(override),
     overrideRationale: override?.rationale ?? null,
-    assumptions,
+    notes: feature.notes,
     mvpFeatures: mvpRecords,
     actorGroups,
     capabilityCount: capabilities.length,

@@ -132,7 +132,7 @@ export function FeatureForm({
       <div className="feature-form__row">
         <div className="feature-form__field">
           <label className="feature-form__label" htmlFor="feature-release">
-            Release
+            Package
           </label>
           <select
             id="feature-release"
@@ -141,7 +141,7 @@ export function FeatureForm({
             onChange={(event) => update('release_id', event.target.value)}
             aria-invalid={Boolean(errorFor('release_id'))}
           >
-            <option value="">Choose a release</option>
+            <option value="">Choose a package</option>
             {releases.map((release) => (
               <option key={release.id} value={release.id}>
                 {release.label}

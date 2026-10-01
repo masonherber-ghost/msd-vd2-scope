@@ -11,6 +11,10 @@ export type PwcFeatureRow = {
   capability_note: string | null
   /** A question someone raised about this feature, or null. */
   question: string | null
+  /** Assumptions and notes, as markdown. */
+  notes: string
+  /** 1 once the notes were edited in the app; import then leaves them alone. */
+  notes_edited: number
   display_order: number
   source: string
   created_at: string
@@ -18,7 +22,8 @@ export type PwcFeatureRow = {
 }
 
 const COLUMNS = `id, name, foundational_build, release_id, phase_id,
-  source_phase_label, capability_note, question, display_order, source,
+  source_phase_label, capability_note, question, notes, notes_edited,
+  display_order, source,
   created_at, updated_at`
 
 let selectAll: Statement | undefined
@@ -29,6 +34,7 @@ let deleteOne: Statement | undefined
 let selectDependents: Statement | undefined
 let selectIds: Statement | undefined
 let selectMaxOrder: Statement | undefined
+let updateImportedNotes: Statement | undefined
 
 export function getAllPwcFeatures(): PwcFeatureRow[] {
   selectAll ??= db.prepare(`SELECT ${COLUMNS} FROM pwc_features ORDER BY display_order`)
@@ -64,20 +70,30 @@ export function upsertImportedPwcFeature(row: {
   upsert.run(row)
 }
 
+/**
+ * Writes the source assumptions into a feature's notes, unless the notes have
+ * been edited in the app — an edit always survives re-import (R-11.4).
+ */
+export function setImportedNotes(id: string, notes: string): void {
+  updateImportedNotes ??= db.prepare(`
+    UPDATE pwc_features
+       SET notes = ?, updated_at = datetime('now')
+     WHERE id = ? AND notes_edited = 0 AND notes != ?
+  `)
+  updateImportedNotes.run(notes, id, notes)
+}
+
 /** For the R-9.4 delete guard: what would be lost, and how much. */
 export function countPwcFeatureDependents(id: string): {
-  assumptions: number
   mvpLinks: number
   capabilityLinks: number
 } {
   selectDependents ??= db.prepare(`
     SELECT
-      (SELECT COUNT(*) FROM assumptions WHERE pwc_feature_id = ?) AS assumptions,
       (SELECT COUNT(*) FROM pwc_feature_mvp_features WHERE pwc_feature_id = ?) AS mvpLinks,
       (SELECT COUNT(*) FROM pwc_feature_capabilities WHERE pwc_feature_id = ?) AS capabilityLinks
   `)
-  return selectDependents.get(id, id, id) as {
-    assumptions: number
+  return selectDependents.get(id, id) as {
     mvpLinks: number
     capabilityLinks: number
   }
@@ -133,7 +149,8 @@ export function createPwcFeature(row: {
 /**
  * Patches only the columns supplied. Editing a row marks it `manual`, so
  * provenance survives and a later import will not overwrite the edit
- * (R-9.9, R-11.4).
+ * (R-9.9, R-11.4). Notes are the exception: editing them sets `notes_edited`
+ * instead, which protects the notes without freezing the other fields.
  */
 export function updatePwcFeature(
   id: string,
@@ -144,16 +161,19 @@ export function updatePwcFeature(
     phase_id?: string
     capability_note?: string | null
     question?: string | null
+    notes?: string
   },
 ): PwcFeatureRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]
   if (fields.length === 0) return getPwcFeature(id)
 
   // Column names come from the schema's own key list, never from user input.
-  const assignments = fields.map((field) => `${field} = @${field}`).join(', ')
+  const assignments = fields.map((field) => `${field} = @${field}`)
+  if (fields.includes('notes')) assignments.push('notes_edited = 1')
+  if (fields.some((field) => field !== 'notes')) assignments.push("source = 'manual'")
   const statement = db.prepare(`
     UPDATE pwc_features
-       SET ${assignments}, source = 'manual', updated_at = datetime('now')
+       SET ${assignments.join(', ')}, updated_at = datetime('now')
      WHERE id = @id
     RETURNING ${COLUMNS}
   `)
@@ -161,7 +181,7 @@ export function updatePwcFeature(
 }
 
 /**
- * Deletes a feature. Assumptions and join rows cascade; nothing else is
+ * Deletes a feature. Its join rows cascade; nothing else is
  * touched. The caller decides whether that cascade is allowed (R-9.4).
  */
 export function deletePwcFeature(id: string): number {

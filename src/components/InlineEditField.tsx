@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MarkdownText } from '@/components/MarkdownText'
 import { HighlightText } from '@/components/ScopeSearch'
 import { Button } from '@/components/ui/button'
 
@@ -27,6 +28,13 @@ export type InlineEditFieldProps = {
   headingClassName?: string
   /** Button label when there is no value yet — "Add a question", not "Edit". */
   addLabel?: string
+  /**
+   * The value is markdown: rendered when shown, edited as source in a
+   * multi-line field. Implies `multiline`.
+   */
+  markdown?: boolean
+  /** Shown when there is no value, in place of "Not set". */
+  emptyText?: string
 }
 
 /**
@@ -46,6 +54,8 @@ export function InlineEditField({
   variant = 'field',
   headingClassName,
   addLabel,
+  markdown = false,
+  emptyText,
 }: InlineEditFieldProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
@@ -126,11 +136,17 @@ export function InlineEditField({
 
   if (!editing) {
     return (
-      <div className="inline-edit">
-        <span className="inline-edit__value">
-          <HighlightText text={displayValue ?? value ?? ''} term={highlight} />
-          {!displayValue && !value ? <em>Not set</em> : null}
-        </span>
+      <div className={markdown ? 'inline-edit inline-edit--markdown' : 'inline-edit'}>
+        {markdown && value ? (
+          <div className="inline-edit__value">
+            <MarkdownText text={value} highlight={highlight} />
+          </div>
+        ) : (
+          <span className="inline-edit__value">
+            <HighlightText text={displayValue ?? value ?? ''} term={highlight} />
+            {!displayValue && !value ? <em>{emptyText ?? 'Not set'}</em> : null}
+          </span>
+        )}
         <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
           {!value && addLabel ? addLabel : `Edit ${label.toLowerCase()}`}
         </Button>
@@ -162,12 +178,13 @@ export function InlineEditField({
             </option>
           ))}
         </select>
-      ) : multiline ? (
+      ) : multiline || markdown ? (
         <textarea
           id={inputId}
           ref={inputRef as React.Ref<HTMLTextAreaElement>}
           className="inline-edit__input"
-          rows={4}
+          rows={markdown ? 10 : 4}
+          aria-describedby={markdown ? `${inputId}-hint` : undefined}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
@@ -187,6 +204,13 @@ export function InlineEditField({
           }}
         />
       )}
+
+      {markdown ? (
+        <p id={`${inputId}-hint`} className="inline-edit__hint">
+          Markdown: <code>1.</code> numbered list, <code>-</code> bullet,{' '}
+          <code>**bold**</code>, <code>_italic_</code>, <code>[text](url)</code>
+        </p>
+      ) : null}
 
       {error ? (
         <p role="alert" className="inline-edit__error">

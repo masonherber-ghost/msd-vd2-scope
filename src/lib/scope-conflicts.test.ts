@@ -22,8 +22,8 @@ describe('buildConflictModel — grouping', () => {
 
   it('shows both placements, so neither source is hidden (R-7.1)', () => {
     expect(model.release[0]).toMatchObject({
-      featurePlacement: 'Release 1.1',
-      tablePlacement: 'Release 1.4',
+      featurePlacement: 'Package 1.1',
+      tablePlacement: 'Package 1.4',
     })
   })
 
@@ -104,11 +104,11 @@ describe('buildConflictModel — release decomposition (D-1)', () => {
     }
     const decomposed = buildConflictModel(decomposedGraph)
     expect(decomposed.decomposition).toEqual([
-      { releaseId: '1.1', label: 'Release 1.1', links: 1 },
+      { releaseId: '1.1', label: 'Package 1.1', links: 1 },
     ])
     expect(decomposed.decompositionRelease).toEqual({
       releaseId: DECOMPOSITION_RELEASE_ID,
-      label: 'Release 1.4',
+      label: 'Package 1.4',
     })
   })
 })

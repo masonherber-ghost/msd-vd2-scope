@@ -22,13 +22,9 @@ import {
   useUpdateFeature,
 } from '@/hooks/useFeatureMutations'
 import {
-  useCreateAssumption,
-  useDeleteAssumption,
   useDeleteCapability,
-  useMoveAssumption,
   useResolveConflict,
   useSetMvpCapabilities,
-  useUpdateAssumption,
   useUpdateCapability,
   useUpdateMvpFeature,
 } from '@/hooks/useEntityMutations'
@@ -65,7 +61,7 @@ import {
   ALL_DETAIL,
   type DetailKey,
 } from '@/lib/card-detail'
-import { captureScopeMapPdf } from '@/lib/scope-pdf'
+import { captureScopeMapPdf, type CaptureBlock } from '@/lib/scope-pdf'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
   EMPTY_FILTERS,
@@ -375,10 +371,6 @@ export default function ScopeMap() {
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
   const deleteFeature = useDeleteFeature()
-  const addAssumption = useCreateAssumption()
-  const editAssumption = useUpdateAssumption()
-  const moveAssumption = useMoveAssumption()
-  const removeAssumption = useDeleteAssumption()
   const resolveConflict = useResolveConflict()
   const updateCapability = useUpdateCapability()
   const deleteCapability = useDeleteCapability()
@@ -620,24 +612,36 @@ export default function ScopeMap() {
 
   /**
    * The PDF is a render of the live DOM rather than of the model, so it
-   * reads the two elements off the page: the actor legend, which is the key,
-   * and the grid it explains. Zoom and scroll are undone during the capture
-   * — they describe the screen, not the map.
+   * reads three elements off the page: the heading, which names the map and
+   * the view it was taken from; the actor legend, which is the key; and the
+   * grid they explain. Only the last two carry the app's page colour behind
+   * them — the heading is text, and a filled rectangle behind it reads as a
+   * box around the words.
+   * Zoom and scroll are undone during the capture — they describe the
+   * screen, not the map.
    */
   const [pdfState, setPdfState] = useState<'idle' | 'working' | 'failed'>('idle')
 
   const exportPdf = useCallback(async () => {
-    const legend = document.querySelector<HTMLElement>('.scope-chrome__legend')
-    const grid = document.querySelector<HTMLElement>('.scope-map-grid')
-    const elements = [legend, grid].filter((node): node is HTMLElement => node !== null)
-    if (elements.length === 0) {
+    const found: [string, CaptureBlock['background']][] = [
+      ['.scope-chrome__heading', 'paper'],
+      ['.scope-chrome__legend', 'app'],
+      ['.scope-map-grid', 'app'],
+    ]
+    const blocks = found
+      .map(([selector, background]) => ({
+        element: document.querySelector<HTMLElement>(selector),
+        background,
+      }))
+      .filter((block): block is CaptureBlock => block.element !== null)
+    if (blocks.length === 0) {
       setPdfState('failed')
       return
     }
 
     setPdfState('working')
     try {
-      await captureScopeMapPdf({ elements, view, filters })
+      await captureScopeMapPdf({ blocks, view, filters })
       setPdfState('idle')
     } catch {
       // Rendering the DOM to a canvas can fail on a resource the browser
@@ -946,7 +950,7 @@ export default function ScopeMap() {
                   Not on the map ({capabilityProjection.unplaced.length})
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  The sequencing table never matched these, so they have no release or
+                  The sequencing table never matched these, so they have no package or
                   stage. Listed rather than dropped.
                 </p>
                 <ul className="mt-2 flex flex-col gap-1 text-sm">
@@ -1133,6 +1137,9 @@ export default function ScopeMap() {
               onSaveQuestion={(question) =>
                 updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { question } })
               }
+              onSaveDetails={(details) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { details } })
+              }
               onDirtyChange={setDirty}
               onSelectFeature={(id) => {
                 // Jumping to a PwC feature means leaving this view — the
@@ -1200,14 +1207,6 @@ export default function ScopeMap() {
                   patch: { release_id: releaseId, phase_id: phaseId },
                 })
               }
-              onAddAssumption={(text) =>
-                addAssumption.mutateAsync({ featureId: detail.id, text })
-              }
-              onEditAssumption={(id, text) => editAssumption.mutateAsync({ id, text })}
-              onMoveAssumption={(id, direction) =>
-                moveAssumption.mutateAsync({ id, direction })
-              }
-              onDeleteAssumption={(id) => removeAssumption.mutateAsync(id)}
             />
             </ScopeDetailDialog>
           ) : null}

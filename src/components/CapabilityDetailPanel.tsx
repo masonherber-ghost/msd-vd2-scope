@@ -183,7 +183,7 @@ export function CapabilityDetailPanel({
 
       {card.releaseId === null || card.phaseId === null ? (
         <p className="capability-detail__note">
-          The {SOURCE_LABEL.sequencing} never matched this text, so it has no release or
+          The {SOURCE_LABEL.sequencing} never matched this text, so it has no package or
           stage. Never merged on a prefix — a human confirms it.
         </p>
       ) : null}

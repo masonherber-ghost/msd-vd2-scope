@@ -1,7 +1,7 @@
 import { CircleCheck, Filter } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { AssumptionList } from '@/components/AssumptionList'
 import { InlineEditField } from '@/components/InlineEditField'
+import { MarkdownText } from '@/components/MarkdownText'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
 import { ConflictBadge } from '@/components/ConflictBadge'
 import { HighlightText } from '@/components/ScopeSearch'
@@ -33,6 +33,8 @@ export type FeatureDetailPanelProps = {
     phase_id?: string
     /** Null clears the question rather than storing a blank one. */
     question?: string | null
+    /** Assumptions and notes, as markdown. */
+    notes?: string
   }) => Promise<unknown>
   onDelete?: (cascade: boolean) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
@@ -63,11 +65,6 @@ export type FeatureDetailPanelProps = {
     releaseId: string,
     phaseId: string,
   ) => Promise<unknown>
-  /** Assumption editing, including explicit reordering (R-9.8). */
-  onAddAssumption?: (text: string) => Promise<unknown>
-  onEditAssumption?: (id: number, text: string) => Promise<unknown>
-  onMoveAssumption?: (id: number, direction: 'up' | 'down') => Promise<unknown>
-  onDeleteAssumption?: (id: number) => Promise<unknown>
 }
 
 export function FeatureDetailPanel({
@@ -90,10 +87,6 @@ export function FeatureDetailPanel({
   linkedCapabilityIds = [],
   onKeepCapability,
   onMoveCapability,
-  onAddAssumption,
-  onEditAssumption,
-  onMoveAssumption,
-  onDeleteAssumption,
 }: FeatureDetailPanelProps) {
   const panelRef = useRef<HTMLElement>(null)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -118,8 +111,7 @@ export function FeatureDetailPanel({
   const canEditMvp = Boolean(onSetMvpLinks && mvpOptions)
   const canEditCapabilities = Boolean(onSetCapabilityLinks && capabilityOptions)
 
-  const dependentTotal =
-    detail.assumptions.length + detail.mvpFeatures.length + detail.capabilityCount
+  const dependentTotal = detail.mvpFeatures.length + detail.capabilityCount
 
   const runDelete = async (cascade: boolean) => {
     if (!onDelete) return
@@ -211,7 +203,7 @@ export function FeatureDetailPanel({
         <div className="feature-detail__section">
           <h3 className="feature-detail__section-title">Placement</h3>
           <InlineEditField
-            label="Release"
+            label="Package"
             value={detail.releaseId}
             displayValue={detail.releaseLabel}
             options={releaseOptions}
@@ -262,28 +254,22 @@ export function FeatureDetailPanel({
       </div>
 
       <div className="feature-detail__section">
-        <h3 className="feature-detail__section-title">
-          Assumptions ({detail.assumptions.length})
-        </h3>
-        {onAddAssumption && onEditAssumption && onMoveAssumption && onDeleteAssumption ? (
-          <AssumptionList
-            assumptions={detail.assumptions}
-            onAdd={onAddAssumption}
-            onEdit={onEditAssumption}
-            onMove={onMoveAssumption}
-            onDelete={onDeleteAssumption}
+        <h3 className="feature-detail__section-title">Assumptions &amp; notes</h3>
+        {onSaveField ? (
+          <InlineEditField
+            label="Assumptions and notes"
+            value={detail.notes}
+            markdown
+            emptyText="None recorded."
+            addLabel="Add assumptions or notes"
+            onSave={(notes) => onSaveField({ notes })}
+            onDirtyChange={onDirtyChange}
             highlight={highlight}
           />
-        ) : detail.assumptions.length === 0 ? (
+        ) : detail.notes === '' ? (
           <p className="feature-detail__note">None recorded.</p>
         ) : (
-          <ol className="feature-detail__list">
-            {detail.assumptions.map((assumption) => (
-              <li key={assumption.id}>
-                <HighlightText text={assumption.text} term={highlight} />
-              </li>
-            ))}
-          </ol>
+          <MarkdownText text={detail.notes} highlight={highlight} />
         )}
       </div>
 
@@ -463,7 +449,7 @@ export function FeatureDetailPanel({
                     </span>
                   </span>
                   {connection.crossesRelease ? (
-                    <span className="feature-detail__crossing">crosses release</span>
+                    <span className="feature-detail__crossing">crosses package</span>
                   ) : null}
                 </button>
               </li>
@@ -489,9 +475,7 @@ export function FeatureDetailPanel({
               <p className="feature-detail__prose">
                 Delete {detail.id}?{' '}
                 {dependentTotal > 0
-                  ? `This also removes ${detail.assumptions.length} assumption${
-                      detail.assumptions.length === 1 ? '' : 's'
-                    }, ${detail.mvpFeatures.length} MVP feature link${
+                  ? `This also removes ${detail.mvpFeatures.length} MVP feature link${
                       detail.mvpFeatures.length === 1 ? '' : 's'
                     } and ${detail.capabilityCount} capability link${
                       detail.capabilityCount === 1 ? '' : 's'
@@ -591,7 +575,7 @@ function CapabilityRow({
       )}
       <span className="feature-detail__capability-meta">
         {capability.matched
-          ? `${capability.releaseLabel ?? 'no release'} · ${
+          ? `${capability.releaseLabel ?? 'no package'} · ${
               capability.phaseName ?? 'no phase'
             }`
           : `No exact match in the ${SOURCE_LABEL.sequencing}`}
@@ -602,7 +586,7 @@ function CapabilityRow({
         <div className="feature-detail__mismatch">
           {capability.releaseDiffers ? (
             <span>
-              <span className="feature-detail__mismatch-label">Release differs:</span> the
+              <span className="feature-detail__mismatch-label">Package differs:</span> the
               feature ships in {detail.releaseLabel}, the {SOURCE_LABEL.sequencing} delivers
               this capability in {capability.releaseLabel}.
             </span>

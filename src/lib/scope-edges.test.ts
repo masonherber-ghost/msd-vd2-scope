@@ -85,6 +85,8 @@ describe('buildEdges', () => {
           source_phase_label: null,
           capability_note: null,
           question: null, display_order: 1,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
         {
@@ -96,6 +98,8 @@ describe('buildEdges', () => {
           source_phase_label: null,
           capability_note: null,
           question: null, display_order: 2,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],

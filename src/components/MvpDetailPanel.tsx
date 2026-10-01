@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
+import { MarkdownText } from '@/components/MarkdownText'
 import { Button } from '@/components/ui/button'
 import { mvpCardLabel, type MvpCardModel } from '@/lib/mvp-derive'
 import { SOURCE_LABEL } from '@/lib/validators'
@@ -17,8 +18,8 @@ const UNSTATED = 'Not stated — placed by its capabilities'
 
 const PLACEMENT_NOTE: Record<MvpCardModel['placement'], string> = {
   stated:
-    'Placed by hand on the record itself, which outranks both derived placements. Set the release and stage back to “not stated” to hand it back to the sources.',
-  capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a release of its own.`,
+    'Placed by hand on the record itself, which outranks both derived placements. Set the package and stage back to “not stated” to hand it back to the sources.',
+  capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a package of its own.`,
   feature:
     `This record owns no placed capability, so it is placed by the PwC features that cite it. That is a weaker footing than the ${SOURCE_LABEL.sequencing}’s own placement.`,
   unplaced: 'Nothing places this record: it owns no capability and no PwC feature cites it.',
@@ -53,6 +54,8 @@ export type MvpDetailPanelProps = {
   onSaveTitle?: (title: string) => Promise<unknown>
   /** Saves a question, or clears it when the text is emptied. */
   onSaveQuestion?: (question: string | null) => Promise<unknown>
+  /** Saves the markdown details. Emptying it clears them. */
+  onSaveDetails?: (details: string) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
 }
 
@@ -79,6 +82,7 @@ export function MvpDetailPanel({
   onSetStatedPlacement,
   onSaveTitle,
   onSaveQuestion,
+  onSaveDetails,
   onDirtyChange,
 }: MvpDetailPanelProps) {
   const label = mvpCardLabel(card)
@@ -160,6 +164,25 @@ export function MvpDetailPanel({
         </p>
       ) : null}
 
+      <section className="mvp-detail__section">
+        <h3 className="mvp-detail__section-title">Details</h3>
+        {onSaveDetails ? (
+          <InlineEditField
+            label="Details"
+            value={card.details}
+            markdown
+            emptyText="None recorded."
+            addLabel="Add details"
+            onSave={onSaveDetails}
+            onDirtyChange={onDirtyChange}
+          />
+        ) : card.details === '' ? (
+          <p className="mvp-detail__note">None recorded.</p>
+        ) : (
+          <MarkdownText text={card.details} />
+        )}
+      </section>
+
       {onSaveQuestion ? (
         <section className="mvp-detail__section">
           <h3 className="mvp-detail__section-title">Question</h3>
@@ -179,7 +202,7 @@ export function MvpDetailPanel({
         <section className="mvp-detail__section">
           <h3 className="mvp-detail__section-title">Placement</h3>
           <InlineEditField
-            label="Release"
+            label="Package"
             value={card.stated.releaseId ?? ''}
             displayValue={
               card.stated.releaseId
@@ -209,7 +232,7 @@ export function MvpDetailPanel({
             {card.placement === 'stated'
               ? 'This is where the record sits on the map. It outranks where its capabilities and citing features are.'
               : card.stated.releaseId || card.stated.phaseId
-                ? `Set the ${card.stated.releaseId ? 'stage' : 'release'} too — a cell is a release and a stage, so half a statement places nothing and the record stays where the sources put it.`
+                ? `Set the ${card.stated.releaseId ? 'stage' : 'package'} too — a cell is a package and a stage, so half a statement places nothing and the record stays where the sources put it.`
                 : 'Set both to place this record by hand. That outranks where its capabilities and citing features are, and moves the card on the map.'}
           </p>
         </section>

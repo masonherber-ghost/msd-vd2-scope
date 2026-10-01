@@ -11,14 +11,16 @@ export type MvpFeatureRow = {
   phase_id: string | null
   /** A question someone raised about this record, or null. */
   question: string | null
+  /** Free-text detail about this record, as markdown. */
+  details: string
   source: string
   created_at: string
   updated_at: string
 }
 
 const COLUMNS =
-  `id, ref, scope_option, title, release_id, phase_id, question, source,
-   created_at, updated_at`
+  `id, ref, scope_option, title, release_id, phase_id, question, details,
+   source, created_at, updated_at`
 
 let selectAll: Statement | undefined
 let selectByRefOption: Statement | undefined
@@ -108,6 +110,13 @@ export function createMvpFeature(row: {
   }) as MvpFeatureRow
 }
 
+/**
+ * Patches only the columns supplied. Editing a row marks it `manual`, so a
+ * later import will not overwrite the edit. `details` is the exception, the
+ * same way `notes` is on a PwC feature: it is a reader's note about the
+ * record rather than a correction to it, and nothing imports into it, so
+ * writing it should not freeze the record's title and placement.
+ */
 export function updateMvpFeature(
   id: number,
   patch: {
@@ -116,14 +125,17 @@ export function updateMvpFeature(
     release_id?: string | null
     phase_id?: string | null
     question?: string | null
+    details?: string
   },
 ): MvpFeatureRow | undefined {
   const fields = Object.keys(patch) as (keyof typeof patch)[]
   if (fields.length === 0) return getMvpFeatureById(id)
-  const assignments = fields.map((field) => `${field} = @${field}`).join(', ')
+  // Column names come from the schema's own key list, never from user input.
+  const assignments = fields.map((field) => `${field} = @${field}`)
+  if (fields.some((field) => field !== 'details')) assignments.push("source = 'manual'")
   return db
     .prepare(
-      `UPDATE mvp_features SET ${assignments}, source = 'manual', updated_at = datetime('now')
+      `UPDATE mvp_features SET ${assignments.join(', ')}, updated_at = datetime('now')
         WHERE id = @id RETURNING ${COLUMNS}`,
     )
     .get({ ...patch, id }) as MvpFeatureRow | undefined

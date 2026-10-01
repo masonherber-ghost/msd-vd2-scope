@@ -55,7 +55,7 @@ export type DetailGroup = {
  * the MSD view lists five and the capability view four.
  */
 const FEATURE_GROUPS: DetailGroup[] = [
-  { key: 'release', label: 'Release', hint: 'The release pill in the card header' },
+  { key: 'release', label: 'Package', hint: 'The package pill in the card header' },
   {
     key: 'refs',
     label: 'MSD features',
@@ -75,7 +75,7 @@ const GROUPS: Record<ViewMode, DetailGroup[]> = {
   release: FEATURE_GROUPS,
   actor: FEATURE_GROUPS,
   mvp: [
-    { key: 'release', label: 'Release', hint: 'The release pill in the card header' },
+    { key: 'release', label: 'Package', hint: 'The package pill in the card header' },
     { key: 'refs', label: 'PwC features', hint: 'The PwC features citing this record' },
     { key: 'actors', label: 'Actors', hint: 'Actor pills and their counts' },
     {

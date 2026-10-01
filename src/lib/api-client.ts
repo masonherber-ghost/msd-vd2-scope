@@ -28,15 +28,11 @@ export type PwcFeatureRow = {
   capability_note: string | null
   /** A question someone raised about this feature, or null. */
   question: string | null
+  /** Assumptions and notes, as markdown. */
+  notes: string
+  /** 1 once the notes were edited in the app; import then leaves them alone. */
+  notes_edited: number
   display_order: number
-  source: string
-}
-
-export type AssumptionRow = {
-  id: number
-  pwc_feature_id: string
-  position: number
-  text: string
   source: string
 }
 
@@ -50,6 +46,8 @@ export type MvpFeatureRow = {
   phase_id: string | null
   /** A question someone raised about this record, or null. */
   question: string | null
+  /** Free-text detail about this record, as markdown. */
+  details: string
   source: string
 }
 
@@ -121,7 +119,6 @@ export type ScopeGraph = {
   releases: ReleaseRow[]
   phases: PhaseRow[]
   pwcFeatures: PwcFeatureRow[]
-  assumptions: AssumptionRow[]
   mvpFeatures: MvpFeatureRow[]
   capabilities: CapabilityRow[]
   featureMvpLinks: FeatureMvpLinkRow[]
@@ -130,7 +127,6 @@ export type ScopeGraph = {
     releases: number
     phases: number
     pwcFeatures: number
-    assumptions: number
     mvpFeatures: number
     capabilities: number
     featureMvpLinks: number
@@ -220,11 +216,13 @@ export type UpdateFeatureBody = Partial<Omit<CreateFeatureBody, 'id'>> & {
   capability_note?: string | null
   /** Null clears the question rather than storing a blank one. */
   question?: string | null
+  /** Assumptions and notes, as markdown. */
+  notes?: string
 }
 
 export type DeleteFeatureResult = {
   deleted: number
-  cascaded: { assumptions: number; mvpLinks: number; capabilityLinks: number }
+  cascaded: { mvpLinks: number; capabilityLinks: number }
 }
 
 export type MoveDirection = 'up' | 'down'
@@ -316,28 +314,6 @@ export const apiClient = {
       ),
   },
 
-  assumptions: {
-    create: (pwcFeatureId: string, text: string) =>
-      request<{ assumption: AssumptionRow; assumptions: AssumptionRow[] }>(
-        '/api/assumptions',
-        { method: 'POST', body: JSON.stringify({ pwc_feature_id: pwcFeatureId, text }) },
-      ),
-    update: (id: number, text: string) =>
-      request<AssumptionRow>(`/api/assumptions/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ text }),
-      }),
-    move: (id: number, direction: MoveDirection) =>
-      request<{ moved: boolean; assumptions: AssumptionRow[] }>(
-        `/api/assumptions/${id}/move`,
-        { method: 'POST', body: JSON.stringify({ direction }) },
-      ),
-    remove: (id: number) =>
-      request<{ deleted: number; assumptions: AssumptionRow[] }>(`/api/assumptions/${id}`, {
-        method: 'DELETE',
-      }),
-  },
-
   mvpFeatures: {
     create: (body: {
       ref: number
@@ -361,6 +337,8 @@ export const apiClient = {
         phase_id: string | null
         /** `null` clears the question rather than storing a blank one. */
         question: string | null
+        /** Free-text detail, as markdown. Empty clears it. */
+        details: string
       }>,
     ) =>
       request<MvpFeatureRow>(`/api/mvp-features/${id}`, {

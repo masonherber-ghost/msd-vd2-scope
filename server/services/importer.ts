@@ -1,5 +1,4 @@
 import { db } from '../database.js'
-import { replaceImportedAssumptions } from '../repositories/assumption-repository.js'
 import {
   findCapabilityBySourceText,
   upsertImportedCapability,
@@ -16,7 +15,10 @@ import {
   upsertImportedMvpFeature,
 } from '../repositories/mvp-feature-repository.js'
 import { upsertImportedPhase } from '../repositories/phase-repository.js'
-import { upsertImportedPwcFeature } from '../repositories/pwc-feature-repository.js'
+import {
+  setImportedNotes,
+  upsertImportedPwcFeature,
+} from '../repositories/pwc-feature-repository.js'
 import {
   deleteImportedReleasesNotIn,
   upsertImportedRelease,
@@ -24,6 +26,18 @@ import {
 import type { MergedMvpFeature, ReconcileResult } from './reconcile.js'
 import { findCountDrift, loadScopeFromSources } from './scope-source.js'
 import type { ScopeOption } from './scope-types.js'
+
+
+/**
+ * The source's ordered assumptions as a numbered markdown list — the form a
+ * feature's notes take until someone edits them.
+ */
+export function assumptionsToMarkdown(assumptions: { position: number; text: string }[]): string {
+  return [...assumptions]
+    .sort((a, b) => a.position - b.position)
+    .map((a, index) => `${index + 1}. ${a.text}`)
+    .join('\n')
+}
 
 export class ImportDriftError extends Error {
   drift: { key: string; expected: number; actual: number }[]
@@ -241,10 +255,7 @@ export function importScope(result: ReconcileResult): ImportSummary {
         capability_note: feature.capabilityNote,
         display_order: feature.displayOrder,
       })
-      replaceImportedAssumptions(
-        feature.id,
-        feature.assumptions.map((a) => a.text),
-      )
+      setImportedNotes(feature.id, assumptionsToMarkdown(feature.assumptions))
     }
 
     for (const link of result.featureMvpLinks) {

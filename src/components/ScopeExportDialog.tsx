@@ -105,7 +105,7 @@ export function ScopeExportDialog({
         <DialogHeader>
           <DialogTitle>Export this view</DialogTitle>
           <DialogDescription>
-            The map as Markdown, grouped by release and journey phase. {viewLabel}.
+            The map as Markdown, grouped by package and journey phase. {viewLabel}.
             Filters apply — what is listed is what the map is showing.
           </DialogDescription>
         </DialogHeader>

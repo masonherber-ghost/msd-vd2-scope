@@ -297,7 +297,7 @@ describe('applyReleaseAliases', () => {
     const { mapping } = applyReleaseAliases(parsed, [alias])
     const renamed = mapping.releases.find((r) => r.id === '1.4')!
 
-    expect(renamed.label).toBe('Release 1.4')
+    expect(renamed.label).toBe('Package 1.4')
     expect(renamed.name).toBe(source.name)
     expect(renamed.description).toBe(source.description)
   })

@@ -48,7 +48,7 @@ describe('ScopeExportDialog — what it shows', () => {
     // The label also appears inside the markdown, so match the sentence
     // the dialog itself writes around it.
     expect(
-      screen.getByText(/grouped by release and journey phase\. View by MSD feature\./),
+      screen.getByText(/grouped by package and journey phase\. View by MSD feature\./),
     ).toBeInTheDocument()
   })
 

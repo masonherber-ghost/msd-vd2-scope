@@ -12,7 +12,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
     releases: [
       {
         id: '1.1',
-        label: 'Release 1.1',
+        label: 'Package 1.1',
         name: 'Pilot',
         description: '',
         display_order: 1,
@@ -22,7 +22,7 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
       },
       {
         id: '1.4',
-        label: 'Release 1.4',
+        label: 'Package 1.4',
         name: '',
         description: '',
         display_order: 2,
@@ -59,6 +59,8 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         source_phase_label: 'Access & Onboarding',
         capability_note: null,
         question: null, display_order: 1,
+        notes: '',
+        notes_edited: 0,
         source: 'mapping',
       },
       {
@@ -70,14 +72,15 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
         source_phase_label: 'Access & Onboarding',
         capability_note: null,
         question: null, display_order: 2,
+        notes: '',
+        notes_edited: 0,
         source: 'mapping',
       },
     ],
-    assumptions: [],
     mvpFeatures: [
-      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', release_id: null, phase_id: null, question: null, source: 'mapping' },
-      { id: 2, ref: 938, scope_option: null, title: 'Additional users', release_id: null, phase_id: null, question: null, source: 'mapping' },
-      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', release_id: null, phase_id: null, question: null, source: 'mapping' },
+      { id: 1, ref: 938, scope_option: '1A', title: 'Additional users', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
+      { id: 2, ref: 938, scope_option: null, title: 'Additional users', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
+      { id: 3, ref: 948, scope_option: '1B', title: 'Verification methods', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
     ],
     capabilities: [
       {
@@ -189,7 +192,6 @@ export function makeScopeGraph(overrides: Partial<ScopeGraph> = {}): ScopeGraph 
       releases: 2,
       phases: 2,
       pwcFeatures: 2,
-      assumptions: 0,
       mvpFeatures: 3,
       capabilities: 3,
       featureMvpLinks: 3,

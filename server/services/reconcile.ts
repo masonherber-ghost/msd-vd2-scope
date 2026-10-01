@@ -117,8 +117,8 @@ export type ReconcileResult = {
 }
 
 const RELEASE_NAMES: Record<string, string> = {
-  '1.4': 'Release 1.4',
-  '2': 'Release 2',
+  '1.4': 'Package 1.4',
+  '2': 'Package 2',
 }
 
 function capabilityKey(text: string, ref: number): string {
@@ -321,7 +321,7 @@ export function reconcile(
     }
     releases.set(id, {
       id,
-      label: RELEASE_NAMES[id] ?? `Release ${id}`,
+      label: RELEASE_NAMES[id] ?? `Package ${id}`,
       name: '',
       description: '',
       inMappingSource: false,

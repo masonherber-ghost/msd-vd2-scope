@@ -19,7 +19,6 @@ const { scopeRouter } = await import('./routes/scope.js')
 const { importRouter } = await import('./routes/import.js')
 const { featuresRouter } = await import('./routes/features.js')
 const {
-  assumptionsRouter,
   capabilitiesRouter,
   mvpFeaturesRouter,
   phasesRouter,
@@ -122,7 +121,6 @@ app.use('/api/import', importRouter)
 app.use('/api/features', featuresRouter)
 app.use('/api/releases', releasesRouter)
 app.use('/api/phases', phasesRouter)
-app.use('/api/assumptions', assumptionsRouter)
 app.use('/api/mvp-features', mvpFeaturesRouter)
 app.use('/api/capabilities', capabilitiesRouter)
 app.use('/api/conflicts', conflictsRouter)

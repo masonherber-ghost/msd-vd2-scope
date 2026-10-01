@@ -1,0 +1,23 @@
+-- Free-text detail on an MSD feature record, as markdown.
+--
+-- The mirror of the `notes` field 011 gave a PwC feature. A PwC feature
+-- carries its assumptions; an MSD feature carried nothing but a title, a
+-- placement and a question, so anything someone knew about the record — what
+-- it covers, what it excludes, what was decided about it — had to be hung off
+-- a question or one of its capabilities, which attributes it to the wrong
+-- record and loses it for the five records that own no capability.
+--
+-- Markdown, edited as one block of text, for the same reason 011 collapsed
+-- the assumptions table: a list with move/edit/delete controls per row is
+-- more machinery than this content warrants.
+--
+-- No `details_edited` flag, unlike `notes`. Neither source document carries
+-- anything that would import into this column, so there is no import to
+-- protect it from. For the same reason editing it does not mark the record
+-- `manual` — see `updateMvpFeature`: details are a reader's note about the
+-- record, not a correction to it, and should not freeze its title against a
+-- re-import.
+--
+-- SQLite has no ADD COLUMN IF NOT EXISTS. Adding a column with a default is
+-- the normal way to extend a table, and the runner applies this once.
+ALTER TABLE mvp_features ADD COLUMN details TEXT NOT NULL DEFAULT '';

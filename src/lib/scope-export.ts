@@ -52,7 +52,7 @@ export type ScopeExportInput = {
 
 /** How the document names the view it was taken from. */
 export const SCOPE_VIEW_LABEL: Record<ViewMode, string> = {
-  release: 'View by PwC release',
+  release: 'View by PwC package',
   actor: 'View by actor',
   mvp: 'View by MSD feature',
   capability: 'View by capability',
@@ -60,7 +60,7 @@ export const SCOPE_VIEW_LABEL: Record<ViewMode, string> = {
 
 /** The view's part of an export filename, shared with the PDF export. */
 export const SCOPE_VIEW_SLUG: Record<ViewMode, string> = {
-  release: 'by-pwc-release',
+  release: 'by-pwc-package',
   actor: 'by-actor',
   mvp: 'by-msd-feature',
   capability: 'by-capability',
@@ -366,7 +366,7 @@ function phaseHeading(phase: PhaseRow): string {
   return `#### **${phase.name}${epic}**`
 }
 
-/** "Release: 1.1, 1.4 · Actor: Employer" — the narrowing, in words. */
+/** "Package: 1.1, 1.4 · Actor: Employer" — the narrowing, in words. */
 export function describeFilters(
   filters: FilterState,
   releases: ReleaseRow[],
@@ -503,8 +503,8 @@ export function buildScopeExport(input: ScopeExportInput): ScopeExport {
     lines.push('## **Not on the map**', '')
     lines.push(
       view === 'mvp'
-        ? 'Neither source places these, so they have no release or stage. Listed rather than dropped.'
-        : 'The sequencing table never matched these, so they have no release or stage. Listed rather than dropped.',
+        ? 'Neither source places these, so they have no package or stage. Listed rather than dropped.'
+        : 'The sequencing table never matched these, so they have no package or stage. Listed rather than dropped.',
       '',
     )
     lines.push(...strays.lines, '')
@@ -539,15 +539,15 @@ function releasesCovered(input: ScopeExportInput, sections: Section[]): ReleaseR
  * set is listed instead of spanned.
  */
 function spanLine(spanned: ReleaseRow[], releases: ReleaseRow[]): string {
-  if (spanned.length === 1) return `Including release ${spanned[0].id}`
+  if (spanned.length === 1) return `Including package ${spanned[0].id}`
 
   const first = releases.indexOf(spanned[0])
   const last = releases.indexOf(spanned[spanned.length - 1])
   const contiguous = last - first + 1 === spanned.length
 
   return contiguous
-    ? `Including releases ${spanned[0].id} – ${spanned[spanned.length - 1].id}`
-    : `Including releases ${spanned.map((release) => release.id).join(', ')}`
+    ? `Including packages ${spanned[0].id} – ${spanned[spanned.length - 1].id}`
+    : `Including packages ${spanned.map((release) => release.id).join(', ')}`
 }
 
 /**

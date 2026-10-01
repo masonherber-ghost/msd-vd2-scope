@@ -110,7 +110,7 @@ describe('the real source documents reconcile to the PRD counts', () => {
   it('makes 1.4 a release both documents name, carrying the 1.9 prose', () => {
     const merged = result.releases.find((r) => r.id === '1.4')!
     expect(merged).toMatchObject({
-      label: 'Release 1.4',
+      label: 'Package 1.4',
       name: 'General Availability & Scale-Up',
       inMappingSource: true,
       inSequencingSource: true,

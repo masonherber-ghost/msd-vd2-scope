@@ -6,6 +6,8 @@ import {
   PAGE_MARGIN,
   captureScale,
   fitBlocks,
+  orientationFor,
+  pageFor,
   pdfFilenameFor,
 } from '@/lib/scope-pdf'
 import { EMPTY_FILTERS } from '@/lib/scope-filters'
@@ -86,6 +88,99 @@ describe('fitBlocks — one page, whole map', () => {
   })
 })
 
+describe('pageFor — the sheet is trimmed to the map', () => {
+  // A tall map is the case that wasted the paper: it fits A3 landscape by its
+  // height, leaving most of the width empty on either side.
+  const tall = [
+    { width: 2000, height: 220 },
+    { width: 2000, height: 2300 },
+  ]
+
+  it('leaves the margin, and no more, on all four sides', () => {
+    const page = pageFor(tall)
+    const blocks = fitBlocks(tall, page)
+    const right = Math.max(...blocks.map((b) => b.x + b.width))
+    const bottom = blocks[blocks.length - 1].y + blocks[blocks.length - 1].height
+
+    expect(within(Math.min(...blocks.map((b) => b.x)), PAGE_MARGIN, 0.01)).toBe(true)
+    expect(within(blocks[0].y, PAGE_MARGIN, 0.01)).toBe(true)
+    expect(within(page.width - right, PAGE_MARGIN, 0.01)).toBe(true)
+    expect(within(page.height - bottom, PAGE_MARGIN, 0.01)).toBe(true)
+  })
+
+  it('is narrower than A3 landscape for a map taller than the sheet is wide', () => {
+    expect(pageFor(tall).width).toBeLessThan(PAGE.width)
+  })
+
+  it('never draws the map smaller than A3 landscape would have', () => {
+    const onA3 = fitBlocks(tall)
+    const trimmed = fitBlocks(tall, pageFor(tall))
+    expect(trimmed[1].width).toBeGreaterThanOrEqual(onA3[1].width - 0.001)
+  })
+
+  it('still fits within A3, so the sheet remains printable', () => {
+    const page = pageFor(tall)
+    expect(page.width).toBeLessThanOrEqual(PAGE.width + 0.001)
+    expect(page.height).toBeLessThanOrEqual(PAGE.height + 0.001)
+  })
+
+  it('wraps a small map at its own size rather than blowing it up', () => {
+    expect(pageFor([{ width: 200, height: 100 }])).toEqual({
+      width: 200 + PAGE_MARGIN * 2,
+      height: 100 + PAGE_MARGIN * 2,
+    })
+  })
+
+  it('falls back to the full sheet when there is nothing to place', () => {
+    expect(pageFor([])).toEqual(PAGE)
+  })
+})
+
+describe('orientationFor — jsPDF must not turn the page on its side', () => {
+  it('calls a page wider than it is tall landscape', () => {
+    expect(orientationFor({ width: 300, height: 120 })).toBe('landscape')
+  })
+
+  it('calls a page taller than it is wide portrait', () => {
+    expect(orientationFor({ width: 120, height: 300 })).toBe('portrait')
+  })
+
+  /**
+   * The regression this exists for: jsPDF swaps the two numbers in `format`
+   * whenever they disagree with the orientation, and the default is portrait.
+   * A wide trimmed page therefore came back narrow, and the map was drawn
+   * past the right-hand edge — the last stage columns simply went missing.
+   * This runs the real page-size logic rather than trusting the argument.
+   */
+  it.each([
+    ['a wide map', [{ width: 4000, height: 900 }]],
+    ['a tall map', [{ width: 900, height: 4000 }]],
+    ['a legend above a wide grid', [{ width: 2000, height: 200 }, { width: 4000, height: 900 }]],
+  ])('hands back the page it was given, for %s', async (_name, blocks) => {
+    const { jsPDF } = await import('jspdf')
+    const page = pageFor(blocks)
+
+    // `getPageSize` is a real static that jsPDF's own constructor uses; it is
+    // simply missing from the published types.
+    const getPageSize = (jsPDF as unknown as {
+      getPageSize: (options: {
+        orientation: string
+        unit: string
+        format: [number, number]
+      }) => { width: number; height: number }
+    }).getPageSize
+
+    const size = getPageSize({
+      orientation: orientationFor(page),
+      unit: 'mm',
+      format: [page.width, page.height],
+    })
+
+    expect(within(size.width, page.width, 0.01)).toBe(true)
+    expect(within(size.height, page.height, 0.01)).toBe(true)
+  })
+})
+
 describe('captureScale — oversampling without exhausting memory', () => {
   it('renders at device scale for a map that comfortably fits', () => {
     expect(captureScale({ width: 1200, height: 800 }, 2)).toBe(2)
@@ -120,7 +215,7 @@ describe('pdfFilenameFor', () => {
 
   it('marks a filtered map, so it is not mistaken for the whole scope', () => {
     expect(pdfFilenameFor('release', { ...EMPTY_FILTERS, release: ['1.1'] })).toBe(
-      'vd2-scope-map-by-pwc-release-filtered.pdf',
+      'vd2-scope-map-by-pwc-package-filtered.pdf',
     )
   })
 

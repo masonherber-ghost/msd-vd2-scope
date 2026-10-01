@@ -29,7 +29,7 @@ const foundationalBuildSchema = z
   .max(2000, 'Keep the foundational-build statement to 2000 characters or fewer.')
 
 // A feature with no release or phase has nowhere to draw on the map (R-9.3).
-const releaseIdSchema = z.string().trim().min(1, 'Choose a release.')
+const releaseIdSchema = z.string().trim().min(1, 'Choose a package.')
 const phaseIdSchema = z.string().trim().min(1, 'Choose a phase.')
 
 export const createFeatureSchema = z.object({
@@ -52,6 +52,11 @@ export const updateFeatureSchema = z
     // Emptying the field clears the question rather than storing a blank
     // one, the same contract the capability's question uses.
     question: z.string().trim().max(1000).nullable(),
+    // Assumptions and notes, as markdown. Empty is allowed — it clears them.
+    notes: z
+      .string()
+      .trim()
+      .max(10000, 'Keep the assumptions and notes to 10,000 characters or fewer.'),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, {
@@ -103,12 +108,12 @@ export const setCapabilityLinksSchema = z.object({
  */
 export const setMvpPlacementSchema = z
   .object({
-    release_id: z.string().trim().min(1, 'Choose a release.'),
+    release_id: z.string().trim().min(1, 'Choose a package.'),
     phase_id: z.string().trim().min(1, 'Choose a stage.'),
   })
   .partial()
   .refine((value) => value.release_id !== undefined || value.phase_id !== undefined, {
-    message: 'Choose a release or a stage to move to.',
+    message: 'Choose a package or a stage to move to.',
   })
 
 export type SetMvpPlacementInput = z.infer<typeof setMvpPlacementSchema>
@@ -127,8 +132,8 @@ export const createReleaseSchema = z.object({
   id: z
     .string()
     .trim()
-    .regex(RELEASE_ID_PATTERN, 'A release id looks like 1.1, 1.4 or 2.'),
-  label: z.string().trim().min(1, 'Give the release a label.').max(80),
+    .regex(RELEASE_ID_PATTERN, 'A package id looks like 1.1, 1.4 or 2.'),
+  label: z.string().trim().min(1, 'Give the package a label.').max(80),
   name: z.string().trim().max(200).default(''),
   description: z.string().trim().max(2000).default(''),
 })
@@ -160,17 +165,8 @@ export const updatePhaseSchema = createPhaseSchema
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
 
 // ---------------------------------------------------------------------------
-// Assumptions
+// Reordering
 // ---------------------------------------------------------------------------
-
-export const createAssumptionSchema = z.object({
-  pwc_feature_id: featureIdSchema,
-  text: z.string().trim().min(1, 'An assumption needs some text.').max(2000),
-})
-
-export const updateAssumptionSchema = z.object({
-  text: z.string().trim().min(1, 'An assumption needs some text.').max(2000),
-})
 
 /** Reordering moves one row one step; positions are renumbered afterwards. */
 export const moveSchema = z.object({
@@ -214,6 +210,11 @@ export const updateMvpFeatureSchema = z
     // Emptying the field clears the question rather than storing a blank
     // one — the same contract the feature's and capability's questions use.
     question: z.string().trim().max(1000).nullable(),
+    // Free-text detail, as markdown. Empty is allowed — it clears it.
+    details: z
+      .string()
+      .trim()
+      .max(10000, 'Keep the details to 10,000 characters or fewer.'),
   })
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
@@ -235,7 +236,7 @@ export const createCapabilitySchema = z.object({
   actor: actorSchema,
   // R-9.3: a capability requires a release and a phase. The importer's one
   // unmatched row predates this and is left as it is.
-  release_id: z.string().trim().min(1, 'Choose a release.'),
+  release_id: z.string().trim().min(1, 'Choose a package.'),
   phase_id: z.string().trim().min(1, 'Choose a phase.'),
 })
 
@@ -243,7 +244,7 @@ export const updateCapabilitySchema = z
   .object({
     text: z.string().trim().min(1, 'A capability needs some text.').max(500),
     actor: actorSchema,
-    release_id: z.string().trim().min(1, 'Choose a release.'),
+    release_id: z.string().trim().min(1, 'Choose a package.'),
     phase_id: z.string().trim().min(1, 'Choose a phase.'),
     /** Null clears it. An empty string would read as "a blank question". */
     question: z

@@ -73,6 +73,8 @@ export type MvpCardModel = {
    * is flagged on the card like one, because it is the same kind of item.
    */
   question: string | null
+  /** Free-text detail someone recorded about this record, as markdown. */
+  details: string
   pwcFeatures: MvpPwcFeature[]
   capabilities: MvpCapability[]
   actorCounts: { actor: Actor; count: number }[]
@@ -149,6 +151,7 @@ function buildCard(
     placement,
     stated,
     question: mvp.question,
+    details: mvp.details,
     pwcFeatures,
     capabilities: capabilities
       .map((c) => ({

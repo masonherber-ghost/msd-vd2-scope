@@ -37,11 +37,10 @@ one forever (R-9.9).
 
 | Table | Rows after import | Notes |
 |---|---|---|
-| `releases` | 6 | Union of both sources; `in_mapping_source` / `in_sequencing_source` record which one had it |
+| `releases` | 6 | Union of both sources; `in_mapping_source` / `in_sequencing_source` record which one had it. `label` reads `Package 1.1` — the UI calls these packages, while the table, the ids and the source documents still say release (migration 012 renamed existing labels) |
 | `phases` | 7 | Canonical, ordered 1–7. `epic_ref` is free text and **not** unique — 186 appears on two phases (D-2) |
-| `pwc_features` | 48 | `id` checked against `F-[0-9][0-9][0-9]`. IDs are sparse and the gaps mean nothing |
-| `assumptions` | 92 | Ordered per feature, contiguous 1..n |
-| `mvp_features` | 51 across 48 refs | Unique on `(ref, scope_option)` |
+| `pwc_features` | 48 | `id` checked against `F-[0-9][0-9][0-9]`. IDs are sparse and the gaps mean nothing. `notes` holds the feature's assumptions and notes as one markdown field (the 92 source assumptions, as numbered lists); `notes_edited` is 1 once edited in the app |
+| `mvp_features` | 51 across 48 refs | Unique on `(ref, scope_option)`. `details` holds free-text detail about the record as one markdown field, empty unless someone writes it |
 | `capabilities` | 107 | Identity is `(mvp_ref, LOWER(text))` |
 | `pwc_feature_mvp_features` | 60 | Join |
 | `pwc_feature_capabilities` | 122 edges / 123 citations | Join, plus the conflict columns |
@@ -88,8 +87,7 @@ the bare record, else the lowest option — and flagged with
 requires both, because the one unmatched mapping-only capability genuinely has
 no placement. The CRUD path enforces the requirement in its validator.
 
-**Cascades (R-9.4):** `assumptions` and both join tables cascade from their
-parent. `pwc_features`, `releases`, `phases` and `mvp_features` never cascade
+**Cascades (R-9.4):** both join tables cascade from their parent. `pwc_features`, `releases`, `phases` and `mvp_features` never cascade
 silently — the route refuses the delete and names what depends on it, using the
 `count*Dependents` repository functions.
 
@@ -111,9 +109,16 @@ documents, reconciles them, and writes the result in one `db.transaction()`.
 - **Re-import is additive.** A row whose `source` is `manual`, and a link whose
   `resolution_state` is anything but `unreviewed`, are never overwritten
   (R-11.4). Both are enforced in the `WHERE` clause of each upsert.
-- **Assumptions are replaced, not merged** — they are an ordered list with no
-  stable natural key. Imported rows are deleted and rewritten, manual ones are
-  kept, then positions are renumbered contiguously.
+- **Assumptions become the feature's `notes`** — the source's ordered
+  assumptions are written as a numbered markdown list, but only while
+  `notes_edited = 0`. Once someone edits the notes, re-import leaves them alone.
+  Editing notes sets `notes_edited`, not `source = 'manual'`, so it does not
+  freeze the feature's other fields against re-import. (Migration 011 replaced
+  the old `assumptions` table.)
+- **`mvp_features.details` has no import to protect it from.** Neither document
+  carries anything that lands in it, so it needs no `details_edited` flag; for
+  the same reason writing it does not set `source = 'manual'`, which would
+  freeze the record's title and placement against re-import. (Migration 013.)
 - After the first run, import is explicit only; boot verifies and logs but does
   not re-import.
 

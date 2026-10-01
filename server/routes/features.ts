@@ -32,7 +32,7 @@ export const featuresRouter = Router()
 
 function assertPlacementExists(releaseId?: string, phaseId?: string): void {
   if (releaseId !== undefined && !getAllReleases().some((r) => r.id === releaseId)) {
-    throw new HttpError(422, `There is no release "${releaseId}".`)
+    throw new HttpError(422, `There is no package "${releaseId}".`)
   }
   if (phaseId !== undefined && !getAllPhases().some((p) => p.id === phaseId)) {
     throw new HttpError(422, `There is no phase "${phaseId}".`)
@@ -102,14 +102,11 @@ featuresRouter.delete('/:id', (req, res) => {
   const cascade = query.data.cascade === 'true'
 
   const dependents = countPwcFeatureDependents(id)
-  const total = dependents.assumptions + dependents.mvpLinks + dependents.capabilityLinks
+  const total = dependents.mvpLinks + dependents.capabilityLinks
 
   if (total > 0 && !cascade) {
     // Refused with a message naming what depends on it and how many (R-9.4).
     const parts = [
-      dependents.assumptions > 0
-        ? `${dependents.assumptions} assumption${dependents.assumptions === 1 ? '' : 's'}`
-        : null,
       dependents.mvpLinks > 0
         ? `${dependents.mvpLinks} MVP feature link${dependents.mvpLinks === 1 ? '' : 's'}`
         : null,

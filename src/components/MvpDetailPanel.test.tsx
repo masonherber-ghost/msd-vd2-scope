@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
@@ -122,14 +122,14 @@ describe('MvpDetailPanel — renaming the record', () => {
 describe('MvpDetailPanel — placing the record', () => {
   it('offers nothing without a placement handler', () => {
     renderPanel()
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit package' })).not.toBeInTheDocument()
   })
 
   it('offers a release and a stage on any record', () => {
     // Including one that owns no capability: the record's own placement is
     // the only thing that can reach those.
     renderPanel(placeable())
-    expect(screen.getByRole('button', { name: 'Edit release' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit package' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
@@ -148,7 +148,7 @@ describe('MvpDetailPanel — placing the record', () => {
         stated: { releaseId: '1.4', phaseId: 'manage-vacancies' },
       },
     })
-    expect(screen.getByText('Release 1.4')).toBeInTheDocument()
+    expect(screen.getByText('Package 1.4')).toBeInTheDocument()
     expect(screen.getByText('Manage Vacancies')).toBeInTheDocument()
   })
 
@@ -157,8 +157,8 @@ describe('MvpDetailPanel — placing the record', () => {
     const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
     renderPanel(placeable(onSetStatedPlacement))
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
@@ -188,8 +188,8 @@ describe('MvpDetailPanel — placing the record', () => {
       card: { ...card, stated: { releaseId: '1.4', phaseId: null } },
     })
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     // Null, not an empty string — an empty string would be a placement
@@ -228,8 +228,8 @@ describe('MvpDetailPanel — placing the record', () => {
       .mockRejectedValue(new Error('There is no release "9.9".'))
     renderPanel(placeable(onSetStatedPlacement))
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('There is no release "9.9".')
@@ -443,5 +443,55 @@ describe('MvpDetailPanel — questions', () => {
     const base = buildMvpCards(graph).find((c) => c.id === 2)!
     render(<MvpDetailPanel card={base} onClose={vi.fn()} />)
     expect(screen.queryByRole('button', { name: /add a question/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('MvpDetailPanel — details', () => {
+  const detailsSection = () =>
+    screen.getByRole('heading', { name: /^details$/i }).closest('section') as HTMLElement
+
+  const renderDetails = (details: string, onSaveDetails?: (next: string) => Promise<unknown>) =>
+    renderPanel({ card: { ...card, details }, onSaveDetails })
+
+  it('renders the markdown rather than showing its syntax', () => {
+    renderDetails('1. Covers **delegated** access only.\n2. Employers only.')
+    const items = within(detailsSection()).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual([
+      'Covers delegated access only.',
+      'Employers only.',
+    ])
+    expect(within(detailsSection()).getByText('delegated').tagName).toBe('STRONG')
+  })
+
+  it('shows raw HTML as text, never as markup', () => {
+    renderDetails('<img src=x onerror="alert(1)">')
+    expect(detailsSection().querySelector('img')).toBeNull()
+  })
+
+  it('says when there are none', () => {
+    renderDetails('')
+    expect(within(detailsSection()).getByText('None recorded.')).toBeInTheDocument()
+  })
+
+  it('edits the whole block as markdown source and saves it as one field', async () => {
+    const user = userEvent.setup()
+    const onSaveDetails = vi.fn().mockResolvedValue(undefined)
+    renderDetails('First line.', onSaveDetails)
+
+    await user.click(screen.getByRole('button', { name: /edit details/i }))
+    const field = screen.getByRole('textbox', { name: /details/i })
+    expect(field).toHaveValue('First line.')
+
+    await user.type(field, '\n\nSecond line.')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(onSaveDetails).toHaveBeenCalledWith('First line.\n\nSecond line.'),
+    )
+  })
+
+  it('offers to add them when there are none', () => {
+    renderDetails('', vi.fn())
+    expect(screen.getByRole('button', { name: 'Add details' })).toBeInTheDocument()
   })
 })

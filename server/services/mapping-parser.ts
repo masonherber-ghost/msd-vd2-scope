@@ -147,7 +147,7 @@ export function parseMappingDocument(markdown: string): MappingParseResult {
       finish()
       currentRelease = {
         id: releaseMatch[1].trim(),
-        label: `Release ${releaseMatch[1].trim()}`,
+        label: `Package ${releaseMatch[1].trim()}`,
         name: releaseMatch[3].trim(),
         description: '',
       }

@@ -44,7 +44,7 @@ describe('createFeatureSchema — required placement (R-9.3)', () => {
   it('rejects a missing release', () => {
     const result = createFeatureSchema.safeParse({ ...valid, release_id: '' })
     expect(result.success).toBe(false)
-    if (!result.success) expect(fieldErrors(result.error).release_id).toMatch(/release/i)
+    if (!result.success) expect(fieldErrors(result.error).release_id).toMatch(/package/i)
   })
 
   it('rejects a missing phase', () => {

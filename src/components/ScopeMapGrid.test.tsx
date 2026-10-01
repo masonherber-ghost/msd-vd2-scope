@@ -64,9 +64,9 @@ describe('ScopeMapGrid — axes', () => {
     renderGrid()
     const rows = screen.getAllByRole('rowheader')
     expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('Release 1.1')
+    expect(rows[0]).toHaveTextContent('Package 1.1')
     // 1.4 has capabilities but no features and must still appear (R-8.5).
-    expect(rows[1]).toHaveTextContent('Release 1.4')
+    expect(rows[1]).toHaveTextContent('Package 1.4')
   })
 
   it('counts what each row shows', () => {
@@ -87,7 +87,7 @@ describe('ScopeMapGrid — cells', () => {
     renderGrid()
     expect(
       screen.getByRole('cell', {
-        name: 'Release 1.1, Access & Onboarding: 2 features, 2 capabilities',
+        name: 'Package 1.1, Access & Onboarding: 2 features, 2 capabilities',
       }),
     ).toBeInTheDocument()
   })
@@ -95,7 +95,7 @@ describe('ScopeMapGrid — cells', () => {
   it('keeps an empty cell visible rather than collapsing it', () => {
     renderGrid()
     const empty = screen.getByRole('cell', {
-      name: 'Release 1.4, Access & Onboarding: 0 features, 0 capabilities',
+      name: 'Package 1.4, Access & Onboarding: 0 features, 0 capabilities',
     })
     expect(empty).toBeInTheDocument()
     expect(empty).toHaveTextContent('No capability')
@@ -104,7 +104,7 @@ describe('ScopeMapGrid — cells', () => {
   it('says a featureless cell still holds capabilities (R-8.5)', () => {
     renderGrid()
     const cell = screen.getByRole('cell', {
-      name: 'Release 1.4, Manage Vacancies: 0 features, 1 capabilities',
+      name: 'Package 1.4, Manage Vacancies: 0 features, 1 capabilities',
     })
     expect(cell).toHaveTextContent('No feature · 1 capability')
   })
@@ -217,6 +217,8 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
             source_phase_label: null,
             capability_note: null,
             question: null, display_order: 1,
+            notes: '',
+            notes_edited: 0,
             source: 'mapping',
           },
           {
@@ -228,6 +230,8 @@ describe('ScopeMapGrid — connection edges (R-8.2)', () => {
             source_phase_label: null,
             capability_note: null,
             question: null, display_order: 2,
+            notes: '',
+            notes_edited: 0,
             source: 'mapping',
           },
         ],

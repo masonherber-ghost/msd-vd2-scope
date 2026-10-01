@@ -53,26 +53,6 @@ export const useMovePhase = () =>
 export const useDeletePhase = () =>
   useGraphMutation((id: string) => apiClient.phases.remove(id))
 
-// ---- Assumptions ----------------------------------------------------------
-
-export const useCreateAssumption = () =>
-  useGraphMutation((vars: { featureId: string; text: string }) =>
-    apiClient.assumptions.create(vars.featureId, vars.text),
-  )
-
-export const useUpdateAssumption = () =>
-  useGraphMutation((vars: { id: number; text: string }) =>
-    apiClient.assumptions.update(vars.id, vars.text),
-  )
-
-export const useMoveAssumption = () =>
-  useGraphMutation((vars: { id: number; direction: MoveDirection }) =>
-    apiClient.assumptions.move(vars.id, vars.direction),
-  )
-
-export const useDeleteAssumption = () =>
-  useGraphMutation((id: number) => apiClient.assumptions.remove(id))
-
 // ---- MVP features ---------------------------------------------------------
 
 export const useCreateMvpFeature = () => useGraphMutation(apiClient.mvpFeatures.create)

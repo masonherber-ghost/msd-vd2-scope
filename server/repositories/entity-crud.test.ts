@@ -8,13 +8,6 @@ vi.mock('../database.js', () => ({ db }))
 
 const { resetSchema } = await import('../test-support/apply-migrations.js')
 const {
-  appendAssumption,
-  deleteAssumption,
-  getAssumptionsForFeature,
-  moveAssumption,
-  updateAssumptionText,
-} = await import('./assumption-repository.js')
-const {
   countCapabilityDependents,
   createCapability,
   deleteCapability,
@@ -48,7 +41,8 @@ const {
   getRelease,
   updateRelease,
 } = await import('./release-repository.js')
-const { upsertImportedPwcFeature } = await import('./pwc-feature-repository.js')
+const { getPwcFeature, setImportedNotes, updatePwcFeature, upsertImportedPwcFeature } =
+  await import('./pwc-feature-repository.js')
 
 function seed() {
   resetSchema(db)
@@ -145,104 +139,43 @@ describe('phases', () => {
   })
 })
 
-describe('assumptions', () => {
-  const seedFour = () => {
-    for (const text of ['one', 'two', 'three', 'four']) appendAssumption('F-001', text)
-    return getAssumptionsForFeature('F-001')
-  }
-
-  it('appends in order', () => {
-    expect(seedFour().map((a) => [a.position, a.text])).toEqual([
-      [1, 'one'],
-      [2, 'two'],
-      [3, 'three'],
-      [4, 'four'],
-    ])
+describe('feature notes', () => {
+  it('starts empty and unedited', () => {
+    expect(getPwcFeature('F-001')).toMatchObject({ notes: '', notes_edited: 0 })
   })
 
-  it('leaves positions contiguous after deleting the second of four', () => {
-    const rows = seedFour()
-    deleteAssumption(rows[1].id)
+  it('takes the source assumptions on import while unedited', () => {
+    setImportedNotes('F-001', '1. one\n2. two')
+    expect(getPwcFeature('F-001')).toMatchObject({ notes: '1. one\n2. two', notes_edited: 0 })
 
-    const after = getAssumptionsForFeature('F-001')
-    expect(after.map((a) => a.position)).toEqual([1, 2, 3])
-    expect(after.map((a) => a.text)).toEqual(['one', 'three', 'four'])
+    // A later import with changed source text follows the source.
+    setImportedNotes('F-001', '1. one\n2. two\n3. three')
+    expect(getPwcFeature('F-001')?.notes).toBe('1. one\n2. two\n3. three')
   })
 
-  it('moves one down without drag', () => {
-    const rows = seedFour()
-    moveAssumption(rows[0].id, 'down')
-    expect(getAssumptionsForFeature('F-001').map((a) => a.text)).toEqual([
-      'two',
-      'one',
-      'three',
-      'four',
-    ])
+  it('never overwrites an edit on re-import (R-11.4)', () => {
+    setImportedNotes('F-001', '1. one')
+    updatePwcFeature('F-001', { notes: '1. one\n\nA note of our own.' })
+    setImportedNotes('F-001', '1. source changed')
+    expect(getPwcFeature('F-001')).toMatchObject({
+      notes: '1. one\n\nA note of our own.',
+      notes_edited: 1,
+    })
   })
 
-  it('moves one up without drag', () => {
-    const rows = seedFour()
-    moveAssumption(rows[3].id, 'up')
-    expect(getAssumptionsForFeature('F-001').map((a) => a.text)).toEqual([
-      'one',
-      'two',
-      'four',
-      'three',
-    ])
+  it('protects the notes without freezing the other fields', () => {
+    const updated = updatePwcFeature('F-001', { notes: 'edited' })
+    expect(updated).toMatchObject({ notes_edited: 1, source: 'mapping' })
   })
 
-  it('does not move past the ends', () => {
-    const rows = seedFour()
-    expect(moveAssumption(rows[0].id, 'up')).toBe(false)
-    expect(moveAssumption(rows[3].id, 'down')).toBe(false)
-    expect(getAssumptionsForFeature('F-001').map((a) => a.position)).toEqual([1, 2, 3, 4])
+  it('still marks the row manual when another field is edited', () => {
+    const updated = updatePwcFeature('F-001', { name: 'Renamed' })
+    expect(updated).toMatchObject({ source: 'manual', notes_edited: 0 })
   })
 
-  it('keeps positions contiguous through repeated moves', () => {
-    const rows = seedFour()
-    moveAssumption(rows[3].id, 'up')
-    moveAssumption(rows[3].id, 'up')
-    moveAssumption(rows[0].id, 'down')
-    expect(getAssumptionsForFeature('F-001').map((a) => a.position)).toEqual([1, 2, 3, 4])
-  })
-
-  it('marks an edited assumption manual', () => {
-    const rows = seedFour()
-    const updated = updateAssumptionText(rows[0].id, 'edited')
-    expect(updated).toMatchObject({ text: 'edited', source: 'manual' })
-  })
-
-  /**
-   * A move is a swap plus two renumbers. If any step fails the whole thing
-   * must roll back, or the list is left with a duplicate or missing position.
-   */
-  it('rolls a failed move back completely', () => {
-    const rows = seedFour()
-    const before = getAssumptionsForFeature('F-001').map((a) => [a.id, a.position])
-
-    const original = db.prepare.bind(db)
-    let runs = 0
-    // The swap prepares once and runs twice, so failing on prepare would
-    // never fire — the second run is the one to break.
-    const spy = vi.spyOn(db, 'prepare').mockImplementation(((sql: string) => {
-      const statement = original(sql)
-      if (!sql.includes('UPDATE assumptions SET position')) return statement
-      return new Proxy(statement, {
-        get(target, property, receiver) {
-          if (property !== 'run') return Reflect.get(target, property, receiver)
-          return (...args: unknown[]) => {
-            runs += 1
-            if (runs === 2) throw new Error('disk full')
-            return (target.run as (...a: unknown[]) => unknown)(...args)
-          }
-        },
-      })
-    }) as typeof db.prepare)
-
-    expect(() => moveAssumption(rows[0].id, 'down')).toThrow('disk full')
-    spy.mockRestore()
-
-    expect(getAssumptionsForFeature('F-001').map((a) => [a.id, a.position])).toEqual(before)
+  it('accepts clearing the notes', () => {
+    setImportedNotes('F-001', '1. one')
+    expect(updatePwcFeature('F-001', { notes: '' })).toMatchObject({ notes: '', notes_edited: 1 })
   })
 })
 
@@ -278,6 +211,35 @@ describe('mvp features', () => {
   it('deletes when nothing references it', () => {
     const created = createMvpFeature({ ref: 994, scope_option: null, title: 'x' })
     expect(deleteMvpFeature(created.id)).toBe(1)
+  })
+
+  it('starts with no details', () => {
+    const created = createMvpFeature({ ref: 995, scope_option: null, title: 'x' })
+    expect(created.details).toBe('')
+  })
+
+  it('stores the details as given, markdown and all', () => {
+    const created = createMvpFeature({ ref: 996, scope_option: null, title: 'x' })
+    const updated = updateMvpFeature(created.id, { details: '1. One.\n2. **Two.**' })
+    expect(updated?.details).toBe('1. One.\n2. **Two.**')
+  })
+
+  // The same contract a PwC feature's notes have: a note about the record is
+  // not a correction to it, so it must not freeze the rest against re-import.
+  it('leaves the record importable when only the details change', () => {
+    const created = createMvpFeature({ ref: 997, scope_option: null, title: 'x' })
+    db.prepare("UPDATE mvp_features SET source = 'mapping' WHERE id = ?").run(created.id)
+
+    expect(updateMvpFeature(created.id, { details: 'Just a note.' })?.source).toBe('mapping')
+  })
+
+  it('marks the record manual when anything else changes alongside', () => {
+    const created = createMvpFeature({ ref: 998, scope_option: null, title: 'x' })
+    db.prepare("UPDATE mvp_features SET source = 'mapping' WHERE id = ?").run(created.id)
+
+    expect(updateMvpFeature(created.id, { title: 'y', details: 'A note.' })?.source).toBe(
+      'manual',
+    )
   })
 })
 

@@ -60,9 +60,9 @@ describe('Coverage', () => {
 
   it('states when nothing spans a release boundary', async () => {
     renderPage()
-    await waitFor(() => expect(section(/spanning more than one release/i)).toBeInTheDocument())
-    expect(section(/spanning more than one release/i)).toHaveTextContent(
-      /every MVP feature sits inside one release/i,
+    await waitFor(() => expect(section(/spanning more than one package/i)).toBeInTheDocument())
+    expect(section(/spanning more than one package/i)).toHaveTextContent(
+      /every MVP feature sits inside one package/i,
     )
   })
 
@@ -77,8 +77,8 @@ describe('Coverage', () => {
       ],
     })
     renderPage()
-    await waitFor(() => expect(section(/spanning more than one release/i)).toBeInTheDocument())
-    expect(section(/spanning more than one release/i)).toHaveTextContent('938 · 1.1 + 1.4')
+    await waitFor(() => expect(section(/spanning more than one package/i)).toBeInTheDocument())
+    expect(section(/spanning more than one package/i)).toHaveTextContent('938 · 1.1 + 1.4')
   })
 
   it('reports orphans in both directions', async () => {
@@ -93,9 +93,9 @@ describe('Coverage', () => {
   it('breaks capabilities down by actor per release (R-8.24)', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /actor breakdown per release/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /actor breakdown per package/i })).toBeInTheDocument(),
     )
-    const table = screen.getByRole('table', { name: /actor breakdown per release/i })
+    const table = screen.getByRole('table', { name: /actor breakdown per package/i })
     expect(table).toHaveTextContent('employer 1')
     expect(table).toHaveTextContent('staff 1')
   })

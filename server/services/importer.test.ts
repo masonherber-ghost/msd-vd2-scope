@@ -9,7 +9,9 @@ vi.mock('../database.js', () => ({ db }))
 const { resetSchema } = await import('../test-support/apply-migrations.js')
 
 
-const { ImportDriftError, chooseMvpOwner, importScope } = await import('./importer.js')
+const { ImportDriftError, assumptionsToMarkdown, chooseMvpOwner, importScope } = await import(
+  './importer.js'
+)
 const { loadScopeFromSources } = await import('./scope-source.js')
 const { getScopeGraph } = await import('../repositories/scope-repository.js')
 const { updateCapability } = await import('../repositories/capability-repository.js')
@@ -164,16 +166,16 @@ describe('importScope writes the whole graph', () => {
 
   it('gives each half of the split its own assumptions', () => {
     importScope(reconciled)
-    const counts = db
+    const notes = db
       .prepare(
-        `SELECT pwc_feature_id, COUNT(*) AS n FROM assumptions
-          WHERE pwc_feature_id IN ('F-085','F-093')
-          GROUP BY pwc_feature_id ORDER BY pwc_feature_id`,
+        `SELECT id, notes FROM pwc_features
+          WHERE id IN ('F-085','F-093') ORDER BY id`,
       )
-      .all()
-    expect(counts).toEqual([
-      { pwc_feature_id: 'F-085', n: 1 },
-      { pwc_feature_id: 'F-093', n: 2 },
+      .all() as { id: string; notes: string }[]
+    // Each half is numbered from 1 — its own list, not a slice of the original.
+    expect(notes.map((row) => [row.id, row.notes.split('\n').map((l) => l.slice(0, 3))])).toEqual([
+      ['F-085', ['1. ']],
+      ['F-093', ['1. ', '2. ']],
     ])
   })
 
@@ -229,7 +231,6 @@ describe('importScope writes exactly what it reconciled', () => {
     expect(rows('releases')).toBe(reconciled.releases.length)
     expect(rows('phases')).toBe(reconciled.phases.length)
     expect(rows('pwc_features')).toBe(reconciled.features.length)
-    expect(rows('assumptions')).toBe(reconciled.assumptions.length)
     expect(rows('mvp_features')).toBe(reconciled.mvpFeatures.length)
     expect(rows('capabilities')).toBe(reconciled.capabilities.length)
     expect(rows('pwc_feature_mvp_features')).toBe(reconciled.featureMvpLinks.length)
@@ -245,25 +246,36 @@ describe('importScope writes exactly what it reconciled', () => {
     expect(citations.n).toBe(reconciled.featureCapabilityLinks.length)
   })
 
-  it('writes every feature\'s assumptions, not just most of them', () => {
+  it('writes every feature\'s assumptions into its notes, numbered in order', () => {
     importScope(reconciled)
-    const perFeature = new Map(
-      (
-        db
-          .prepare('SELECT pwc_feature_id AS id, COUNT(*) AS n FROM assumptions GROUP BY 1')
-          .all() as { id: string; n: number }[]
-      ).map((row) => [row.id, row.n]),
+    const notes = new Map(
+      (db.prepare('SELECT id, notes FROM pwc_features').all() as { id: string; notes: string }[])
+        .map((row) => [row.id, row.notes]),
     )
 
     const mismatched = reconciled.features
       .map((feature) => ({
         id: feature.id,
-        expected: feature.assumptions.length,
-        actual: perFeature.get(feature.id) ?? 0,
+        expected: assumptionsToMarkdown(feature.assumptions),
+        actual: notes.get(feature.id),
       }))
       .filter((row) => row.expected !== row.actual)
 
     expect(mismatched).toEqual([])
+    // Nothing lost: one numbered line per source assumption.
+    const lines = [...notes.values()].flatMap((n) => (n === '' ? [] : n.split('\n')))
+    expect(lines).toHaveLength(reconciled.assumptions.length)
+  })
+
+  it('leaves edited notes alone on re-import (R-11.4)', () => {
+    importScope(reconciled)
+    const id = reconciled.features.find((f) => f.assumptions.length > 0)!.id
+    db.prepare("UPDATE pwc_features SET notes = 'Ours.', notes_edited = 1 WHERE id = ?").run(id)
+
+    importScope(reconciled)
+    expect(db.prepare('SELECT notes FROM pwc_features WHERE id = ?').get(id)).toEqual({
+      notes: 'Ours.',
+    })
   })
 
   it('writes every reconciled MVP record, keyed on ref and option', () => {

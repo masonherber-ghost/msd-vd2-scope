@@ -420,7 +420,7 @@ describe('ScopeMap filter rail', () => {
     await openFilters(user)
 
     for (const group of [
-      'Release',
+      'Package',
       'Phase',
       'Actor',
       'MVP feature',
@@ -471,8 +471,8 @@ describe('ScopeMap filter rail', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     await openFilters(user)
 
-    const release = screen.getByRole('group', { name: /release/i })
-    await user.click(within(release).getByRole('checkbox', { name: /Release 1\.4/ }))
+    const release = screen.getByRole('group', { name: /package/i })
+    await user.click(within(release).getByRole('checkbox', { name: /Package 1\.4/ }))
 
     await waitFor(() => expect(url()).toContain('release=1.4'))
   })
@@ -508,10 +508,10 @@ describe('ScopeMap filter rail', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     await openFilters(user)
 
-    const release = screen.getByRole('group', { name: /release/i })
-    // Release 1.1 holds both features; 1.4 holds none.
-    expect(within(release).getByText('Release 1.1').closest('label')).toHaveTextContent('2')
-    expect(within(release).getByText('Release 1.4').closest('label')).toHaveTextContent('0')
+    const release = screen.getByRole('group', { name: /package/i })
+    // Package 1.1 holds both features; 1.4 holds none.
+    expect(within(release).getByText('Package 1.1').closest('label')).toHaveTextContent('2')
+    expect(within(release).getByText('Package 1.4').closest('label')).toHaveTextContent('0')
   })
 
   it('clears everything with one control', async () => {
@@ -722,11 +722,11 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
 
     expect(screen.getByRole('form', { name: /new pwc feature/i })).toBeInTheDocument()
-    expect(screen.getByLabelText('Release')).toHaveValue('1.4')
+    expect(screen.getByLabelText('Package')).toHaveValue('1.4')
     expect(screen.getByLabelText('Phase')).toHaveValue('manage-vacancies')
   })
 
@@ -736,7 +736,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
 
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
@@ -752,7 +752,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Brand new feature')
@@ -774,7 +774,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     // No name.
@@ -791,7 +791,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Duplicate')
@@ -972,8 +972,8 @@ describe('ScopeMap placement editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: /edit release/i }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: /edit package/i }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => expect(state.patched).toHaveLength(1))
@@ -1005,11 +1005,11 @@ describe('ScopeMap placement editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: /edit release/i }))
-    const select = screen.getByLabelText('Release')
+    await user.click(screen.getByRole('button', { name: /edit package/i }))
+    const select = screen.getByLabelText('Package')
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Release 1.1',
-      'Release 1.4',
+      'Package 1.1',
+      'Package 1.4',
     ])
   })
 })
@@ -1140,7 +1140,7 @@ describe('ScopeMap capability link editing', () => {
     const picker = await openCapabilityEditor(user)
     expect(within(picker).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
     expect(within(picker).getByText(/948 · employer/)).toBeInTheDocument()
-    expect(within(picker).getAllByText('Release 1.4').length).toBeGreaterThan(0)
+    expect(within(picker).getAllByText('Package 1.4').length).toBeGreaterThan(0)
   })
 
   it('shows the current assignment as checked', async () => {
@@ -1459,18 +1459,13 @@ describe('ScopeMap search (R-8.11 – R-8.13)', () => {
       ...base,
       pwcFeatures: base.pwcFeatures.map((f) =>
         f.id === 'F-002'
-          ? { ...f, foundational_build: 'Staff verify an employer before publishing.' }
+          ? {
+              ...f,
+              foundational_build: 'Staff verify an employer before publishing.',
+              notes: '1. Assumes an **Omniscript** saves the partial verification.',
+            }
           : f,
       ),
-      assumptions: [
-        {
-          id: 1,
-          pwc_feature_id: 'F-002',
-          position: 1,
-          text: 'Assumes an Omniscript saves the partial verification.',
-          source: 'mapping',
-        },
-      ],
     }
 
     renderPage('/?selected=F-002&q=Omniscript')
@@ -1498,8 +1493,8 @@ describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     const rows = screen.getAllByRole('rowheader')
-    expect(rows[0]).toHaveTextContent('Release 1.1')
-    expect(screen.getByRole('button', { name: 'By PwC release' })).toHaveAttribute(
+    expect(rows[0]).toHaveTextContent('Package 1.1')
+    expect(screen.getByRole('button', { name: 'By PwC package' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -1584,11 +1579,11 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const chips = screen.getByRole('list', { name: /filter by release/i })
-    expect(within(chips).getByRole('button', { name: /Release 1\.1/ })).toHaveTextContent(
+    const chips = screen.getByRole('list', { name: /filter by package/i })
+    expect(within(chips).getByRole('button', { name: /Package 1\.1/ })).toHaveTextContent(
       '2 features · 2 capabilities',
     )
-    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveTextContent(
+    expect(within(chips).getByRole('button', { name: /Package 1\.4/ })).toHaveTextContent(
       '0 features · 1 capabilities',
     )
   })
@@ -1598,11 +1593,11 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const chips = screen.getByRole('list', { name: /filter by release/i })
-    await user.click(within(chips).getByRole('button', { name: /Release 1\.4/ }))
+    const chips = screen.getByRole('list', { name: /filter by package/i })
+    await user.click(within(chips).getByRole('button', { name: /Package 1\.4/ }))
 
     await waitFor(() => expect(url()).toContain('release=1.4'))
-    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveAttribute(
+    expect(within(chips).getByRole('button', { name: /Package 1\.4/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -1629,7 +1624,7 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const horizons = screen.getByRole('region', { name: /release horizons/i })
+    const horizons = screen.getByRole('region', { name: /package horizons/i })
     expect(within(horizons).getAllByRole('listitem')).toHaveLength(2)
     expect(within(horizons).getByText('Pilot')).toBeInTheDocument()
     expect(
@@ -1650,14 +1645,14 @@ describe('ScopeMap — the MSD feature view', () => {
   it('offers the view as a third tab', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'By PwC release' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'By PwC package' })).toBeInTheDocument(),
     )
     const tabs = screen.getByRole('group', { name: 'Map view' })
     expect(
       within(tabs)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['By PwC release', 'By actor', 'By MSD feature', 'By capability'])
+    ).toEqual(['By PwC package', 'By actor', 'By MSD feature', 'By capability'])
   })
 
   it('swaps PwC cards for MSD feature cards', async () => {
@@ -1688,7 +1683,7 @@ describe('ScopeMap — the MSD feature view', () => {
     await openMsdView(user)
 
     // 948 is cited by F-002 in 1.1, but its capability is scheduled in 1.4.
-    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    const cell = screen.getByRole('cell', { name: /Package 1\.4, Manage Vacancies/ })
     expect(
       within(cell).getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
     ).toBeInTheDocument()
@@ -1703,7 +1698,7 @@ describe('ScopeMap — the MSD feature view', () => {
     await openMsdView(user)
     expect(url()).toContain('view=mvp')
 
-    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
+    await user.click(screen.getByRole('button', { name: 'By PwC package' }))
     expect(url()).not.toContain('view=mvp')
   })
 
@@ -1786,7 +1781,7 @@ describe('ScopeMap — the MSD feature view', () => {
     // The PwC panel cannot render here, and no MSD card is selected yet.
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
+    await user.click(screen.getByRole('button', { name: 'By PwC package' }))
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
@@ -1870,9 +1865,9 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
     expect(within(dialog).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
-    expect(within(dialog).getByText(/F-002 ships in Release 1\.1/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/F-002 ships in Package 1\.1/)).toBeInTheDocument()
     expect(
-      within(dialog).getByText(/delivers this capability in Release 1\.4/),
+      within(dialog).getByText(/delivers this capability in Package 1\.4/),
     ).toBeInTheDocument()
   })
 
@@ -1935,7 +1930,7 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const dialog = await openModal(user)
 
     await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
-    await user.selectOptions(within(dialog).getByLabelText('Release'), '1.4')
+    await user.selectOptions(within(dialog).getByLabelText('Package'), '1.4')
     await user.selectOptions(
       within(dialog).getByLabelText('Phase'),
       'manage-vacancies',
@@ -2041,7 +2036,7 @@ describe('ScopeMap — a decided capability stops arguing its case', () => {
     )
 
     const panel = () => screen.getByRole('region', { name: 'Verify employer' })
-    expect(within(panel()).getByText(/Release differs:/)).toBeInTheDocument()
+    expect(within(panel()).getByText(/Package differs:/)).toBeInTheDocument()
 
     await user.click(within(panel()).getByRole('button', { name: 'Resolve' }))
     await user.click(
@@ -2054,7 +2049,7 @@ describe('ScopeMap — a decided capability stops arguing its case', () => {
     // The round trip carries the new state back, so the panel re-renders
     // collapsed without a reload.
     await waitFor(() =>
-      expect(within(panel()).queryByText(/Release differs:/)).not.toBeInTheDocument(),
+      expect(within(panel()).queryByText(/Package differs:/)).not.toBeInTheDocument(),
     )
     expect(
       within(panel()).getByRole('button', { name: /Reviewed: MSD features sequencing is right/ }),
@@ -2113,11 +2108,11 @@ describe('ScopeMap — the capability view', () => {
     await openCapabilityView(user)
 
     // Row header is the release, column header the stage — the same grid.
-    expect(screen.getByRole('rowheader', { name: /Release 1\.4/ })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: /Package 1\.4/ })).toBeInTheDocument()
     expect(
       screen.getByRole('columnheader', { name: /Manage Vacancies/ }),
     ).toBeInTheDocument()
-    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    const cell = screen.getByRole('cell', { name: /Package 1\.4, Manage Vacancies/ })
     expect(
       within(cell).getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
     ).toBeInTheDocument()
@@ -2131,7 +2126,7 @@ describe('ScopeMap — the capability view', () => {
     )
     await openCapabilityView(user)
     expect(
-      screen.getByRole('cell', { name: 'Release 1.1, Access & Onboarding: 2 capabilities' }),
+      screen.getByRole('cell', { name: 'Package 1.1, Access & Onboarding: 2 capabilities' }),
     ).toBeInTheDocument()
   })
 
@@ -2482,8 +2477,8 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     renderPage('/?view=mvp')
     await openRecord(user, 'MSD feature 938 Additional users')
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
@@ -2500,7 +2495,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     renderPage('/?view=mvp')
     await openRecord(user, 'MSD feature 938 · 1A Additional users')
 
-    expect(screen.getByRole('button', { name: 'Edit release' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit package' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
@@ -2764,7 +2759,7 @@ describe('ScopeMap export (the map as a document)', () => {
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('View by MSD feature')
-    expect(markdown).toContain('## **1. Release 1.1 — Pilot**')
+    expect(markdown).toContain('## **1. Package 1.1 — Pilot**')
     expect(markdown).toContain('#### **Access & Onboarding')
     expect(markdown).toContain('* **SVD-938**: Additional users')
   })
@@ -2912,7 +2907,7 @@ describe('ScopeMap PDF export (the map as a picture)', () => {
     expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
   })
 
-  it('hands over the legend and the grid, in that order', async () => {
+  it('hands over the heading, the legend and the grid, in that order', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
@@ -2920,11 +2915,44 @@ describe('ScopeMap PDF export (the map as a picture)', () => {
     await user.click(screen.getByRole('button', { name: 'Export PDF' }))
 
     await waitFor(() => expect(capturePdf).toHaveBeenCalled())
-    const { elements } = capturePdf.mock.calls[0][0]
-    expect(elements.map((node: HTMLElement) => node.className)).toEqual([
-      'scope-chrome__legend',
-      'scope-map-grid',
+    const { blocks } = capturePdf.mock.calls[0][0]
+    expect(
+      blocks.map((block: { element: HTMLElement; background: string }) => [
+        block.element.className,
+        block.background,
+      ]),
+    ).toEqual([
+      // The heading is text, so it prints without a filled box behind it.
+      ['scope-chrome__heading', 'paper'],
+      ['scope-chrome__legend', 'app'],
+      ['scope-map-grid', 'app'],
     ])
+  })
+
+  it('heads the document with the map’s title and the view it was taken from', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const [heading] = capturePdf.mock.calls[0][0].blocks as { element: HTMLElement }[]
+    expect(heading.element.textContent).toContain('VD2 package scope map')
+    expect(heading.element.textContent).toContain('View by MSD feature')
+  })
+
+  it('names the view the export was actually taken from, not a fixed one', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const [heading] = capturePdf.mock.calls[0][0].blocks as { element: HTMLElement }[]
+    expect(heading.element.textContent).toContain('View by capability')
+    expect(heading.element.textContent).not.toContain('View by MSD feature')
   })
 
   it('captures the view and filters the map is currently showing', async () => {
@@ -3046,7 +3074,7 @@ describe('ScopeMap zoom survives a save', () => {
     await user.click(screen.getByRole('button', { name: '100%' }))
 
     const rail = await openFilters(user)
-    await user.click(within(rail).getByRole('checkbox', { name: /Release 1\.1/ }))
+    await user.click(within(rail).getByRole('checkbox', { name: /Package 1\.1/ }))
 
     expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
   })

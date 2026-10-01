@@ -27,25 +27,25 @@ describe('buildScopeExport — document shape', () => {
     expect(markdown.split('\n').slice(0, 5)).toEqual([
       '# Scope for VD2',
       '',
-      'Including releases 1.1 – 1.4',
+      'Including packages 1.1 – 1.4',
       '',
       'View by MSD feature',
     ])
   })
 
   it('names the view it was taken from', () => {
-    expect(exportFor('release').markdown).toContain('View by PwC release')
+    expect(exportFor('release').markdown).toContain('View by PwC package')
     expect(exportFor('actor').markdown).toContain('View by actor')
     expect(exportFor('capability').markdown).toContain('View by capability')
   })
 
   it('heads each release section with its number, label and name', () => {
-    expect(exportFor('release').markdown).toContain('## **1. Release 1.1 — Pilot**')
+    expect(exportFor('release').markdown).toContain('## **1. Package 1.1 — Pilot**')
   })
 
   it('falls back to the label alone for a release with no name', () => {
     const { markdown } = exportFor('capability')
-    expect(markdown).toContain('## **2. Release 1.4**')
+    expect(markdown).toContain('## **2. Package 1.4**')
   })
 
   it('heads each phase with its epic, as the source document does', () => {
@@ -191,8 +191,8 @@ describe('buildScopeExport — capabilities group under their ref', () => {
   it('gives each option variant of a ref its own heading', () => {
     const variants = makeScopeGraph({
       mvpFeatures: [
-        { id: 7, ref: 951, scope_option: '1A', title: 'Register A', release_id: null, phase_id: null, question: null, source: 'mapping' },
-        { id: 8, ref: 951, scope_option: '1B', title: 'Register B', release_id: null, phase_id: null, question: null, source: 'mapping' },
+        { id: 7, ref: 951, scope_option: '1A', title: 'Register A', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
+        { id: 8, ref: 951, scope_option: '1B', title: 'Register B', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
       ],
       capabilities: [
         {
@@ -244,19 +244,19 @@ describe('buildScopeExport — grouping', () => {
   })
 
   it('omits a phase nothing lands in', () => {
-    // Release 1.1 holds nothing in Manage Vacancies, so that heading should
+    // Package 1.1 holds nothing in Manage Vacancies, so that heading should
     // not appear before the 1.4 section starts.
     const { markdown } = exportFor('capability')
     const firstSection = markdown.slice(
-      markdown.indexOf('## **1. Release 1.1'),
-      markdown.indexOf('## **2. Release 1.4'),
+      markdown.indexOf('## **1. Package 1.1'),
+      markdown.indexOf('## **2. Package 1.4'),
     )
     expect(firstSection).not.toContain('Manage Vacancies')
   })
 
   it('omits a release nothing lands in', () => {
     // No PwC feature ships in 1.4, so the feature view has no 1.4 section.
-    expect(exportFor('release').markdown).not.toContain('Release 1.4')
+    expect(exportFor('release').markdown).not.toContain('Package 1.4')
   })
 
   it('groups by actor in actor view, repeating a feature per actor', () => {
@@ -296,7 +296,7 @@ describe('buildScopeExport — records nothing places', () => {
     const orphan = makeScopeGraph({
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 9, ref: 953, scope_option: null, title: 'Compliance view', release_id: null, phase_id: null, question: null, source: 'sequencing' },
+        { id: 9, ref: 953, scope_option: null, title: 'Compliance view', release_id: null, phase_id: null, question: null, details: '', source: 'sequencing' },
       ],
     })
     const { markdown } = buildScopeExport({
@@ -333,8 +333,8 @@ describe('buildScopeExport — records nothing places', () => {
     expect(markdown).toContain('## **Not on the map**')
     expect(markdown).toContain('**SVD-948 (Option 1B)**:')
     expect(markdown).toContain('* Electronic T&Cs acceptance')
-    // Release 1.4 held nothing else, so it gets no section of its own.
-    expect(markdown).not.toContain('## **2. Release 1.4**')
+    // Package 1.4 held nothing else, so it gets no section of its own.
+    expect(markdown).not.toContain('## **2. Package 1.4**')
   })
 })
 
@@ -355,7 +355,7 @@ describe('buildScopeExport — filters', () => {
 
   it('states the narrowing in words so the list is not read as the whole scope', () => {
     const filtered = exportFor('release', { ...EMPTY_FILTERS, release: ['1.1'], actor: ['staff'] })
-    expect(filtered.markdown).toContain('Filtered by — Release: Release 1.1 · Actor: MSD staff')
+    expect(filtered.markdown).toContain('Filtered by — Package: Package 1.1 · Actor: MSD staff')
   })
 
   it('says nothing about filters when none are active', () => {
@@ -372,7 +372,7 @@ describe('buildScopeExport — filters', () => {
       mvpCards: [],
       capabilityCards: buildCapabilityCards(graph).filter((c) => c.releaseId === '1.4'),
     })
-    expect(filtered.markdown).toContain('Including release 1.4')
+    expect(filtered.markdown).toContain('Including package 1.4')
   })
 
   it('explains an empty result instead of returning bare headings', () => {
@@ -410,7 +410,7 @@ describe('describeFilters', () => {
   it('falls back to the raw value when a label is missing', () => {
     expect(
       describeFilters({ ...EMPTY_FILTERS, release: ['9.9'] }, model.releases, model.phases),
-    ).toBe('Release: 9.9')
+    ).toBe('Package: 9.9')
   })
 })
 
@@ -447,8 +447,8 @@ describe('buildScopeExport — what the document claims about itself', () => {
       mvpCards: [],
       capabilityCards: [],
     })
-    expect(filtered.markdown).toContain('Filtered by — Release: Release 1.1')
-    expect(filtered.markdown).not.toContain('Including releases 1.1 – 1.4')
+    expect(filtered.markdown).toContain('Filtered by — Package: Package 1.1')
+    expect(filtered.markdown).not.toContain('Including packages 1.1 – 1.4')
   })
 
   it('does not span a release the export skipped', () => {
@@ -459,7 +459,7 @@ describe('buildScopeExport — what the document claims about itself', () => {
         ...graph.releases,
         {
           id: '2',
-          label: 'Release 2',
+          label: 'Package 2',
           name: '',
           description: '',
           display_order: 3,
@@ -485,7 +485,7 @@ describe('buildScopeExport — what the document claims about itself', () => {
     })
 
     // 1.4 holds nothing and has no section, so the header must not claim it.
-    expect(markdown).not.toContain('## **2. Release 1.4**')
+    expect(markdown).not.toContain('## **2. Package 1.4**')
     expect(markdown).not.toContain('Including releases 1.1 – 2')
   })
 

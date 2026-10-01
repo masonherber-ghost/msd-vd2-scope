@@ -68,7 +68,7 @@ describe('buildMvpCards — placement', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
       ],
     }
     const card = buildMvpCards(orphan).find((c) => c.id === 99)!
@@ -219,7 +219,7 @@ describe('projectMvpCells', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
       ],
     } as ScopeGraph
     const projection = projectMvpCells(buildMvpCards(orphan))
@@ -277,6 +277,7 @@ describe('buildMvpCards — a stated placement', () => {
           release_id: '1.4',
           phase_id: 'manage-vacancies',
           question: null,
+          details: '',
           source: 'sequencing',
         },
       ],
@@ -351,6 +352,7 @@ describe('buildMvpCards — a question on the record', () => {
             release_id: null,
             phase_id: null,
             question: 'Is this in scope at all?',
+            details: '',
             source: 'sequencing',
           },
         ],

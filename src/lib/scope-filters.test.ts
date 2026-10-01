@@ -59,7 +59,7 @@ describe('matchesFilters — OR within a group', () => {
 describe('matchesFilters — AND across groups', () => {
   it('requires every active group to match', () => {
     expect(ids(withFilters({ release: ['1.1'], actor: ['staff'] }))).toEqual(['F-001'])
-    // Release 1.4 has no features, so combining it with anything is empty.
+    // Package 1.4 has no features, so combining it with anything is empty.
     expect(ids(withFilters({ release: ['1.4'], actor: ['employer'] }))).toEqual([])
   })
 })

@@ -70,10 +70,10 @@ export const SCOPE_SPLITS: readonly ScopeSplit[] = [
       'outcome, so its capabilities sat in two phases and PRD §16 P-1 made any single ' +
       'placement wrong. The split falls on the MVP feature boundary: 972 is vacancy ' +
       'outcome, 990 is applicant progression. Each half then agrees with the sequencing ' +
-      'table on both phase and release, clearing all five of its conflicts. Supersedes ' +
+      'table on both phase and package, clearing all five of its conflicts. Supersedes ' +
       'OV-001, which moved the whole feature to Manage Vacancies / 1.1. ' +
       'Revised 2026-09-11: the F-085 half sits in 1.1, not 1.2, because OV-006 moves ' +
-      'MVP ref 972 into the approved Release 1.1 list and this half is the part that ' +
+      'MVP ref 972 into the approved Package 1.1 list and this half is the part that ' +
       'carries 972. Both moved together, so the half still agrees with the table.',
     decidedOn: '2026-09-09',
     into: [
@@ -314,7 +314,7 @@ export type ReleaseAlias = {
   id: string
   from: string
   to: string
-  /** Label for the merged release. Defaults to `Release ${to}`. */
+  /** Label for the merged release. Defaults to `Package ${to}`. */
   label?: string
   rationale: string
   decidedOn: string
@@ -326,10 +326,10 @@ export const RELEASE_ALIASES: readonly ReleaseAlias[] = [
     from: '1.9',
     to: '1.4',
     rationale:
-      'Release 1.9 is a mapping-file construct with no column in the sequencing table, ' +
+      'Package 1.9 is a mapping-file construct with no column in the sequencing table, ' +
       'so every one of its 32 capability links conflicted and no capability anywhere was ' +
-      'sequenced as 1.9. The table schedules 5 of those links in 1.4 — the release that ' +
-      'had capabilities but no features. Treating 1.9 and 1.4 as one release is the only ' +
+      'sequenced as 1.9. The table schedules 5 of those links in 1.4 — the package that ' +
+      'had capabilities but no features. Treating 1.9 and 1.4 as one package is the only ' +
       'reading under which both documents describe the same plan: it clears those 5 ' +
       'conflicts and leaves the 27 that are genuine disagreements about 1.1 and 2.',
     decidedOn: '2026-09-11',
@@ -376,7 +376,7 @@ export function applyReleaseAliases(
     const renamed = {
       ...source,
       id: alias.to,
-      label: alias.label ?? `Release ${alias.to}`,
+      label: alias.label ?? `Package ${alias.to}`,
     }
     releases = releases
       .filter((r) => r.id !== alias.from && r.id !== alias.to)
@@ -419,7 +419,7 @@ export type ReleaseReallocation = {
 }
 
 const R1_1_APPROVED_NOTE =
-  'MSD approved 12 MVP features for Release 1.1 (991, 946, 941, 955, 959, 962, 939, ' +
+  'MSD approved 12 MVP features for Package 1.1 (991, 946, 941, 955, 959, 962, 939, ' +
   '940, 944, 947, 968, 972). '
 
 export const RELEASE_REALLOCATIONS: readonly ReleaseReallocation[] = [
@@ -433,8 +433,8 @@ export const RELEASE_REALLOCATIONS: readonly ReleaseReallocation[] = [
       'These three leave the pilot and the PwC features that cite them say where to: ' +
       '1052 is cited only by F-005 and F-013, both already in 1.4; 948 only by F-011, ' +
       'also 1.4, and its sole record is Option 1B, which the mapping file files under ' +
-      'the GA & Scale-Up release anyway. 938 is cited by F-001 and F-002 in the pilot ' +
-      'and by F-003 in 1.4 — the pilot is ruled out for it, so 1.4 is the only release ' +
+      'the GA & Scale-Up package anyway. 938 is cited by F-001 and F-002 in the pilot ' +
+      'and by F-003 in 1.4 — the pilot is ruled out for it, so 1.4 is the only package ' +
       'any citing feature points at.',
     decidedOn: '2026-09-11',
   },
@@ -447,9 +447,9 @@ export const RELEASE_REALLOCATIONS: readonly ReleaseReallocation[] = [
       R1_1_APPROVED_NOTE +
       'These five leave the pilot with no evidence of where they belong: every PwC ' +
       'feature citing them is itself in 1.1 (F-014, F-027, F-028, F-039, F-046), and ' +
-      '976 is cited by none at all. 1.2 is the next sequenced release and is a parking ' +
+      '976 is cited by none at all. 1.2 is the next sequenced package and is a parking ' +
       'place, not a finding — nothing in either document argues for it. Revisit these ' +
-      'five first when the release plan is next reviewed.',
+      'five first when the package plan is next reviewed.',
     decidedOn: '2026-09-11',
   },
   {
@@ -558,7 +558,7 @@ export const MVP_OPTION_MERGES: readonly MvpOptionMerge[] = [
     into: '1A',
     rationale:
       'Same as OV-007: a bare record (F-006, 1 capability) beside an Option 1A one (F-007, ' +
-      'none), and no Option 1B for the ref. 946 is on the approved Release 1.1 list, and ' +
+      'none), and no Option 1B for the ref. 946 is on the approved Package 1.1 list, and ' +
       'the approved version is the Option A slice.',
     decidedOn: '2026-09-11',
   },

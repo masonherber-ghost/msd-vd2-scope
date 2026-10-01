@@ -12,12 +12,6 @@ const { applyAllMigrations, resetSchema } = await import('../test-support/apply-
 
 
 const {
-  createAssumption,
-  getAssumptionsForFeature,
-  renumberAssumptions,
-  replaceImportedAssumptions,
-} = await import('./assumption-repository.js')
-const {
   upsertImportedCapability,
   getAllCapabilities,
   findCapabilityByText: findCapability,
@@ -201,15 +195,6 @@ describe('capability identity is case-insensitive on (ref, text)', () => {
 })
 
 describe('referential integrity (R-9.4)', () => {
-  it('cascades assumptions when their feature is deleted', () => {
-    createAssumption({ pwc_feature_id: 'F-001', position: 1, text: 'a', source: 'mapping' })
-    createAssumption({ pwc_feature_id: 'F-001', position: 2, text: 'b', source: 'mapping' })
-    expect(getAssumptionsForFeature('F-001')).toHaveLength(2)
-
-    db.prepare("DELETE FROM pwc_features WHERE id='F-001'").run()
-    expect(getAssumptionsForFeature('F-001')).toHaveLength(0)
-  })
-
   it('cascades join rows when their feature is deleted', () => {
     upsertImportedMvpFeature({ ref: 938, scope_option: '1A', title: 'A', source: 'mapping' })
     const mvp = findMvpFeature(938, '1A')!
@@ -265,43 +250,15 @@ describe('referential integrity (R-9.4)', () => {
   })
 
   it('counts what depends on a feature, for the delete guard', () => {
-    createAssumption({ pwc_feature_id: 'F-001', position: 1, text: 'a', source: 'mapping' })
     upsertImportedMvpFeature({ ref: 938, scope_option: null, title: 'A', source: 'mapping' })
     upsertImportedFeatureMvpLink({
       pwc_feature_id: 'F-001',
       mvp_feature_id: findMvpFeature(938, null)!.id,
     })
     expect(countPwcFeatureDependents('F-001')).toEqual({
-      assumptions: 1,
       mvpLinks: 1,
       capabilityLinks: 0,
     })
-  })
-})
-
-describe('assumption ordering stays contiguous (R-9.3)', () => {
-  it('numbers imported assumptions 1..n', () => {
-    replaceImportedAssumptions('F-001', ['one', 'two', 'three'])
-    expect(getAssumptionsForFeature('F-001').map((a) => a.position)).toEqual([1, 2, 3])
-  })
-
-  it('keeps a manual assumption and renumbers around it on re-import', () => {
-    replaceImportedAssumptions('F-001', ['one', 'two'])
-    createAssumption({ pwc_feature_id: 'F-001', position: 99, text: 'manual', source: 'manual' })
-
-    replaceImportedAssumptions('F-001', ['one', 'two', 'three'])
-
-    const rows = getAssumptionsForFeature('F-001')
-    expect(rows.map((a) => a.position)).toEqual([1, 2, 3, 4])
-    expect(rows.filter((a) => a.source === 'manual')).toHaveLength(1)
-  })
-
-  it('closes a gap left by a deletion', () => {
-    replaceImportedAssumptions('F-001', ['one', 'two', 'three'])
-    db.prepare("DELETE FROM assumptions WHERE pwc_feature_id='F-001' AND position=2").run()
-
-    renumberAssumptions('F-001')
-    expect(getAssumptionsForFeature('F-001').map((a) => a.position)).toEqual([1, 2])
   })
 })
 
@@ -497,15 +454,13 @@ describe('feature writes', () => {
       expect(deletePwcFeature('F-999')).toBe(0)
     })
 
-    it('cascades assumptions and join rows, and nothing else', () => {
-      createAssumption({ pwc_feature_id: 'F-001', position: 1, text: 'a', source: 'mapping' })
+    it('cascades join rows, and nothing else', () => {
       upsertImportedMvpFeature({ ref: 938, scope_option: null, title: 'A', source: 'mapping' })
       const mvp = findMvpFeature(938, null)!
       upsertImportedFeatureMvpLink({ pwc_feature_id: 'F-001', mvp_feature_id: mvp.id })
 
       deletePwcFeature('F-001')
 
-      expect(getAssumptionsForFeature('F-001')).toHaveLength(0)
       expect(
         db.prepare('SELECT COUNT(*) AS n FROM pwc_feature_mvp_features').get(),
       ).toEqual({ n: 0 })

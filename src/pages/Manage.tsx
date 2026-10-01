@@ -21,7 +21,7 @@ import { buildMvpCards, type MvpCardModel } from '@/lib/mvp-derive'
 import { sourceLabel } from '@/lib/validators'
 
 const ENTITIES = [
-  { slug: 'releases', label: 'Releases' },
+  { slug: 'releases', label: 'Packages' },
   { slug: 'phases', label: 'Phases' },
   { slug: 'mvp-features', label: 'MVP features' },
   { slug: 'capabilities', label: 'Capabilities' },
@@ -31,7 +31,7 @@ type EntitySlug = (typeof ENTITIES)[number]['slug']
 
 /**
  * Bulk editing for the entities with no natural home on the map (R-9.2).
- * Features and assumptions are edited in the detail panel, in context.
+ * Features and their notes are edited in the detail panel, in context.
  */
 export default function Manage() {
   const { entity } = useParams<{ entity: string }>()
@@ -44,7 +44,7 @@ export default function Manage() {
         <h1 className="text-2xl font-semibold tracking-tight">Manage</h1>
         <p className="text-sm text-muted-foreground">
           Bulk editing for entities that have no single place on the map. Features and their
-          assumptions are edited on the map itself.
+          assumptions and notes are edited on the map itself.
         </p>
       </div>
 
@@ -134,7 +134,7 @@ function Releases({ scope }: { scope: Scope }) {
 
       <div className="manage-table__scroll">
         <table className="manage-table__grid">
-          <caption className="sr-only">Releases</caption>
+          <caption className="sr-only">Packages</caption>
           <thead>
             <tr>
               <th scope="col">Id</th>
@@ -204,25 +204,25 @@ function Releases({ scope }: { scope: Scope }) {
       </div>
 
       <div className="manage-table__create">
-        <h2 className="text-sm font-semibold">Add a release</h2>
+        <h2 className="text-sm font-semibold">Add a package</h2>
         <div className="manage-table__create-fields">
           <input
             className="manage-table__input"
-            aria-label="New release id"
+            aria-label="New package id"
             placeholder="2.1"
             value={draft.id}
             onChange={(event) => setDraft({ ...draft, id: event.target.value })}
           />
           <input
             className="manage-table__input"
-            aria-label="New release label"
-            placeholder="Release 2.1"
+            aria-label="New package label"
+            placeholder="Package 2.1"
             value={draft.label}
             onChange={(event) => setDraft({ ...draft, label: event.target.value })}
           />
           <input
             className="manage-table__input"
-            aria-label="New release name"
+            aria-label="New package name"
             placeholder="Name"
             value={draft.name}
             onChange={(event) => setDraft({ ...draft, name: event.target.value })}
@@ -237,7 +237,7 @@ function Releases({ scope }: { scope: Scope }) {
             if (ok) setDraft({ id: '', label: '', name: '' })
           }}
         >
-          Add release
+          Add package
         </Button>
       </div>
     </div>
@@ -457,7 +457,7 @@ function MvpFeatures({ scope }: { scope: Scope }) {
               <th scope="col">Ref</th>
               <th scope="col">Option</th>
               <th scope="col">Title</th>
-              <th scope="col">Release</th>
+              <th scope="col">Package</th>
               <th scope="col">Stage</th>
               <th scope="col">Placed by</th>
               <th scope="col">Features</th>
@@ -490,7 +490,7 @@ function MvpFeatures({ scope }: { scope: Scope }) {
                 <td>
                   <select
                     className="manage-table__input"
-                    aria-label={`Release for MVP ${mvpLabel(mvp)}`}
+                    aria-label={`Package for MVP ${mvpLabel(mvp)}`}
                     value={mvp.release_id ?? ''}
                     onChange={(event) =>
                       void run(() =>
@@ -558,7 +558,7 @@ function MvpFeatures({ scope }: { scope: Scope }) {
         <h2 className="text-sm font-semibold">Add an MVP feature</h2>
         <p className="manage-table__muted text-xs">
           Uniqueness is on ref plus option, so the same ref with a different option is a
-          separate record. A release and stage are optional: leave them unstated and the
+          separate record. A package and stage are optional: leave them unstated and the
           record is placed by its capabilities, or by the features citing it. Stating both
           overrides that — stating one does nothing on its own, because a cell needs both.
         </p>
@@ -594,11 +594,11 @@ function MvpFeatures({ scope }: { scope: Scope }) {
           />
           <select
             className="manage-table__input"
-            aria-label="New MVP release"
+            aria-label="New MVP package"
             value={draft.release_id}
             onChange={(event) => setDraft({ ...draft, release_id: event.target.value })}
           >
-            <option value="">Release not stated</option>
+            <option value="">Package not stated</option>
             {scope.releases.map((release) => (
               <option key={release.id} value={release.id}>
                 {release.label}
@@ -694,7 +694,7 @@ function Capabilities({ scope }: { scope: Scope }) {
               <th scope="col">Ref</th>
               <th scope="col">Text</th>
               <th scope="col">Actor</th>
-              <th scope="col">Release</th>
+              <th scope="col">Package</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -794,11 +794,11 @@ function Capabilities({ scope }: { scope: Scope }) {
           </select>
           <select
             className="manage-table__input"
-            aria-label="New capability release"
+            aria-label="New capability package"
             value={draft.release_id}
             onChange={(event) => setDraft({ ...draft, release_id: event.target.value })}
           >
-            <option value="">Choose a release</option>
+            <option value="">Choose a package</option>
             {scope.releases.map((release) => (
               <option key={release.id} value={release.id}>
                 {release.label}

@@ -28,7 +28,7 @@ describe('CapabilityDetailPanel — what it shows', () => {
   it('names the capability, its actor and its placement', () => {
     renderPanel()
     expect(screen.getByText('Capability · Employer')).toBeInTheDocument()
-    expect(screen.getByText('Release 1.4 · Manage Vacancies')).toBeInTheDocument()
+    expect(screen.getByText('Package 1.4 · Manage Vacancies')).toBeInTheDocument()
   })
 
   it('names the MSD feature it sits under', () => {

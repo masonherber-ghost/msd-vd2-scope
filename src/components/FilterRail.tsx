@@ -47,7 +47,7 @@ const SOURCE_OPTIONS: Option[] = [
 ]
 
 const CONFLICT_OPTIONS: Option[] = [
-  { value: 'release', label: 'Release conflict' },
+  { value: 'release', label: 'Package conflict' },
   { value: 'phase', label: 'Phase conflict' },
   { value: 'unmatched', label: 'Unmatched link' },
   { value: 'unreviewed', label: 'Unreviewed' },
