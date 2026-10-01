@@ -277,7 +277,7 @@ describe('MvpDetailPanel — capabilities it owns', () => {
 
     await user.click(screen.getByRole('button', { name: 'Invite employer to register' }))
 
-    expect(screen.getByRole('group', { name: /Capabilities owned by 938/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /Capabilities owned by SVD-938/ })).toBeInTheDocument()
   })
 
   it('sends the complete new set when one is ticked', async () => {
@@ -370,7 +370,7 @@ describe('MvpDetailPanel — keyboard (WCAG 2.4.3)', () => {
     screen.getByRole('button', { name: 'Change capabilities' }).focus()
     await user.keyboard('{Enter}')
 
-    expect(screen.getByRole('group', { name: /Capabilities owned by 938/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /Capabilities owned by SVD-938/ })).toBeInTheDocument()
   })
 
   it('keeps focus inside the panel when the lookup replaces the button', async () => {

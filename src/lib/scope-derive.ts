@@ -348,6 +348,14 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
 export const releaseTokenSuffix = (releaseId: string) => releaseId.replace(/\./g, '-')
 
 /**
+ * Pill shorthand for a package label: `Package 1.1` → `P1.1`. Card tags are
+ * the most repeated place the label appears, so the word is dropped there; the
+ * full label stays on row headers, detail panels and exports. A label that is
+ * not a package name is returned untouched.
+ */
+export const releaseShortLabel = (label: string) => label.replace(/^Package\s+/i, 'P')
+
+/**
  * Recomputes the grid for a subset of features. The full model keeps every
  * card so the filter rail can count against all of them; the grid renders
  * only what survived.

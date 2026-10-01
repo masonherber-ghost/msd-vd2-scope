@@ -1668,9 +1668,9 @@ describe('ScopeMap — the MSD feature view', () => {
     const cards = screen.getAllByRole('button', { name: /^MSD feature / })
     // One card per MVP record, including both records under ref 938.
     expect(cards.map((c) => c.getAttribute('aria-label'))).toEqual([
-      'MSD feature 938 Additional users',
-      'MSD feature 938 · 1A Additional users',
-      'MSD feature 948 · 1B Verification methods',
+      'MSD feature SVD-938 Additional users',
+      'MSD feature SVD-938 · 1A Additional users',
+      'MSD feature SVD-948 · 1B Verification methods',
     ])
   })
 
@@ -1685,7 +1685,7 @@ describe('ScopeMap — the MSD feature view', () => {
     // 948 is cited by F-002 in 1.1, but its capability is scheduled in 1.4.
     const cell = screen.getByRole('cell', { name: /Package 1\.4, Manage Vacancies/ })
     expect(
-      within(cell).getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+      within(cell).getByRole('button', { name: 'MSD feature SVD-948 · 1B Verification methods' }),
     ).toBeInTheDocument()
   })
 
@@ -1714,13 +1714,13 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }),
       ).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+    await user.click(screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }))
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('PwC features citing this (1)')).toBeInTheDocument()
     expect(within(panel).getByText('F-001')).toBeInTheDocument()
     expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
@@ -1734,15 +1734,15 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 · 1A Additional users' }),
       ).toBeInTheDocument(),
     )
 
     await user.click(
-      screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+      screen.getByRole('button', { name: 'MSD feature SVD-938 · 1A Additional users' }),
     )
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938 · 1A' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938 · 1A' })
     expect(within(panel).getByText(/placed by the PwC features that cite it/i)).toBeInTheDocument()
     expect(within(panel).getByText(/owns no capability/i)).toBeInTheDocument()
   })
@@ -1752,12 +1752,12 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }),
       ).toBeInTheDocument(),
     )
-    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+    await user.click(screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }))
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     await user.click(within(panel).getByRole('button', { name: /F-001/ }))
 
     // Back in the feature view, with that feature's panel open.
@@ -1775,7 +1775,7 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp&selected=F-002')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /MSD feature 938 Additional users/ }),
+        screen.getByRole('button', { name: /MSD feature SVD-938 Additional users/ }),
       ).toBeInTheDocument(),
     )
     // The PwC panel cannot render here, and no MSD card is selected yet.
@@ -1791,7 +1791,7 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp&release=1.4')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-948 · 1B Verification methods' }),
       ).toBeInTheDocument(),
     )
     expect(screen.getAllByRole('button', { name: /^MSD feature / })).toHaveLength(1)
@@ -2415,7 +2415,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('stays closed until the shown capability is tapped', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     expect(
       screen.queryByRole('group', { name: /Capabilities owned by/ }),
@@ -2424,28 +2424,28 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     await user.click(screen.getByRole('button', { name: 'Invite employer to register' }))
 
     expect(
-      screen.getByRole('group', { name: 'Capabilities owned by 938 — 2 selected' }),
+      screen.getByRole('group', { name: 'Capabilities owned by SVD-938 — 2 selected' }),
     ).toBeInTheDocument()
   })
 
   it('offers every capability, saying which record owns each one', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
 
-    const picker = screen.getByRole('group', { name: /Capabilities owned by 948 · 1B/ })
+    const picker = screen.getByRole('group', { name: /Capabilities owned by SVD-948 · 1B/ })
     expect(within(picker).getAllByRole('checkbox')).toHaveLength(3)
     expect(
-      within(picker).getByRole('checkbox', { name: /Invite employer to register.*owned by 938/ }),
+      within(picker).getByRole('checkbox', { name: /Invite employer to register.*owned by SVD-938/ }),
     ).toBeInTheDocument()
   })
 
   it('renames the record from its title, and shows the new name at once', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     await user.click(
       screen.getByRole('button', { name: 'Edit msd feature title: Additional users' }),
@@ -2460,7 +2460,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
         { id: 2, patch: { title: 'Additional employer portal users' } },
       ]),
     )
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     await waitFor(() =>
       expect(
         within(panel).getByRole('button', {
@@ -2475,7 +2475,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     // the server moves the capabilities it owns to match.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     await user.click(screen.getByRole('button', { name: 'Edit package' }))
     await user.selectOptions(screen.getByLabelText('Package'), '1.4')
@@ -2493,7 +2493,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     // worked by moving capabilities, and they have none.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 · 1A Additional users')
+    await openRecord(user, 'MSD feature SVD-938 · 1A Additional users')
 
     expect(screen.getByRole('button', { name: 'Edit package' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
@@ -2502,7 +2502,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('offers to assign, not change, on a record that owns nothing', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 · 1A Additional users')
+    await openRecord(user, 'MSD feature SVD-938 · 1A Additional users')
 
     expect(screen.getByRole('button', { name: 'Assign capabilities' })).toBeInTheDocument()
   })
@@ -2510,7 +2510,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('sends the complete new set when a capability is claimed', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
@@ -2525,14 +2525,14 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('shows the claimed capability under its new record without a reload', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
       screen.getByRole('checkbox', { name: /Invite employer to register/ }),
     )
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-948 · 1B' })
     await waitFor(() =>
       expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument(),
     )
@@ -2542,7 +2542,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('takes it off the record that owned it before', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
       screen.getByRole('checkbox', { name: /Invite employer to register/ }),
@@ -2550,9 +2550,9 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     await waitFor(() => expect(state.mvpCapabilitySets).toHaveLength(1))
 
     await user.click(screen.getByRole('button', { name: 'Close' }))
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('Capabilities (1)')).toBeInTheDocument()
     expect(
       within(panel).queryByText('Invite employer to register'),
@@ -2562,7 +2562,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('unticking leaves the capability on the map, owned by nothing', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
@@ -2585,7 +2585,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it("surfaces the server's refusal and keeps the record as it was", async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     state.writeFail = 'No capability with id 10.'
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
@@ -2594,7 +2594,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No capability with id 10.')
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
   })
 })
@@ -2730,7 +2730,7 @@ describe('ScopeMap — deleting a capability from its panel', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' }),
+        screen.getByRole('complementary', { name: 'MSD feature SVD-948 · 1B' }),
       ).toBeInTheDocument(),
     )
     expect(url()).toContain('view=mvp')

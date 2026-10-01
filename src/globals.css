@@ -47,6 +47,7 @@
 @import "./components/CardDetailBar.css";
 @import "./components/ScopeDetailDialog.css";
 @import "./components/CoverageReport.css";
+@import "./components/ScopePrintSheet.css";
 
 /* ============================================================
    2. DESIGN TOKENS — the only source of truth for values
@@ -156,9 +157,18 @@
      actor in words, so the colour is a scanning aid, never the signal. */
   --color-actor-employer: oklch(46.7% 0.128 267.3);
   --color-actor-staff: oklch(72.4% 0.180 52.6);
-  --color-actor-jobseeker: oklch(67.8% 0.191 25.1);
+  /* Teal, not red: red reads as a failure state everywhere else in the
+     map, and an actor is never an alarm. */
+  --color-actor-jobseeker: oklch(64.5% 0.106 191.8);
   --color-actor-system: oklch(56.5% 0.151 247.7);
   --color-actor-none: oklch(63.6% 0.057 250.4);
+
+  /* The same four hues at pill strength: a tint light enough to carry
+     ink-700 text, so an actor pill reads as its own colour. */
+  --color-actor-employer-tint: oklch(95.5% 0.022 267.3);
+  --color-actor-staff-tint: oklch(95.5% 0.032 52.6);
+  --color-actor-jobseeker-tint: oklch(95.5% 0.024 191.8);
+  --color-actor-system-tint: oklch(95.5% 0.024 247.7);
 
   /* ---- Scope map: release accents ---- */
   --color-release-1-1: oklch(37.8% 0.102 254.0);

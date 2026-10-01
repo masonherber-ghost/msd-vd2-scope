@@ -30,8 +30,8 @@ describe('buildMvpCards — identity', () => {
   })
 
   it('labels an option variant apart from the bare record', () => {
-    expect(mvpCardLabel({ ref: 938, scopeOption: null })).toBe('938')
-    expect(mvpCardLabel({ ref: 938, scopeOption: '1A' })).toBe('938 · 1A')
+    expect(mvpCardLabel({ ref: 938, scopeOption: null })).toBe('SVD-938')
+    expect(mvpCardLabel({ ref: 938, scopeOption: '1A' })).toBe('SVD-938 · 1A')
   })
 })
 

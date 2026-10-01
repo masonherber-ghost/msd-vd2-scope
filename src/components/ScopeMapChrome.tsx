@@ -117,23 +117,34 @@ export function ScopeMapChrome({
         </ul>
       </div>
 
-      <ul className="scope-chrome__legend" aria-label="Actors">
-        <li className="scope-chrome__legend-title">Actors</li>
-        {ACTOR_ROWS.filter((row) => row.key !== 'no-actor').map((row) => (
-          <li key={row.key} className="scope-chrome__legend-item">
-            <span
-              className="scope-chrome__legend-dot"
-              style={
-                { '--legend-accent': `var(--color-actor-${row.tokenSuffix})` } as CSSProperties
-              }
-              aria-hidden="true"
-            />
-            <span className="scope-chrome__legend-name">{row.label}</span>
-            <span className="scope-chrome__legend-note">{row.blurb}</span>
-          </li>
-        ))}
-      </ul>
+      <ActorLegend />
     </>
+  )
+}
+
+/**
+ * The key to the cards' colour coding. Its own component because the print
+ * sheet needs the same key without the tabs and chips around it — two keys
+ * that could drift apart would be two different maps.
+ */
+export function ActorLegend() {
+  return (
+    <ul className="scope-chrome__legend" aria-label="Actors">
+      <li className="scope-chrome__legend-title">Actors</li>
+      {ACTOR_ROWS.filter((row) => row.key !== 'no-actor').map((row) => (
+        <li key={row.key} className="scope-chrome__legend-item">
+          <span
+            className="scope-chrome__legend-dot"
+            style={
+              { '--legend-accent': `var(--color-actor-${row.tokenSuffix})` } as CSSProperties
+            }
+            aria-hidden="true"
+          />
+          <span className="scope-chrome__legend-name">{row.label}</span>
+          <span className="scope-chrome__legend-note">{row.blurb}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 

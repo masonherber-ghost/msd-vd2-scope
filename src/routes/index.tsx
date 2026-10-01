@@ -8,8 +8,12 @@ const Reconciliation = lazy(() => import('@/pages/Reconciliation'))
 const Coverage = lazy(() => import('@/pages/Coverage'))
 const Manage = lazy(() => import('@/pages/Manage'))
 const NotFound = lazy(() => import('@/pages/NotFound'))
+const ScopePrint = lazy(() => import('@/pages/ScopePrint'))
 
 export const router = createBrowserRouter([
+  // Outside the layout: a sheet about to be printed carries no app header,
+  // nav or footer, on screen or on paper.
+  { path: '/print', element: <ScopePrint /> },
   {
     path: '/',
     element: <Layout />,

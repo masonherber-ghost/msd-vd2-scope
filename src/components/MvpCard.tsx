@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { ConflictBadge } from '@/components/ConflictBadge'
 import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
 import { mvpCardLabel, type MvpCardModel } from '@/lib/mvp-derive'
-import { releaseTokenSuffix } from '@/lib/scope-derive'
+import { releaseShortLabel, releaseTokenSuffix } from '@/lib/scope-derive'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -78,7 +78,9 @@ export function MvpCard({
           <span className="mvp-card__ref">{label}</span>
         )}
         {detail.release && releaseLabel ? (
-          <span className="mvp-card__release">{releaseLabel}</span>
+          <span className="mvp-card__release" title={releaseLabel}>
+            {releaseShortLabel(releaseLabel)}
+          </span>
         ) : null}
       </div>
 
@@ -101,10 +103,11 @@ export function MvpCard({
 
       {detail.actors && card.actorCounts.length > 0 ? (
         <ul className="mvp-card__actors">
-          {card.actorCounts.map(({ actor, count }) => (
+          {/* Which actors this touches is the signal; the per-actor count was
+              noise at card size, so the pill names the actor only. */}
+          {card.actorCounts.map(({ actor }) => (
             <li key={actor} className={`mvp-card__actor mvp-card__actor--${actor}`}>
               {ACTOR_LABEL[actor]}
-              <span className="mvp-card__actor-count">{count}</span>
             </li>
           ))}
         </ul>

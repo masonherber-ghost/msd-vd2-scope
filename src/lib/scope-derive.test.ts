@@ -4,6 +4,7 @@ import {
   buildScopeMap,
   cellKey,
   projectCells,
+  releaseShortLabel,
   releaseTokenSuffix,
   rowsFor,
   rowsForFeature,
@@ -142,6 +143,18 @@ describe('releaseTokenSuffix', () => {
   it('makes a release id safe for a CSS class and token name', () => {
     expect(releaseTokenSuffix('1.1')).toBe('1-1')
     expect(releaseTokenSuffix('2')).toBe('2')
+  })
+})
+
+describe('releaseShortLabel', () => {
+  it('shortens a package label for the card tag', () => {
+    expect(releaseShortLabel('Package 1.1')).toBe('P1.1')
+    expect(releaseShortLabel('Package 2')).toBe('P2')
+  })
+
+  it('leaves a label that is not a package name alone', () => {
+    expect(releaseShortLabel('Pilot')).toBe('Pilot')
+    expect(releaseShortLabel('1.1')).toBe('1.1')
   })
 })
 

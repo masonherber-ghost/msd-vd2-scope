@@ -83,9 +83,13 @@ export type MvpCardModel = {
   releaseIds: Set<string>
 }
 
-/** `947`, or `951 · 1B` where the record is an option variant. */
+/**
+ * `SVD-947`, or `SVD-951 · 1B` where the record is an option variant. The
+ * stored ref is the bare number; `SVD-` is how MSD writes it, so it is added
+ * on display rather than baked into the data.
+ */
 export const mvpCardLabel = (card: Pick<MvpCardModel, 'ref' | 'scopeOption'>) =>
-  card.scopeOption ? `${card.ref} · ${card.scopeOption}` : String(card.ref)
+  card.scopeOption ? `SVD-${card.ref} · ${card.scopeOption}` : `SVD-${card.ref}`
 
 function distinctCells(
   pairs: { releaseId: string | null; phaseId: string | null }[],

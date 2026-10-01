@@ -85,6 +85,17 @@
   color: var(--color-destructive);
 }
 
+/* Why a row cannot be deleted, printed beside its own button. The refusal
+   comes from the server and used to appear only at the top of the table, an
+   unscrolled screen away from the button that was pressed — which reads as
+   a button that does nothing. */
+.manage-table__blocked {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-muted-foreground);
+}
+
 /* ========================================
    CREATE ROW
    ======================================== */

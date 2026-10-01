@@ -107,6 +107,30 @@ function useWriteError() {
   return { error, run }
 }
 
+/**
+ * What is referencing a record, in the server's own words — or null when
+ * nothing is.
+ *
+ * The server refuses a delete with dependents (R-9.4, R-9.5) and says why in
+ * a 409. That message landed in one line above the table, which on a
+ * fifty-row table is off-screen from the button that was pressed: the button
+ * looked broken. The same count is already in the payload, so the reason can
+ * sit beside the button and the refusal never has to be discovered.
+ */
+function dependentsNote(
+  parts: { count: number; one: string; many: string }[],
+): string | null {
+  const holding = parts.filter((part) => part.count > 0)
+  if (holding.length === 0) return null
+  const named = holding.map(
+    (part) => `${part.count} ${part.count === 1 ? part.one : part.many}`,
+  )
+  // "1 capability references it", but "1 capability and 2 PwC features
+  // reference it" — the verb agrees with the whole subject, not the last part.
+  const verb = holding.length === 1 && holding[0].count === 1 ? 'references' : 'reference'
+  return `${named.join(' and ')} ${verb} it`
+}
+
 function ErrorLine({ error }: { error: string | null }) {
   if (!error) return null
   return (
@@ -441,6 +465,16 @@ function MvpFeatures({ scope }: { scope: Scope }) {
   const linkCount = (id: number) =>
     scope.featureMvpLinks.filter((l) => l.mvp_feature_id === id).length
 
+  const ownedCount = (id: number) =>
+    scope.capabilities.filter((c) => c.mvp_feature_id === id).length
+
+  /** Null when the record can go; otherwise what is holding it. */
+  const blockedBy = (id: number) =>
+    dependentsNote([
+      { count: linkCount(id), one: 'PwC feature', many: 'PwC features' },
+      { count: ownedCount(id), one: 'capability', many: 'capabilities' },
+    ])
+
   // The same derivation the map uses, so this table and the map agree on
   // where a record sits and on what put it there.
   const cardById = new Map(buildMvpCards(scope).map((card) => [card.id, card]))
@@ -539,13 +573,30 @@ function MvpFeatures({ scope }: { scope: Scope }) {
                 <td className="manage-table__mono">{linkCount(mvp.id)}</td>
                 <td>
                   <div className="manage-table__actions">
+                    {/* `aria-disabled` rather than `disabled`: a disabled
+                        button is skipped by the keyboard, so the reason it
+                        cannot be used would be unreachable for anyone
+                        tabbing through the table (WCAG 2.1 AA, 2.4.3). */}
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => void run(() => remove.mutateAsync(mvp.id))}
+                      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+                      aria-disabled={blockedBy(mvp.id) !== null}
+                      aria-describedby={
+                        blockedBy(mvp.id) !== null ? `mvp-${mvp.id}-blocked` : undefined
+                      }
+                      onClick={() => {
+                        if (blockedBy(mvp.id) !== null) return
+                        void run(() => remove.mutateAsync(mvp.id))
+                      }}
                     >
                       Delete
                     </Button>
+                    {blockedBy(mvp.id) !== null ? (
+                      <span className="manage-table__blocked" id={`mvp-${mvp.id}-blocked`}>
+                        Cannot delete — {blockedBy(mvp.id)}.
+                      </span>
+                    ) : null}
                   </div>
                 </td>
               </tr>

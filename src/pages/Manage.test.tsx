@@ -293,6 +293,86 @@ describe('Manage — MVP features', () => {
   })
 })
 
+describe('Manage — deleting an MSD feature', () => {
+  /** The row for a ref, found by the ref cell rather than by position. */
+  const rowFor = (ref: string) =>
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .find((row) => within(row).queryAllByRole('cell')[0]?.textContent === ref) as HTMLElement
+
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('says at the row what is holding a record it cannot delete', async () => {
+    await openTable()
+    // 948 is cited by one PwC feature and owns one capability.
+    expect(rowFor('948')).toHaveTextContent(
+      /Cannot delete — 1 PwC feature and 1 capability reference it/,
+    )
+  })
+
+  it('agrees the verb with what is actually holding the record', async () => {
+    await openTable()
+    // The first 938 row is cited once and owns nothing — one thing, so
+    // "references", not the compound "reference".
+    expect(rowFor('938')).toHaveTextContent(/1 PwC feature references it/)
+  })
+
+  it('does not ask the server for a delete it knows will be refused', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(within(rowFor('948')).getByRole('button', { name: 'Delete' }))
+    expect(called('mvp.remove')).toHaveLength(0)
+  })
+
+  it('marks the button disabled to assistive tech, but keeps it reachable', async () => {
+    await openTable()
+    const button = within(rowFor('948')).getByRole('button', { name: 'Delete' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    // Not the `disabled` attribute: that would skip it in the tab order and
+    // the reason beside it would never be announced.
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAccessibleDescription(/Cannot delete/)
+  })
+
+  it('deletes a record nothing references', async () => {
+    const user = userEvent.setup()
+    state.graph = makeScopeGraph({
+      mvpFeatures: [
+        {
+          id: 7,
+          ref: 999,
+          scope_option: null,
+          title: 'Unreferenced',
+          release_id: null,
+          phase_id: null,
+          question: null,
+          details: '',
+          source: 'manual',
+        },
+      ],
+      featureMvpLinks: [],
+      capabilities: [],
+    })
+    await openTable()
+
+    const row = rowFor('999')
+    expect(row).not.toHaveTextContent(/Cannot delete/)
+    const button = within(row).getByRole('button', { name: 'Delete' })
+    expect(button).not.toHaveAttribute('aria-disabled', 'true')
+
+    await user.click(button)
+    await waitFor(() => expect(called('mvp.remove')).toHaveLength(1))
+    expect(called('mvp.remove')[0].args[0]).toBe(7)
+  })
+})
+
 describe('Manage — capabilities', () => {
   it('lists them with ref, actor and release', async () => {
     renderManage('/manage/capabilities')

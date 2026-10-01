@@ -1,7 +1,11 @@
 import type { CSSProperties } from 'react'
 import { ConflictBadge } from '@/components/ConflictBadge'
 import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
-import { releaseTokenSuffix, type FeatureCardModel } from '@/lib/scope-derive'
+import {
+  releaseShortLabel,
+  releaseTokenSuffix,
+  type FeatureCardModel,
+} from '@/lib/scope-derive'
 import { densityBand } from '@/lib/scope-edges'
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -90,7 +94,9 @@ export function FeatureCard({
         )}
         <span className="feature-card__meta">
           {detail.release && releaseLabel ? (
-            <span className="feature-card__release">{releaseLabel}</span>
+            <span className="feature-card__release" title={releaseLabel}>
+              {releaseShortLabel(releaseLabel)}
+            </span>
           ) : null}
           {detail.refs && density > 0 ? (
             // Shown passively so load-bearing features read as important

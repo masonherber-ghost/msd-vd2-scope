@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Download, Eye, FileDown, Filter } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { Download, Eye, FileDown, Filter, Printer } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
@@ -772,6 +772,21 @@ export default function ScopeMap() {
           >
             <FileDown aria-hidden="true" />
             {pdfState === 'working' ? 'Building PDF…' : 'Export PDF'}
+          </Button>
+
+          {/* The print view is the same map laid out for paper, printed by
+              the browser — so the text comes out as text rather than as a
+              picture of it. Opened in its own tab, since the map it was
+              taken from is usually still wanted. */}
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={{ pathname: '/print', search: searchParams.toString() }}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Printer aria-hidden="true" />
+              Print view
+            </Link>
           </Button>
 
           <Button
