@@ -293,6 +293,78 @@ describe('Manage — MVP features', () => {
   })
 })
 
+describe('Manage — adding an MSD feature', () => {
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('asks for the ref rather than sending a request that cannot succeed', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP title'), 'No ref given')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    // An empty ref is NaN, which serialises as null and comes back a 422.
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Give the MVP feature a ref/)
+  })
+
+  it('names a ref that is not a number back to the person who typed it', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '99a')
+    await user.type(screen.getByLabelText('New MVP title'), 'Typo')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/“99a” is not an MVP ref/)
+  })
+
+  it('asks for the title too', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '994')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Give the MVP feature a title/)
+  })
+
+  it('puts the refusal beside the controls it belongs to', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+    // The create block, not the line above a fifty-row table.
+    const createBlock = screen
+      .getByRole('button', { name: /add MVP feature/i })
+      .closest('.manage-table__create') as HTMLElement
+    expect(within(createBlock).getByRole('alert')).toBeInTheDocument()
+  })
+
+  it('trims what it sends and clears the draft on success', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), ' 994 ')
+    await user.type(screen.getByLabelText('New MVP title'), '  Something new  ')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    await waitFor(() => expect(called('mvp.create')).toHaveLength(1))
+    expect(called('mvp.create')[0].args[0]).toMatchObject({
+      ref: 994,
+      title: 'Something new',
+    })
+    expect(screen.getByLabelText('New MVP ref')).toHaveValue('')
+  })
+})
+
 describe('Manage — deleting an MSD feature', () => {
   /** The row for a ref, found by the ref cell rather than by position. */
   const rowFor = (ref: string) =>

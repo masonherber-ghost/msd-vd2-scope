@@ -104,7 +104,9 @@ function useWriteError() {
       return false
     }
   }
-  return { error, run }
+  /** A problem found here, before a request the server would only refuse. */
+  const fail = (message: string) => setError(message)
+  return { error, run, fail }
 }
 
 /**
@@ -129,6 +131,23 @@ function dependentsNote(
   // reference it" — the verb agrees with the whole subject, not the last part.
   const verb = holding.length === 1 && holding[0].count === 1 ? 'references' : 'reference'
   return `${named.join(' and ')} ${verb} it`
+}
+
+/**
+ * What is wrong with a new MVP feature, or null when it can be sent.
+ *
+ * The same two rules the server enforces, checked here so the first thing
+ * someone sees is which field needs filling in — not a 422 in the console
+ * and a page that appears to have ignored them.
+ */
+function newMvpProblem(draft: { ref: string; title: string }): string | null {
+  const ref = draft.ref.trim()
+  if (ref === '') return 'Give the MVP feature a ref — a whole number, like 994.'
+  if (!/^\d+$/.test(ref) || Number(ref) <= 0) {
+    return `“${ref}” is not an MVP ref. Refs are whole numbers, like 994.`
+  }
+  if (draft.title.trim() === '') return 'Give the MVP feature a title.'
+  return null
 }
 
 function ErrorLine({ error }: { error: string | null }) {
@@ -454,6 +473,12 @@ function MvpFeatures({ scope }: { scope: Scope }) {
   const update = useUpdateMvpFeature()
   const remove = useDeleteMvpFeature()
   const { error, run } = useWriteError()
+  /**
+   * The create row has its own error line. One shared line above the table
+   * is an unscrolled screen away from the controls down here, so a refused
+   * create looked like a button that did nothing.
+   */
+  const creating = useWriteError()
   const [draft, setDraft] = useState<{
     ref: string
     scope_option: '' | '1A' | '1B'
@@ -670,14 +695,23 @@ function MvpFeatures({ scope }: { scope: Scope }) {
             ))}
           </select>
         </div>
+        <ErrorLine error={creating.error} />
         <Button
           size="sm"
           onClick={async () => {
-            const ok = await run(() =>
+            // A blank or non-numeric ref becomes NaN, which serialises as
+            // `null` and comes back a 422 — the request was never going to
+            // succeed, so say what is missing instead of sending it.
+            const problem = newMvpProblem(draft)
+            if (problem) {
+              creating.fail(problem)
+              return
+            }
+            const ok = await creating.run(() =>
               create.mutateAsync({
-                ref: Number(draft.ref),
+                ref: Number(draft.ref.trim()),
                 scope_option: draft.scope_option === '' ? null : draft.scope_option,
-                title: draft.title,
+                title: draft.title.trim(),
                 release_id: draft.release_id || null,
                 phase_id: draft.phase_id || null,
               }),

@@ -1,4 +1,5 @@
 import type { ViewMode } from '@/lib/scope-derive'
+import { PX_PER_MM } from '@/lib/scope-print'
 import { SCOPE_VIEW_SLUG } from '@/lib/scope-export'
 import { isEmpty, type FilterState } from '@/lib/scope-filters'
 
@@ -307,6 +308,75 @@ export async function captureScopeMapPdf(input: CaptureInput): Promise<string> {
       'FAST',
     )
   })
+
+  const filename = pdfFilenameFor(view, filters)
+  pdf.save(filename)
+  return filename
+}
+
+export type SheetCapture = {
+  /** The laid-out sheet, exactly as it appears on screen. */
+  element: HTMLElement
+  view: ViewMode
+  filters: FilterState
+}
+
+/**
+ * The print sheet, written straight to a PDF the size of itself.
+ *
+ * The browser's own print path produces vector text, but what it produces is
+ * decided by the print dialog: a sheet longer than the chosen paper comes
+ * back sliced across pages, with rows cut through at the boundary. This
+ * route takes the decision away from the dialog — one page, exactly the
+ * sheet's own dimensions, exactly the picture on screen. The text is an
+ * image rather than selectable text; that is the trade for a file that
+ * cannot come out different from the preview.
+ *
+ * The element is measured and the size handed to `html2canvas` explicitly.
+ * Left to itself it sizes the canvas from the live layout box, which is how
+ * the old export silently cropped the right-hand columns and bottom rows.
+ */
+export async function captureSheetPdf({
+  element,
+  view,
+  filters,
+}: SheetCapture): Promise<string> {
+  const width = Math.max(element.offsetWidth, element.scrollWidth)
+  const height = Math.max(element.offsetHeight, element.scrollHeight)
+  if (width <= 0 || height <= 0) throw new Error('There is nothing on the sheet to export.')
+
+  const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+    import('html2canvas-pro'),
+    import('jspdf'),
+  ])
+
+  const background = getComputedStyle(element).backgroundColor || PAPER
+
+  const canvas = await html2canvas(element, {
+    backgroundColor: background,
+    scale: captureScale({ width, height }, window.devicePixelRatio),
+    logging: false,
+    width,
+    height,
+    onclone: (_cloned: Document, clone: HTMLElement) => {
+      // The sheet is shown as paper on screen — edged, rounded and lifted
+      // off a grey backdrop. On the page it *is* the paper, so the frame
+      // around it would print as a box drawn on the sheet.
+      clone.style.border = 'none'
+      clone.style.borderRadius = '0'
+      clone.style.boxShadow = 'none'
+      clone.style.margin = '0'
+    },
+  })
+
+  // The page is the sheet: same proportions, same scale, nothing to fit.
+  const page = { width: width / PX_PER_MM, height: height / PX_PER_MM }
+  const pdf = new jsPDF({
+    orientation: orientationFor(page),
+    unit: 'mm',
+    format: [page.width, page.height],
+  })
+  pdf.addImage(canvas, 'PNG', 0, 0, page.width, page.height, undefined, 'FAST')
 
   const filename = pdfFilenameFor(view, filters)
   pdf.save(filename)

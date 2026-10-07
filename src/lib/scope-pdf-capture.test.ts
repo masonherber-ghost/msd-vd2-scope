@@ -3,10 +3,12 @@ import {
   BLOCK_GAP,
   PAGE,
   captureScopeMapPdf,
+  captureSheetPdf,
   orientationFor,
   pageFor,
   type CaptureBlock,
 } from '@/lib/scope-pdf'
+import { PX_PER_MM } from '@/lib/scope-print'
 import { EMPTY_FILTERS } from '@/lib/scope-filters'
 
 /**
@@ -299,5 +301,76 @@ describe('captureScopeMapPdf — undoing the screen', () => {
     expect(live.scaler.style.width).toBe('1200px')
     expect(live.scaler.style.height).toBe('420px')
     expect(live.grid.style.overflow).toBe('auto')
+  })
+})
+
+
+describe('captureSheetPdf — the print sheet, as drawn', () => {
+  /** A sheet of this many CSS pixels, as the print view lays one out. */
+  const sheet = (width: number, height: number) => element('print-sheet', width, height)
+
+  it('hands the measured size over rather than letting the canvas guess', async () => {
+    await captureSheetPdf({
+      element: sheet(1587, 1814),
+      view: 'release',
+      filters: EMPTY_FILTERS,
+    })
+
+    // Left to itself html2canvas sizes the canvas from the live layout box,
+    // which is how the old export cropped the right-hand columns.
+    const options = html2canvas.mock.calls[0][1]
+    expect(options.width).toBe(1587)
+    expect(options.height).toBe(1814)
+  })
+
+  it('makes a page the exact size of the sheet, so nothing is split or scaled', async () => {
+    await captureSheetPdf({
+      element: sheet(1587, 1814),
+      view: 'release',
+      filters: EMPTY_FILTERS,
+    })
+
+    const { format, orientation } = jsPDFArgs[0] as {
+      format: [number, number]
+      orientation: string
+    }
+    expect(format[0]).toBeCloseTo(1587 / PX_PER_MM, 5)
+    expect(format[1]).toBeCloseTo(1814 / PX_PER_MM, 5)
+    expect(orientation).toBe(orientationFor({ width: format[0], height: format[1] }))
+
+    // Drawn at the origin, filling the page: one picture, one sheet.
+    const [, , x, y, width, height] = addImage.mock.calls[0]
+    expect([x, y]).toEqual([0, 0])
+    expect(width).toBeCloseTo(format[0], 5)
+    expect(height).toBeCloseTo(format[1], 5)
+  })
+
+  it('drops the paper styling the screen puts round the sheet', async () => {
+    const node = sheet(1587, 1814)
+    node.style.border = '1px solid red'
+    node.style.boxShadow = '0 4px 8px black'
+    node.style.borderRadius = '8px'
+
+    await captureSheetPdf({ element: node, view: 'release', filters: EMPTY_FILTERS })
+
+    const clone = node.cloneNode(true) as HTMLElement
+    html2canvas.mock.calls[0][1].onclone(document, clone)
+    expect(clone.style.borderStyle).toBe('none')
+    expect(clone.style.boxShadow).toBe('none')
+    expect(clone.style.borderRadius).toBe('0px')
+    // The live sheet is untouched — nothing flickers under the person.
+    expect(node.style.borderStyle).toBe('solid')
+  })
+
+  it('saves under the view’s own name', async () => {
+    await captureSheetPdf({ element: sheet(1587, 1814), view: 'mvp', filters: EMPTY_FILTERS })
+    expect(save).toHaveBeenCalledWith('vd2-scope-map-by-msd-feature.pdf')
+  })
+
+  it('refuses an unmeasured sheet rather than writing an empty page', async () => {
+    await expect(
+      captureSheetPdf({ element: sheet(0, 0), view: 'release', filters: EMPTY_FILTERS }),
+    ).rejects.toThrow(/nothing on the sheet/)
+    expect(save).not.toHaveBeenCalled()
   })
 })

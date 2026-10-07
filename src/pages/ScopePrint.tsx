@@ -1,11 +1,12 @@
-import { useMemo } from 'react'
-import { Printer } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { FileDown } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { ActorLegend, SCOPE_MAP_TITLE } from '@/components/ScopeMapChrome'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { ScopePrintSheet } from '@/components/ScopePrintSheet'
 import { useScope } from '@/hooks/useScope'
+import { captureSheetPdf } from '@/lib/scope-pdf'
 import { parseDetail } from '@/lib/card-detail'
 import { buildCapabilityCards, applyCapabilityFilters, projectCapabilityCells } from '@/lib/capability-derive'
 import { buildMvpCards, applyMvpFilters, projectMvpCells } from '@/lib/mvp-derive'
@@ -87,6 +88,33 @@ export default function ScopePrint() {
   /** The query string that produced this sheet, so "back" lands on it. */
   const backTo = `/?${searchParams.toString()}`
 
+  /**
+   * The sheet, written to a PDF the size of itself.
+   *
+   * Not the browser's print dialog: that decides the paper, and a sheet
+   * longer than the paper comes back sliced across pages with rows cut
+   * through. This writes one page the exact size of what is on screen.
+   */
+  const sheetRef = useRef<HTMLElement>(null)
+  const [pdfState, setPdfState] = useState<'idle' | 'working' | 'failed'>('idle')
+
+  const download = useCallback(async () => {
+    const element = sheetRef.current
+    if (!element) {
+      setPdfState('failed')
+      return
+    }
+    setPdfState('working')
+    try {
+      await captureSheetPdf({ element, view, filters })
+      setPdfState('idle')
+    } catch {
+      // Rendering to a canvas can fail on a resource the browser will not
+      // let us read. Say so rather than leaving a button that did nothing.
+      setPdfState('failed')
+    }
+  }, [view, filters])
+
   return (
     <div className="flex min-h-dvh flex-col gap-4 overflow-x-auto bg-muted p-4 print:overflow-visible print:bg-transparent print:p-0">
       {/* Screen furniture: the sheet below is the only thing that prints. */}
@@ -95,13 +123,22 @@ export default function ScopePrint() {
           <Button asChild variant="outline" size="sm">
             <Link to={backTo}>Back to the map</Link>
           </Button>
-          <p className="text-sm text-muted-foreground">
-            A3 landscape. Print, then choose “Save as PDF” to keep a copy.
+          <p
+            className="text-sm text-muted-foreground"
+            role={pdfState === 'failed' ? 'alert' : undefined}
+          >
+            {pdfState === 'failed'
+              ? 'The sheet could not be written to a PDF. Try again.'
+              : 'The PDF is one page, exactly the sheet below.'}
           </p>
         </div>
-        <Button size="sm" onClick={() => window.print()} disabled={!model}>
-          <Printer aria-hidden="true" />
-          Print / Save as PDF
+        <Button
+          size="sm"
+          onClick={() => void download()}
+          disabled={!model || pdfState === 'working'}
+        >
+          <FileDown aria-hidden="true" />
+          {pdfState === 'working' ? 'Building PDF…' : 'Download PDF'}
         </Button>
       </div>
 
@@ -119,6 +156,7 @@ export default function ScopePrint() {
           subtitle={SCOPE_VIEW_LABEL[view]}
           meta={meta}
           legend={<ActorLegend />}
+          sheetRef={sheetRef}
         >
           <ScopeMapGrid
             model={{ ...model, ...projected }}

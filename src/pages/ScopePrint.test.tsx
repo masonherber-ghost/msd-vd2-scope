@@ -24,6 +24,16 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
   }
 })
 
+const { capture } = vi.hoisted(() => ({ capture: vi.fn() }))
+
+// jsdom renders nothing to a canvas, so a real capture is impossible here.
+// What the page is responsible for is handing over the right element and
+// reporting what came back.
+vi.mock('@/lib/scope-pdf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/scope-pdf')>()),
+  captureSheetPdf: capture,
+}))
+
 const { makeScopeGraph } = await import('@/test/scope-fixture')
 const ScopePrint = (await import('@/pages/ScopePrint')).default
 
@@ -46,6 +56,8 @@ const sheet = async () => {
 beforeEach(() => {
   state.fail = null
   state.graph = makeScopeGraph()
+  capture.mockReset()
+  capture.mockResolvedValue('vd2-scope-map-by-pwc-package.pdf')
 })
 
 describe('ScopePrint — the sheet', () => {
@@ -110,16 +122,39 @@ describe('ScopePrint — what the sheet says about itself', () => {
 })
 
 describe('ScopePrint — printing', () => {
-  it('prints through the browser, so the sheet comes out as text', async () => {
-    const print = vi.fn()
-    vi.stubGlobal('print', print)
+  it('writes the sheet itself to a PDF, not whatever the print dialog decides', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const printed = await sheet()
+
+    await user.click(screen.getByRole('button', { name: /Download PDF/ }))
+    await waitFor(() => expect(capture).toHaveBeenCalled())
+    // The sheet element, so the file cannot come out different from the
+    // preview above it.
+    expect(capture.mock.calls[0][0].element).toBe(printed)
+  })
+
+  it('carries the view and filters through to the filename', async () => {
+    const user = userEvent.setup()
+    renderPage('?view=mvp&release=1.1')
+    await sheet()
+
+    await user.click(screen.getByRole('button', { name: /Download PDF/ }))
+    await waitFor(() => expect(capture).toHaveBeenCalled())
+    expect(capture.mock.calls[0][0]).toMatchObject({ view: 'mvp' })
+    expect(capture.mock.calls[0][0].filters.release).toEqual(['1.1'])
+  })
+
+  it('says so when the capture fails, rather than looking like it did nothing', async () => {
+    capture.mockRejectedValueOnce(new Error('canvas refused'))
     const user = userEvent.setup()
     renderPage()
     await sheet()
 
-    await user.click(screen.getByRole('button', { name: /Print \/ Save as PDF/ }))
-    expect(print).toHaveBeenCalled()
-    vi.unstubAllGlobals()
+    await user.click(screen.getByRole('button', { name: /Download PDF/ }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent(/could not be written to a PDF/),
+    )
   })
 
   it('offers the way back to the map it was taken from', async () => {

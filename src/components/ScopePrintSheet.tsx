@@ -12,6 +12,8 @@ export type ScopePrintSheetProps = {
   legend?: ReactNode
   /** The map itself, at its natural size — this component scales it. */
   children: ReactNode
+  /** The sheet element, for the export that writes it to a PDF as drawn. */
+  sheetRef?: React.Ref<HTMLElement>
 }
 
 /**
@@ -30,6 +32,7 @@ export function ScopePrintSheet({
   meta,
   legend,
   children,
+  sheetRef,
 }: ScopePrintSheetProps) {
   const headerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<HTMLDivElement>(null)
@@ -83,7 +86,7 @@ export function ScopePrintSheet({
   const pageHeight = pageHeightMm(painted.height + headerHeight)
 
   return (
-    <article className="print-sheet" style={{ ['--print-sheet-height' as string]: `${pageHeight}mm` }}>
+    <article ref={sheetRef} className="print-sheet" style={{ ['--print-sheet-height' as string]: `${pageHeight}mm` }}>
       {/* `@page` reads no custom property and cannot be written in the
           stylesheet, because the height is whatever this map turned out to
           need. The rule is emitted here instead, and goes with the page. */}
