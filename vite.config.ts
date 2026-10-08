@@ -21,6 +21,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
+    // Need the emulators — run via `npm run test:rules`.
+    exclude: ['**/node_modules/**', 'src/test/emulator/**'],
     restoreMocks: true,
   },
   server: {

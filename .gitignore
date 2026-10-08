@@ -33,3 +33,11 @@ server/uploads/
 logs/
 *.log
 npm-debug.log*
+
+# Firebase: emulator state, debug logs, and the Admin SDK key (a real secret)
+.emulator-data/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
+admin/service-account.json

@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router-dom'
 import '@/globals.css'
 import { router } from '@/routes'
 import { AuthProvider } from '@/hooks/AuthContext'
+import { RequireAuth } from '@/components/RequireAuth'
 
 const rootElement = document.getElementById('root')
 if (!rootElement) throw new Error('Root element #root not found in index.html')
@@ -23,9 +24,11 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Suspense fallback={null}>
-          <RouterProvider router={router} />
-        </Suspense>
+        <RequireAuth>
+          <Suspense fallback={null}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </RequireAuth>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

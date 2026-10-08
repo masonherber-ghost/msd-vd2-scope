@@ -4,6 +4,18 @@ import { Suspense } from 'react'
 import { RouterProvider, createMemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+// The real provider initialises Firebase on import; the gate is tested in
+// RequireAuth.test.tsx.
+vi.mock('@/hooks/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'owner', name: 'Test Owner', email: null },
+    isAuthenticated: true,
+    isLoading: false,
+    signIn: vi.fn(),
+    signOut: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-client')>()
   return {
