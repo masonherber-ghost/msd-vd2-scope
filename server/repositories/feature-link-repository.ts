@@ -1,5 +1,8 @@
 import type { Statement } from 'better-sqlite3'
 import { db } from '../database.js'
+import type { ConflictInputs } from '../../src/lib/conflict-rules.js'
+
+export type { ConflictInputs }
 
 export type FeatureMvpLinkRow = {
   pwc_feature_id: string
@@ -267,23 +270,6 @@ export function resolveConflict(
   `)
   setResolution.run({ id, state, note })
   return getFeatureCapabilityLink(id)
-}
-
-/** Everything the conflict rules need about one live link, joined up. */
-export type ConflictInputs = {
-  link_id: number
-  pwc_feature_id: string
-  capability_id: number
-  matched: number
-  feature_release_id: string
-  feature_phase_id: string
-  feature_phase_label: string | null
-  capability_release_id: string | null
-  capability_phase_id: string | null
-  capability_phase_label: string | null
-  release_conflict: number
-  phase_conflict: number
-  phase_conflict_merged: number
 }
 
 const CONFLICT_INPUTS_SQL = `

@@ -25,6 +25,7 @@
     "vite.config.ts",
     "server/**/*.ts",
     "scripts/**/*.ts",
-    "src/lib/validators.ts"
+    "src/lib/validators.ts",
+    "src/lib/conflict-rules.ts"
   ]
 }
