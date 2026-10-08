@@ -27,7 +27,7 @@ concurrency:
 jobs:
   build:
     if: ${{ !inputs.redeploy_run_id }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to 26 on 2026-10-19
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -74,7 +74,7 @@ jobs:
   publish:
     needs: [build]
     if: ${{ !cancelled() && needs.build.result != 'failure' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to 26 on 2026-10-19
     environment:
       name: production
       url: https://masonherber.com/scopemap/
