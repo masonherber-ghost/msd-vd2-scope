@@ -26,7 +26,6 @@
   },
   "include": [
     "vite.config.ts",
-    "server/**/*.ts",
     "scripts/**/*.ts",
     "admin/**/*.ts",
     "src/lib/validators.ts",

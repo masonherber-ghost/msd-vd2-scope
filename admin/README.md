@@ -25,14 +25,21 @@ Emulator runs (`--emulator`) need no key.
 
 | Script | Does |
 |---|---|
-| `sqlite-export.ts` | Reads the old SQLite database into the stored-document shape, verbatim |
-| `seed-firestore.ts` | One-time copy of SQLite into `users/{uid}/`, then reads it all back and compares. Refuses to overwrite a non-empty store without `--force` |
+| `import-scope.ts` | Re-imports the source documents in `_docs/`. Dry run by default; `--apply` writes and verifies. Run through the `/import-scope` skill |
+| `backup-firestore.ts` | The whole store to `backups/firestore-<stamp>.json` (`npm run backup-db`) |
+| `restore-firestore.ts` | Makes the store exactly a backup file. Dry run by default; `--apply` writes |
+| `seed-firestore.ts` | One-time copy of the old SQLite database (default: the final snapshot in `backups/sqlite/`) into an **empty** store. Refuses a non-empty one without `--force` |
+| `firestore-admin.ts` | Shared: connect, read the store, per-document diff, commit, verify |
+| `sqlite-export.ts` | Reads an SQLite database into the stored-document shape, verbatim |
+| `import/` | The source parsers, reconciliation, declared overrides, and `plan-import.ts` — the re-import planned against the store |
+
+Every script takes `--emulator` to run against the local emulator instead, and
+defaults the owner UID to the one pinned in `firestore.rules`.
 
 ```bash
-# Dry run against the local emulator
-npx firebase emulators:exec --only firestore \
-  "npx tsx admin/seed-firestore.ts --uid <UID> --emulator"
-
-# Production
-npx tsx admin/seed-firestore.ts --uid <UID>
+npm run import-scope                 # dry run
+npm run import-scope -- --apply      # write
+npm run backup-db
+npx tsx admin/restore-firestore.ts backups/firestore-<stamp>.json            # dry run
+npx tsx admin/restore-firestore.ts backups/firestore-<stamp>.json --apply
 ```

@@ -1,6 +1,7 @@
 /**
- * The conflict rules for one feature→capability link, shared by the server's
- * recompute and the browser data client so the two can never disagree.
+ * The conflict rules for one feature→capability link, shared by the browser's
+ * writes (scope-plan.ts) and the re-import (admin/import/plan-import.ts), so
+ * the two can never disagree.
  */
 
 /** Everything the conflict rules need about one live link, joined up. */

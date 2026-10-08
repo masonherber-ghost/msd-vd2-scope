@@ -20,9 +20,6 @@ dist-ssr/
 # holds the final pre-Firestore SQLite snapshot: the permanent rollback copy.
 !backups/**/*.db
 
-# Uploaded files live on disk; only filenames go in the database
-server/uploads/
-
 # Editor / OS
 .DS_Store
 *.local

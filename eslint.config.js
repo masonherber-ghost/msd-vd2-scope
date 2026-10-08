@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  { ignores: ['dist', 'coverage', 'node_modules', 'server/backups'] },
+  { ignores: ['dist', 'coverage', 'node_modules', 'backups'] },
 
   // Client
   {
@@ -44,9 +44,9 @@ export default tseslint.config(
     rules: { 'react-refresh/only-export-components': 'off' },
   },
 
-  // Server and scripts — console logging is the intended output here.
+  // Admin and scripts — console logging is the intended output here.
   {
-    files: ['server/**/*.ts', 'scripts/**/*.ts', 'admin/**/*.ts', 'vite.config.ts', 'vitest.emulator.config.ts'],
+    files: ['scripts/**/*.ts', 'admin/**/*.ts', 'vite.config.ts', 'vitest.emulator.config.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
