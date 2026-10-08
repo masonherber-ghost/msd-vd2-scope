@@ -1,0 +1,60 @@
+# MSD VD2 Scope — served from masonherber.com/scopemap/
+#
+# Deployed by .github/workflows/deploy.yml into public_html/scopemap/ only.
+# RewriteBase must match `base` in vite.config.ts (the router's basename is
+# derived from it).
+
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /scopemap/
+
+  # 1. One canonical origin: https, no www. Firebase Auth matches the origin
+  #    exactly, and a second origin would be a second, signed-out session.
+  #    The forwarded headers stop a redirect loop behind a TLS-terminating proxy.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteCond %{HTTP:X-Forwarded-SSL} !=on
+  RewriteRule ^ https://masonherber.com%{REQUEST_URI} [L,R=301]
+
+  RewriteCond %{HTTP_HOST} ^www\. [NC]
+  RewriteRule ^ https://masonherber.com%{REQUEST_URI} [L,R=301]
+
+  # 2. SPA fallback: real files (the hashed chunks) are served as they are;
+  #    every other path is a client route, so it gets the app shell.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+  RewriteRule . /scopemap/index.html [L]
+</IfModule>
+
+# 3. Caching. Everything under assets/ is content-hashed by Vite, so it can be
+#    cached for a year; index.html must be re-checked every time or a deploy
+#    never reaches anyone who has visited before.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(js|css|woff2?|png|jpe?g|svg|webp|ico)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+  <FilesMatch "^index\.html$">
+    Header set Cache-Control "no-cache, must-revalidate"
+  </FilesMatch>
+</IfModule>
+
+# 4. Private files. Apache only blocks .ht* by itself; the deploy's sync-state
+#    file would otherwise list every file on the site.
+<FilesMatch "^\.(ftp-deploy-sync-state\.json|htaccess|env)$">
+  Require all denied
+</FilesMatch>
+
+# 5. Types and compression.
+<IfModule mod_mime.c>
+  AddType application/javascript .js .mjs
+  AddType text/css .css
+  AddType font/woff2 .woff2
+  AddType image/svg+xml .svg
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css application/javascript application/json image/svg+xml
+</IfModule>

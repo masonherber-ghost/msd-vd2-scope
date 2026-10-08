@@ -6,6 +6,9 @@ import { fileURLToPath, URL } from 'node:url'
 const src = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
 export default defineConfig({
+  // Served from masonherber.com/scopemap/. The router's basename and
+  // public/.htaccess's RewriteBase derive from / must match this.
+  base: '/scopemap/',
   plugins: [react(), tailwindcss()],
   resolve: {
     // Most specific aliases first — the resolver matches in order.

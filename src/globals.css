@@ -12,7 +12,7 @@
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("/fonts/atkinson-hyperlegible-400.woff2") format("woff2");
+  src: url("./assets/fonts/atkinson-hyperlegible-400.woff2") format("woff2");
 }
 
 @font-face {
@@ -20,7 +20,7 @@
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  src: url("/fonts/atkinson-hyperlegible-700.woff2") format("woff2");
+  src: url("./assets/fonts/atkinson-hyperlegible-700.woff2") format("woff2");
 }
 
 /* BEM component CSS. One file per component, per rules-css-bem.md. */

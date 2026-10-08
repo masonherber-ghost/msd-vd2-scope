@@ -1,0 +1,30 @@
+name: CI
+
+# Every branch but main, and every pull request: the same gates the deploy
+# runs, without publishing. main is covered by deploy.yml, which re-runs them.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # No Firebase config here: this proves typecheck and bundling only.
+      - run: npm run build

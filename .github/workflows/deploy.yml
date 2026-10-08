@@ -1,0 +1,118 @@
+name: Deploy
+
+# Push to main → build, gate, publish to masonherber.com/scopemap/ over FTPS,
+# smoke-test the live site.
+#
+# Rollback: Actions → Deploy → Run workflow, with redeploy_run_id set to the
+# run id of a good earlier deploy. It re-publishes that run's dist/ as-is.
+# Builds are kept for 90 days.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      redeploy_run_id:
+        description: 'Rollback: re-publish dist from a previous run id. Blank = build this ref.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read # cross-run artifact download, for rollback
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never cancel a half-finished sync
+
+jobs:
+  build:
+    if: ${{ !inputs.redeploy_run_id }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # Public web config (repo Variables, not Secrets) — it ships in the
+          # bundle; firestore.rules is the security boundary.
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+
+      - name: Gate the artifact
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          test -f dist/.htaccess
+          grep -q 'src="/scopemap/assets/' dist/index.html
+          grep -q 'href="/scopemap/assets/' dist/index.html
+          # A missing VITE_ var is inlined as `void 0` and still builds green.
+          if grep -qE '(apiKey|authDomain|projectId|storageBucket|messagingSenderId|appId):(void 0|undefined)' dist/assets/*.js; then
+            echo "::error::Firebase config not injected — check the repo Variables (not Secrets)"
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+          include-hidden-files: true # the default drops dist/.htaccess, silently
+          if-no-files-found: error
+          retention-days: 90 # the rollback window
+
+  publish:
+    needs: [build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://masonherber.com/scopemap/
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+          run-id: ${{ inputs.redeploy_run_id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: SamKirkland/FTP-Deploy-Action@v4.4.0
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps # explicit TLS on 21, not ftps-legacy
+          port: 21
+          security: strict
+          timeout: 60000
+          local-dir: ./dist/
+          # Correct only because the FTP account is scoped to
+          # public_html/scopemap/ — the portfolio at the domain root is out of
+          # its reach.
+          server-dir: ./
+          state-name: .ftp-deploy-sync-state.json
+          # `exclude` deliberately unset: setting it replaces the defaults.
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS https://masonherber.com/scopemap/ -o /tmp/index.html
+          ASSET=$(grep -o '/scopemap/assets/index-[^"]*\.js' /tmp/index.html | head -1)
+          test -n "$ASSET"
+          curl -fsSI "https://masonherber.com$ASSET" | grep -qi 'immutable'
+          # A deep link is a client route: the shell, not a 404.
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://masonherber.com/scopemap/coverage)" = 200
+          # The sync-state file lists every file on the site; it must be denied.
+          test "$(curl -s -o /dev/null -w '%{http_code}' https://masonherber.com/scopemap/.ftp-deploy-sync-state.json)" = 403
+          # The portfolio at the root is untouched.
+          curl -fsS https://masonherber.com/ | grep -q "<title>Mason Herber's Portfolio"
