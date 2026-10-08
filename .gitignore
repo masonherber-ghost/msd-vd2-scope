@@ -41,3 +41,4 @@ firestore-debug.log
 ui-debug.log
 .firebase/
 admin/service-account.json
+*firebase-adminsdk*.json
