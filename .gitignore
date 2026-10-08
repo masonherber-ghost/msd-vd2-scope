@@ -16,8 +16,9 @@ dist-ssr/
 *.db-journal
 *.db-wal
 *.db-shm
-# Backups are deliberately committable — see the /backup-db skill.
-!server/backups/*.db
+# Backups are deliberately committable — see the /backup-db skill. backups/sqlite/
+# holds the final pre-Firestore SQLite snapshot: the permanent rollback copy.
+!backups/**/*.db
 
 # Uploaded files live on disk; only filenames go in the database
 server/uploads/

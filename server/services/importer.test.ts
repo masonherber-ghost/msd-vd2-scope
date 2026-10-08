@@ -12,7 +12,7 @@ const { resetSchema } = await import('../test-support/apply-migrations.js')
 const { ImportDriftError, assumptionsToMarkdown, chooseMvpOwner, importScope } = await import(
   './importer.js'
 )
-const { loadScopeFromSources } = await import('./scope-source.js')
+const { loadScopeFromSources } = await import('../../admin/import/scope-source.js')
 const { getScopeGraph } = await import('../repositories/scope-repository.js')
 const { updateCapability } = await import('../repositories/capability-repository.js')
 

@@ -27,7 +27,8 @@ import { exportRawScope, exportSequences } from './sqlite-export.js'
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url))
-const DEFAULT_DB = path.join(here, '..', 'server', 'msd-vd2-scope.db')
+// The final pre-Firestore snapshot — the live SQLite file went with the server.
+const DEFAULT_DB = path.join(here, '..', 'backups', 'sqlite', 'msd-vd2-scope-final-pre-firestore.db')
 const SERVICE_ACCOUNT = path.join(here, 'service-account.json')
 const PROJECT_ID = 'vd2-scope'
 

@@ -11,8 +11,9 @@ import type {
   StoredMvpFeature,
   StoredPwcFeature,
 } from '../../src/lib/scope-records.js'
-import type { MergedMvpFeature, ReconcileResult } from '../../server/services/reconcile.js'
-import { findCountDrift } from '../../server/services/scope-source.js'
+import { FEATURE_ID_PATTERN } from '../../src/lib/validators.js'
+import type { MergedMvpFeature, ReconcileResult } from './reconcile.js'
+import { findCountDrift } from './scope-source.js'
 
 /**
  * Re-import, planned against the store: what server/services/importer.ts did
@@ -112,6 +113,55 @@ const findBySourceText = (d: Draft, ref: number, text: string) =>
   d.data.capabilities.find(
     (c) => c.mvp_ref === ref && sqlLower(c.source_text ?? c.text) === sqlLower(text),
   )
+
+/**
+ * The foreign keys and the feature-id CHECK SQLite enforced, checked by hand:
+ * every id must be one the app itself would accept, and every reference in
+ * the planned store must name a row that exists. A source that would leave a
+ * feature on a phase nobody defined refuses the whole import — nothing is
+ * committed — rather than writing a card the map has nowhere to draw.
+ */
+function assertReferencesResolve(d: Draft): void {
+  const has = (rows: { id: string | number }[]) => new Set(rows.map((r) => r.id))
+  const releases = has(d.data.releases)
+  const phases = has(d.data.phases)
+  const features = has(d.data.pwcFeatures)
+  const mvps = has(d.data.mvpFeatures)
+  const capabilities = has(d.data.capabilities)
+
+  const broken: string[] = []
+  const check = (ok: boolean, what: string) => {
+    if (!ok) broken.push(what)
+  }
+  for (const f of d.data.pwcFeatures) {
+    // The old CHECK (id GLOB 'F-[0-9][0-9][0-9]'): the app refuses any other
+    // id on create, so the import must not write one either.
+    check(FEATURE_ID_PATTERN.test(f.id), `feature id ${f.id} is not F-nnn`)
+    check(releases.has(f.release_id), `feature ${f.id} → release ${f.release_id}`)
+    check(phases.has(f.phase_id), `feature ${f.id} → phase ${f.phase_id}`)
+  }
+  for (const c of d.data.capabilities) {
+    // Nullable: an unmatched capability genuinely has no placement or owner.
+    check(c.release_id === null || releases.has(c.release_id), `capability ${c.id} → release ${c.release_id}`)
+    check(c.phase_id === null || phases.has(c.phase_id), `capability ${c.id} → phase ${c.phase_id}`)
+    check(c.mvp_feature_id === null || mvps.has(c.mvp_feature_id), `capability ${c.id} → MVP record ${c.mvp_feature_id}`)
+  }
+  for (const l of d.data.featureMvpLinks) {
+    check(features.has(l.pwc_feature_id), `link → feature ${l.pwc_feature_id}`)
+    check(mvps.has(l.mvp_feature_id), `link ${l.pwc_feature_id} → MVP record ${l.mvp_feature_id}`)
+  }
+  for (const l of d.data.featureCapabilityLinks) {
+    check(features.has(l.pwc_feature_id), `link ${l.id} → feature ${l.pwc_feature_id}`)
+    check(capabilities.has(l.capability_id), `link ${l.id} → capability ${l.capability_id}`)
+  }
+
+  if (broken.length > 0) {
+    throw new Error(
+      `Import refused — ${broken.length} reference(s) point at nothing: ${broken.slice(0, 5).join('; ')}` +
+        (broken.length > 5 ? '; …' : ''),
+    )
+  }
+}
 
 export function planImport(ctx: PlanContext, result: ReconcileResult): Plan<ImportSummary> {
   const drift = findCountDrift(result)
@@ -433,6 +483,8 @@ export function planImport(ctx: PlanContext, result: ReconcileResult): Plan<Impo
     d.remove('mvpFeatures', mvp)
     removedMvpFeatures.push({ ref: mvp.ref, scope_option: mvp.scope_option })
   }
+
+  assertReferencesResolve(d)
 
   return d.done({
     releases: result.releases.length,

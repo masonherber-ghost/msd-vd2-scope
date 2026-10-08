@@ -23,9 +23,9 @@ import {
   deleteImportedReleasesNotIn,
   upsertImportedRelease,
 } from '../repositories/release-repository.js'
-import type { MergedMvpFeature, ReconcileResult } from './reconcile.js'
-import { findCountDrift, loadScopeFromSources } from './scope-source.js'
-import type { ScopeOption } from './scope-types.js'
+import type { MergedMvpFeature, ReconcileResult } from '../../admin/import/reconcile.js'
+import { findCountDrift, loadScopeFromSources } from '../../admin/import/scope-source.js'
+import type { ScopeOption } from '../../admin/import/scope-types.js'
 
 
 /**

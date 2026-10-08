@@ -7,7 +7,7 @@ import { getAllMvpFeatures } from './mvp-feature-repository.js'
 import { getAllPhases } from './phase-repository.js'
 import { getAllPwcFeatures } from './pwc-feature-repository.js'
 import { getAllReleases } from './release-repository.js'
-import { RELEASE_ALIASES, SCOPE_OVERRIDES } from '../services/scope-overrides.js'
+import { RELEASE_ALIASES, SCOPE_OVERRIDES } from '../../admin/import/scope-overrides.js'
 
 export type ScopeGraph = ReturnType<typeof getScopeGraph>
 

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { HttpError } from '../middleware/error-handler.js'
 import { ImportDriftError, importScopeFromSources } from '../services/importer.js'
-import { ParseError } from '../services/scope-types.js'
+import { ParseError } from '../../admin/import/scope-types.js'
 
 export const importRouter = Router()
 

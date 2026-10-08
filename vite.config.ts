@@ -20,7 +20,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts', 'admin/**/*.test.ts'],
     // Need the emulators — run via `npm run test:emulator`.
     exclude: ['**/node_modules/**', 'src/test/emulator/**'],
     restoreMocks: true,

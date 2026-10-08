@@ -128,18 +128,29 @@ export type SetCapabilityLinksInput = z.infer<typeof setCapabilityLinksSchema>
 /** `1.1`, `1.4`, `2` — a major with an optional minor, as both sources write them. */
 export const RELEASE_ID_PATTERN = /^\d+(\.\d+)?$/
 
+const releaseFields = {
+  label: z.string().trim().min(1, 'Give the package a label.').max(80),
+  name: z.string().trim().max(200),
+  description: z.string().trim().max(2000),
+}
+
 export const createReleaseSchema = z.object({
   id: z
     .string()
     .trim()
     .regex(RELEASE_ID_PATTERN, 'A package id looks like 1.1, 1.4 or 2.'),
-  label: z.string().trim().min(1, 'Give the package a label.').max(80),
-  name: z.string().trim().max(200).default(''),
-  description: z.string().trim().max(2000).default(''),
+  label: releaseFields.label,
+  name: releaseFields.name.default(''),
+  description: releaseFields.description.default(''),
 })
 
-export const updateReleaseSchema = createReleaseSchema
-  .omit({ id: true })
+/**
+ * Built from the bare fields, not from the create schema: in zod 4 a
+ * `.default()` still fires inside `.partial()`, so a PATCH of `{ label }`
+ * would come out carrying `name: ''` and `description: ''` and wipe them.
+ */
+export const updateReleaseSchema = z
+  .object(releaseFields)
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
 
@@ -147,20 +158,27 @@ export const updateReleaseSchema = createReleaseSchema
 // Phases
 // ---------------------------------------------------------------------------
 
+const phaseFields = {
+  name: z.string().trim().min(1, 'Give the phase a name.').max(120),
+  // Free text and deliberately not unique — epic 186 sits on two phases (D-2).
+  epic_ref: z.string().trim().max(40),
+  epic_description: z.string().trim().max(500),
+}
+
 export const createPhaseSchema = z.object({
   id: z
     .string()
     .trim()
     .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, 'A phase id is lower-case words joined by hyphens.')
     .max(80),
-  name: z.string().trim().min(1, 'Give the phase a name.').max(120),
-  // Free text and deliberately not unique — epic 186 sits on two phases (D-2).
-  epic_ref: z.string().trim().max(40).default(''),
-  epic_description: z.string().trim().max(500).default(''),
+  name: phaseFields.name,
+  epic_ref: phaseFields.epic_ref.default(''),
+  epic_description: phaseFields.epic_description.default(''),
 })
 
-export const updatePhaseSchema = createPhaseSchema
-  .omit({ id: true })
+/** From the bare fields, for the reason given on updateReleaseSchema. */
+export const updatePhaseSchema = z
+  .object(phaseFields)
   .partial()
   .refine((value) => Object.keys(value).length > 0, { message: 'Nothing to update.' })
 

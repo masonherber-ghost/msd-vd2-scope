@@ -34,7 +34,7 @@ db.pragma('foreign_keys = ON')
 vi.mock('../database.js', () => ({ db }))
 
 const { importScope } = await import('../services/importer.js')
-const { loadScopeFromSources } = await import('../services/scope-source.js')
+const { loadScopeFromSources } = await import('../../admin/import/scope-source.js')
 const caps = await import('../repositories/capability-repository.js')
 const features = await import('../repositories/pwc-feature-repository.js')
 const links = await import('../repositories/feature-link-repository.js')

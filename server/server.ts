@@ -28,7 +28,7 @@ const { conflictsRouter } = await import('./routes/conflicts.js')
 const { errorHandler, notFoundHandler } = await import('./middleware/error-handler.js')
 const { isScopeEmpty } = await import('./repositories/scope-repository.js')
 const { importScopeFromSources } = await import('./services/importer.js')
-const { findCountDrift, loadScopeFromSources } = await import('./services/scope-source.js')
+const { findCountDrift, loadScopeFromSources } = await import('../admin/import/scope-source.js')
 
 runMigrations()
 

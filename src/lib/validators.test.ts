@@ -7,6 +7,8 @@ import {
   sourceLabel,
   summariseZodError,
   updateFeatureSchema,
+  updatePhaseSchema,
+  updateReleaseSchema,
 } from '@/lib/validators'
 
 const valid = {
@@ -99,6 +101,24 @@ describe('updateFeatureSchema', () => {
 
   it('still rejects a blank name', () => {
     expect(updateFeatureSchema.safeParse({ name: '  ' }).success).toBe(false)
+  })
+})
+
+describe('update schemas carry only what was sent', () => {
+  // In zod 4 a `.default()` still fires inside `.partial()`, so an update
+  // schema derived from its create schema invents blank values for every
+  // field the patch left out — and saving one field wiped the others.
+  it('a release label patch does not invent a name or description', () => {
+    expect(updateReleaseSchema.parse({ label: 'Package 9' })).toEqual({ label: 'Package 9' })
+  })
+
+  it('a phase name patch does not invent an epic ref or description', () => {
+    expect(updatePhaseSchema.parse({ name: 'Vacancies' })).toEqual({ name: 'Vacancies' })
+  })
+
+  it('still refuses an empty patch', () => {
+    expect(updateReleaseSchema.safeParse({}).success).toBe(false)
+    expect(updatePhaseSchema.safeParse({}).success).toBe(false)
   })
 })
 

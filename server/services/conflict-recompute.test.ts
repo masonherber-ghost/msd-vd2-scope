@@ -8,7 +8,7 @@ vi.mock('../database.js', () => ({ db }))
 
 const { resetSchema } = await import('../test-support/apply-migrations.js')
 const { importScope } = await import('./importer.js')
-const { loadScopeFromSources } = await import('./scope-source.js')
+const { loadScopeFromSources } = await import('../../admin/import/scope-source.js')
 const {
   deriveLinkConflict,
   recomputeAllConflicts,
