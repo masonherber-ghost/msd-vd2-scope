@@ -7,14 +7,13 @@ rules_version = '2';
 // UID may touch that subtree. OWNER_UID is pinned rather than "any signed-in
 // user", because Google sign-in is open to every Google account.
 //
-// The placeholder denies everyone until it is replaced with the real UID
-// (Firebase console → Authentication → Users, after the first sign-in).
+// The owner's UID is in Firebase console → Authentication → Users.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) {
       return request.auth != null
         && request.auth.uid == uid
-        && uid == 'OWNER_UID_PENDING';
+        && uid == 'ZKiKolGTyMN64MeQXZV9QaY9Jsn1';
     }
 
     match /users/{uid}/{document=**} {
