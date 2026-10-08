@@ -80,7 +80,7 @@ export type PlanContext = {
 }
 
 /** A working copy of the store that records every write made to it. */
-class Draft {
+export class Draft {
   readonly data: RawScope
   readonly writes: Write[] = []
   readonly sequences: Partial<Sequences> = {}
@@ -282,6 +282,15 @@ const recomputeForCapability = (d: Draft, capabilityId: number) =>
 
 const recomputeForFeature = (d: Draft, featureId: string) =>
   applyConflicts(d, conflictInputs(d, (l) => l.pwc_feature_id === featureId))
+
+/** Every live link — the import settles flags against what it wrote. */
+export const recomputeAllConflicts = (d: Draft) => applyConflicts(d, conflictInputs(d, () => true))
+
+/**
+ * SQLite's LOWER(): ASCII letters only. Capability identity was a unique
+ * index on (mvp_ref, LOWER(text)), so matching must lowercase exactly that.
+ */
+export const sqlLower = (text: string) => text.replace(/[A-Z]/g, (c) => c.toLowerCase())
 
 // ---------------------------------------------------------------------------
 // Releases
@@ -1019,9 +1028,10 @@ export function planUpdateCapability(
   // Identity is (ref, case-insensitive text): a rename onto a sibling's
   // wording is refused rather than left to collide.
   if (input.text !== undefined) {
-    const text = input.text.toLowerCase()
+    // The route matched with SQL LOWER(), so ASCII-only lowercasing here.
+    const text = sqlLower(input.text)
     const clash = d.data.capabilities.find(
-      (c) => c.mvp_ref === current.mvp_ref && c.text.toLowerCase() === text,
+      (c) => c.mvp_ref === current.mvp_ref && sqlLower(c.text) === text,
     )
     if (clash && clash.id !== id) {
       throw new ApiError(
