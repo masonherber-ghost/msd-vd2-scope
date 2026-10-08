@@ -19,13 +19,18 @@
     "noUncheckedSideEffectImports": true,
     "types": [
       "node"
-    ]
+    ],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
   },
   "include": [
     "vite.config.ts",
     "server/**/*.ts",
     "scripts/**/*.ts",
+    "admin/**/*.ts",
     "src/lib/validators.ts",
-    "src/lib/conflict-rules.ts"
+    "src/lib/conflict-rules.ts",
+    "src/lib/scope-decisions.ts"
   ]
 }
