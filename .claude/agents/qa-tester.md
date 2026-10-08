@@ -96,7 +96,7 @@ Say plainly whether the suite is testing the right things. "6 tests pass" is not
 
 ### House test conventions (match them)
 
-Vitest + React Testing Library. Pages/hooks use the stateful fake in `src/test/fake-api.ts` via `installFakeApi`, wrapped in `QueryClientProvider` + `MemoryRouter` (+ `AuthProvider` where auth is read). Repositories use real `better-sqlite3` at `:memory:` — never mock the database. AI is mocked at the service boundary (`server/services/anthropic-service.ts`), never at the SDK internals, and never called for real. Read `src/pages/MyStories.test.tsx` for the established shape before writing a new file.
+Vitest + React Testing Library. Pages and hooks mock `@/lib/api-client` with a **stateful** fake — writes change the graph that `scope.get` and `scope.cached` return, so a write genuinely round-trips — built on `makeScopeGraph()` from `src/test/scope-fixture.ts`, wrapped in `QueryClientProvider` + `MemoryRouter`; anything that reads auth mocks `@/hooks/AuthContext` (the real provider starts Firebase). Read `src/pages/ScopeMap.test.tsx` for the established shape. Data rules are pure planners: test them directly (`src/lib/scope-plan*.test.ts`, `src/lib/scope-invariants.test.ts`) — build a `RawScope`, assert `plan.result`, `plan.next`, or the `ApiError`. Never call Firestore or a model for real in a unit test; `npm run test:emulator` is the one suite that goes through the real SDK with rules enforced.
 
 ---
 
@@ -133,7 +133,7 @@ An accessibility failure is never below S2.
 
 1. **Read the brief and the build.** The wireframe or design, any product docs in `_docs/`, the relevant rules files, the page source, its route entry, its hooks, and its existing tests. If a brief was not supplied, say so and reconstruct the intent from the wireframe, the docs, and the code — then mark every derived requirement as an assumption.
 2. **Review the build against the brief.** Element by element: present, absent, or different. Note what was built that the brief never asked for.
-3. **Review the implementation decisions.** Not style preferences — decisions with user-visible consequences: raw `fetch` in a component instead of a hook; a missing query invalidation; hardcoded values instead of tokens; a `throw` inside an async Express handler; user input concatenated into SQL; a secret behind a `VITE_` var; drag-and-drop with no alternative; an unrate-limited AI route.
+3. **Review the implementation decisions.** Not style preferences — decisions with user-visible consequences: raw `fetch` or a Firebase import in a component instead of a hook; a per-view Firestore read instead of a derive; a write that refetches the store instead of `syncScopeAfterWrite`, or bypasses the planners; hardcoded values instead of tokens; a `throw` inside an async Express handler; user input concatenated into SQL; a secret behind a `VITE_` var; drag-and-drop with no alternative; an unrate-limited AI route.
 4. **Derive the scenarios.** Walk all 12 categories. Label each automated / manual / gap. Assign priority (P1 critical journey, P2 important, P3 edge).
 5. **Audit the existing tests.** Map them to scenarios. Name the anti-patterns you find.
 6. **Ask** any clarifying questions, in one batch, via `AskUserQuestion`.

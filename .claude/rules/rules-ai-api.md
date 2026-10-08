@@ -1,134 +1,104 @@
+# AI features (Anthropic API)
+
+**The app has no AI features today.** Nothing calls a model, and the Firebase
+project (`vd2-scope`) is on the Spark plan, which cannot run Cloud Functions.
+This file is how one gets added.
+
+> The Express server this file used to describe — `/api/ai/*` routes,
+> `express-rate-limit`, `server/prompts.json` — was deleted in the serverless
+> migration (2026-10-09). There is no server to put an AI route on.
+
 ---
-description: Rules for calling the Anthropic API from the Express server and managing prompts
----
-
-# Anthropic API via Express + Prompt Management
-
----
-
-## Constraining model output — read this first
-
-The product decides what the AI is *for*; these constraints apply to every AI feature regardless:
-
-- **Constrain the output shape.** Use the system prompt (and structured outputs where it fits) to force short, bounded responses. Never return free-form open-ended text straight into the UI.
-- **Structured-output schemas do not support `minItems` above 1.** A schema asking for an array of exactly N items is rejected with a 400. To require a fixed number of things, use named properties (`optionA`, `optionB`) and map them to an array in the service — the shape is then guaranteed by construction, and the client contract stays whatever you want it to be.
-- **Never echo raw model output into the UI without bounds.** Cap length server-side and validate the shape before it reaches the client.
-- **Handle refusals explicitly.** Check `stop_reason` — a `refusal` must surface as a clear, non-alarming message, never a raw error or an empty panel.
-- **Tone and content constraints are a server responsibility.** Put them in the system prompt in `prompts.json`, not in client code where they can be bypassed.
-- **Never log user-entered text to an external service.** Server-side logs of prompt inputs must be scrubbed or omitted.
 
 ## Architecture
 
-The browser never talks to Anthropic. Every AI call goes:
+A model call needs a secret, and nothing in the browser or on the static host
+can keep one. So it runs in a **Cloud Function**:
 
 ```
-component → hook (src/hooks/) → api-client (src/lib/api-client.ts)
-          → POST /api/ai/* (Express, rate-limited)
-          → server/services/anthropic-service.ts → Anthropic API
+component → hook (src/hooks/) → src/lib/ai-client.ts → httpsCallable
+          → functions/src/index.ts (v2 onCall) → Anthropic
 ```
 
-**The API key is server-side only.** It lives in `server/.env` as `ANTHROPIC_API_KEY` and is never prefixed `VITE_` — a `VITE_` var is compiled into the client bundle and is therefore public. Add the key to `server/.env.example` as an empty placeholder; never commit a real value.
+- **Upgrade the project to Blaze first.** Functions do not deploy on Spark.
+- **The API key is a Functions secret only** — never in the client, never a
+  `VITE_` variable, never in a root `.env`.
+  - Production: `npx firebase functions:secrets:set ANTHROPIC_API_KEY`
+  - Emulator: gitignored `functions/.secret.local`
+- **The owner guard replaces rate limiting.** Every callable's first line
+  asserts `request.auth?.uid === OWNER_UID` (the UID pinned in
+  `firestore.rules`) and throws `HttpsError('permission-denied')` otherwise.
+  An unguarded AI endpoint is a billing incident waiting to happen.
+- **Functions stay pure: input → model → structured output.** No Firestore
+  access inside a function. Persistence happens in the browser through a
+  planner (`rules-firebase.md`), so validation, counters and the held store
+  keep working. Context the model needs — rows, the graph — is passed in the
+  payload, built from what the client already holds: zero extra reads.
+- **Components never call `httpsCallable` directly** — `ai-client.ts` wraps
+  each callable, a hook wraps that in `useMutation`, and the UI shows pending
+  and error states (AI calls are slow).
+
+### Calls over ~60 seconds: two timeouts
+
+- the function: `onCall({ timeoutSeconds: 540, … })` — the v2 default is 60
+- the caller: `httpsCallable(functions, name, { timeout: 540000 })` — the SDK
+  default is **70s**, the easier one to miss
+
+They fail differently; set both. (The site is on cPanel, not behind a Firebase
+Hosting rewrite, so Hosting's hard 60s ceiling does not apply.)
 
 ---
+
+## Constraining model output — applies to every AI feature
+
+- **Constrain the shape.** Structured outputs (`output_config.format` with a
+  Zod schema via `client.messages.parse()`) for anything the app parses. Never
+  put free-form text straight into the UI.
+- **Structured-output schemas do not support `minItems` above 1.** To require a
+  fixed number of things use named properties (`optionA`, `optionB`) and map
+  them to an array in the function.
+- **Bound and validate** before returning: cap lengths, check enums and ranges
+  a schema cannot express.
+- **Check `stop_reason`.** `refusal` and `max_tokens` are not HTTP errors; they
+  surface as empty or truncated output unless handled. A refusal becomes a
+  clear, non-alarming message.
+- **Tone and content constraints are a function-side responsibility** — in the
+  prompt, never in client code where they can be bypassed.
+- **Never log user-entered text** to an external service.
 
 ## SDK and model
 
-Use the official SDK — `npm install @anthropic-ai/sdk`. Never hand-roll `fetch` against the REST endpoint, and never use an OpenAI-compatible shim.
+- The official SDK, `@anthropic-ai/sdk`, created inside the handler with the
+  secret's value. Never hand-rolled `fetch`, never an OpenAI-compatible shim.
+- Default model **`claude-opus-5`**, exact ID, no date suffix. Choosing a
+  cheaper model is the user's decision, not a default.
+- Adaptive thinking (`thinking: { type: 'adaptive' }`) for anything
+  non-trivial; it shares `max_tokens`, so budget for both. No `temperature` or
+  `budget_tokens` — both are rejected.
+- Stream (`client.messages.stream(…).finalMessage()`) for long inputs or
+  outputs.
+- `response.content` is a union — narrow on `block.type === 'text'`.
 
-```ts
-import Anthropic from '@anthropic-ai/sdk'
+## Prompts
 
-const client = new Anthropic() // reads ANTHROPIC_API_KEY from the environment
-```
+In `functions/src/prompts.ts`, versioned with the functions: one entry per
+action with its system prompt, `{{placeholder}}` template, model and
+`max_tokens`. Substitute and sanitise at runtime; a missing placeholder value
+is an error, not an empty string. Prompt edits are reviewable changes — keep
+them in their own commit where practical.
 
-Default model: **`claude-opus-5`**. Use the exact model ID string — never append a date suffix. Do not downgrade to a cheaper model to save cost; that is the user's decision.
+## Errors
 
-Default request shape:
-
-```ts
-const response = await client.messages.create({
-  model: 'claude-opus-5',
-  max_tokens: 16000,
-  thinking: { type: 'adaptive' },
-  system: systemPrompt,
-  messages: [{ role: 'user', content: userPrompt }],
-})
-```
-
-- **Adaptive thinking** (`thinking: { type: 'adaptive' }`) for anything non-trivial. `budget_tokens` is removed on this model and returns a 400.
-- **Stream** any request with long input, long output, or a high `max_tokens` — it avoids HTTP timeouts. Use `client.messages.stream(...)` and `.finalMessage()` when you don't need individual events.
-- `response.content` is a discriminated union — narrow on `block.type === 'text'` before reading `block.text`.
-- Assistant prefill is not supported on this model. Constrain output shape with the system prompt or structured outputs instead.
-
----
-
-## Prompt Management
-
-**All prompts live in `server/prompts.json`.** Never inline a prompt string in a service or route.
-
-```json
-{
-  "vacancy.summarise": {
-    "system": "You are a concise summarisation assistant.",
-    "user": "Summarise the {{record_type}} described here: {{details}}."
-  }
-}
-```
-
-- Placeholders use `{{variable}}` syntax.
-- Substitute and **sanitise** at runtime — never interpolate raw user input without escaping. Treat every user-supplied value as untrusted.
-- A missing placeholder value is an error, not an empty string.
-- Changing a prompt is a reviewable change; keep prompt edits in their own commit where practical.
-
----
-
-## Routes
-
-- All AI routes live under `/api/ai/` in `server/routes/`.
-- **Never `throw` inside an `async` route handler.** Express 4 does not catch rejected promises, so the throw becomes an unhandled rejection that kills the process instead of reaching the error middleware. Use `next(err); return`. This applies to validation guards at the top of the handler, not just to the provider call — those are the easiest to get wrong because the same `throw` is safe in a synchronous handler.
-- **Every AI route is rate-limited** with `express-rate-limit`. An unlimited AI endpoint is a billing incident waiting to happen.
-- Catch provider errors and return a user-friendly message — never leak a stack trace or the raw provider error to the client. Use the SDK's typed errors, most specific first:
-
-```ts
-import Anthropic from '@anthropic-ai/sdk'
-
-try {
-  // ...
-} catch (error) {
-  if (error instanceof Anthropic.RateLimitError) { /* 429 → "busy, try again" */ }
-  else if (error instanceof Anthropic.AuthenticationError) { /* 500 → log, generic message */ }
-  else if (error instanceof Anthropic.APIError) { /* map error.status */ }
-}
-```
-
-- Always check `response.stop_reason` before reading content — `refusal` and `max_tokens` are not failures at the HTTP level and will otherwise surface as empty or truncated output.
-
----
-
-## Frontend
-
-- Add a typed function to `src/lib/api-client.ts` for each AI endpoint.
-- Wrap it in a TanStack Query `useMutation` in `src/hooks/` (e.g. `src/hooks/useVacancySummary.ts`).
-- Never call `fetch` directly from a component.
-- AI calls are slow — always surface pending and error states in the UI.
-
----
-
-## Adding a new AI capability — step by step
-
-1. Add the prompt to `server/prompts.json` with `{{placeholders}}`.
-2. Add a method to `server/services/anthropic-service.ts` that loads the prompt, substitutes, sanitises, and calls the API.
-3. Add a rate-limited route under `/api/ai/` in `server/routes/`.
-4. Add a typed function to `src/lib/api-client.ts`.
-5. Add a hook in `src/hooks/` wrapping a TanStack Query mutation.
-6. Wire the hook into the UI with pending and error states.
-7. Add tests — **mock the provider at the boundary** (mock `anthropic-service`, not the SDK internals). Never call the real API in a test.
-
----
+Map SDK errors to `HttpsError` with a user-meaningful code, most specific
+first — `RateLimitError` → `resource-exhausted` ("busy, try again"),
+`AuthenticationError` → `internal` (log it, generic message),
+other `APIError` → by status. Never return a raw provider error or a stack.
 
 ## Testing
 
-- Mock at the service boundary. Tests must never make a real API call — it costs money and is non-deterministic.
-- Test prompt substitution directly: given a template and variables, assert the resolved string.
-- Test that a missing or invalid API key produces a user-friendly error, not a stack trace.
-- Test the rate limiter rejects past the threshold.
+- Mock at the boundary: hook and component tests mock `@/lib/ai-client`;
+  function tests mock the SDK. Never call the real API in a test.
+- Test placeholder substitution, missing-placeholder rejection, output
+  validation and refusal handling as pure logic.
+- Against the emulator: a wrong-UID call is rejected, and a missing secret
+  fails with a clean error, not a stack trace.

@@ -1,5 +1,7 @@
 # PRD — MSD VD2 Scope Map
 
+> **Architecture changed 2026-10-09.** The Express + SQLite backend described below was replaced: the browser reads and writes Firestore directly, the site is static at https://masonherber.com/scopemap/, and re-import is the `/import-scope` skill (`admin/import/`, which also holds the parsers once in `server/services/`). Requirements stand; where this document names a server path, route or SQL mechanism, read it as the behaviour it specifies — see `.claude/rules/rules-firebase.md` and `_docs/database-structure.md` for where that behaviour lives now.
+
 An interactive, editable scope and journey map for the PwC VD2 Phase 1 scope, built over
 two source documents:
 

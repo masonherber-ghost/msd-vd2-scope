@@ -1,135 +1,139 @@
 # Database structure
 
-SQLite via `better-sqlite3`, at `server/msd-vd2-scope.db` (gitignored, along with
-its `-wal` and `-shm` companions). Migrations in `server/migrations/` run on
-server start, in filename order, each in a transaction, recorded in `migrations`
-so they apply once.
+**Firestore**, project `vd2-scope`. Everything lives under
+`users/{owner UID}/`, one collection per former SQLite table, and the browser
+reads and writes it directly — `firestore.rules` allows the pinned owner UID
+and nobody else. How reads and writes work: `.claude/rules/rules-firebase.md`.
 
-## Connection
+Field shapes are the SQLite rows verbatim — snake_case, `0`/`1` flags, numeric
+ids, UTC timestamps as `YYYY-MM-DD HH:MM:SS` strings, `null` for "no value".
+Every document carries `created_at` and `updated_at`.
 
-Set in `server/database.ts`:
+> Until 2026-10-09 this was SQLite (`better-sqlite3`, migrations in
+> `server/migrations/`). The final SQLite database is kept in
+> `backups/sqlite/msd-vd2-scope-final-pre-firestore.db`.
 
-| Pragma | Value | Why |
-|---|---|---|
-| `journal_mode` | `WAL` | Better concurrent reads |
-| `foreign_keys` | `ON` | Off by default in SQLite — without it `ON DELETE CASCADE` silently does nothing and orphans child rows |
+## What SQLite enforced, and where it lives now
 
-## Tables
+The store has no foreign keys, unique indexes or CHECK constraints. Each was
+re-implemented where the writes happen, and is tested
+(`src/lib/scope-invariants.test.ts`, `admin/import/plan-import.invariants.test.ts`):
 
-### `migrations`
-Created by the runner itself, not by a migration file.
+| Was | Now |
+|---|---|
+| `FOREIGN KEY` (feature → release/phase, capability → release/phase/MVP record, links → feature/capability/MVP record) | App writes: the planners refuse a placement that doesn't exist (422). Re-import: `assertReferencesResolve` refuses the whole import |
+| `ON DELETE CASCADE` (links with their feature or capability) | The delete planners remove the link documents themselves, tombstoned ones included, after the two-step cascade confirmation |
+| `CHECK (id GLOB 'F-[0-9][0-9][0-9]')` | `FEATURE_ID_PATTERN` in the zod schema; the import checks it too |
+| `UNIQUE` on (`ref`, option), (`mvp_ref`, `LOWER(text)`), (feature, capability) | The create/update planners refuse a duplicate (409) |
+| `CHECK` on `actor`, `scope_option`, `resolution_state`, `source` | zod enums in `src/lib/validators.ts` |
+| `AUTOINCREMENT` | `meta/sequences` — counter + 1 inside the write's transaction; a deleted id is never reused |
 
-| Column | Type | Notes |
-|---|---|---|
-| `name` | TEXT | Primary key — the migration filename |
-| `applied_at` | TEXT | UTC, `datetime('now')` |
+## Collections
 
-### `notes` — dropped
-Created by `001_create_notes.sql` as `/setup-site`'s end-to-end verification
-vehicle, then dropped by `003_drop_notes.sql`. `001` is deliberately left
-untouched: an applied migration is never edited.
+Document ids are the row's primary key as a string (`docId` in
+`src/lib/scope-records.ts`).
 
-### Scope tables
-Created by `002_create_scope_schema.sql`, modelling PRD §6. Every table carries
-`source` (`mapping` | `sequencing` | `both` | `manual`), `created_at` and
-`updated_at`, so a manually created row stays distinguishable from an imported
-one forever (R-9.9).
+### `releases` — doc id = `id`
+| Field | Notes |
+|---|---|
+| `id` | `1.1`, `1.4`, `2` — the id both sources use |
+| `label`, `name`, `description` | `label` is what the UI shows ("Package 1.1") |
+| `display_order` | Column order on the map |
+| `in_mapping_source`, `in_sequencing_source` | 0/1 — which documents name it |
+| `source` | `mapping` / `sequencing` / `both` / `manual` — `manual` once edited in the app; re-import then leaves it alone |
 
-| Table | Rows after import | Notes |
-|---|---|---|
-| `releases` | 6 | Union of both sources; `in_mapping_source` / `in_sequencing_source` record which one had it. `label` reads `Package 1.1` — the UI calls these packages, while the table, the ids and the source documents still say release (migration 012 renamed existing labels) |
-| `phases` | 7 | Canonical, ordered 1–7. `epic_ref` is free text and **not** unique — 186 appears on two phases (D-2) |
-| `pwc_features` | 48 | `id` checked against `F-[0-9][0-9][0-9]`. IDs are sparse and the gaps mean nothing. `notes` holds the feature's assumptions and notes as one markdown field (the 92 source assumptions, as numbered lists); `notes_edited` is 1 once edited in the app |
-| `mvp_features` | 51 across 48 refs | Unique on `(ref, scope_option)`. `details` holds free-text detail about the record as one markdown field, empty unless someone writes it |
-| `capabilities` | 107 | Identity is `(mvp_ref, LOWER(text))` |
-| `pwc_feature_mvp_features` | 60 | Join |
-| `pwc_feature_capabilities` | 122 edges / 123 citations | Join, plus the conflict columns |
+### `phases` — doc id = `id`
+| Field | Notes |
+|---|---|
+| `id` | Canonical kebab-case id (`manage-vacancies`) |
+| `name`, `epic_ref`, `epic_description` | `epic_ref` is deliberately not unique — epic 186 sits on two phases (D-2) |
+| `display_order` | Row order; renumbered 1..n on every move |
+| `source` | As releases |
 
-**Two constraints are expression indexes, not plain `UNIQUE`, and both matter:**
+### `pwc_features` — doc id = `id`
+| Field | Notes |
+|---|---|
+| `id` | `F-nnn`. Sparse by design — gaps carry no meaning (PRD §6) |
+| `name`, `foundational_build` | |
+| `release_id`, `phase_id` | Required: a feature with no placement cannot be drawn (R-9.3) |
+| `source_phase_label` | The label as the mapping document wrote it — what phase conflicts are measured on |
+| `capability_note`, `question` | Free text / a raised question, nullable |
+| `notes` | The source's assumptions as a numbered markdown list, until edited |
+| `notes_edited` | 0/1 — set by an edit to `notes`; re-import then leaves the notes alone without freezing the rest of the row |
+| `display_order`, `source` | |
 
-- `mvp_features (ref, IFNULL(scope_option, ''))` — SQLite treats NULLs as
-  *distinct* in a unique index, so `UNIQUE(ref, scope_option)` would silently
-  accept two bare records for the same ref.
-- `capabilities (mvp_ref, LOWER(text))` — encodes the case-insensitive dedup
-  rule, so `Filter and Sort Applications` and `Filter and sort applications`
-  cannot both exist under ref 980.
+### `mvp_features` — doc id = `String(id)`
+| Field | Notes |
+|---|---|
+| `id` | From `meta/sequences.mvp_features` |
+| `ref`, `scope_option` | Identity is (`ref`, option): `1A` and `1B` are separate records; `null` is the option-agnostic "bare" record. Uniqueness compares a `null` option as `''` — two bare records for one ref are a duplicate |
+| `title` | |
+| `release_id`, `phase_id` | A **stated** placement, nullable. Setting one moves every capability the record owns |
+| `question`, `details` | `details` is a reader's note. Nothing imports into it, so it needs no `*_edited` flag, and editing it does not mark the record manual — which would freeze its title and placement against re-import |
+| `source` | |
 
-An upsert onto either must repeat the same expression in its `ON CONFLICT`
-target, or SQLite cannot match the index.
+### `capabilities` — doc id = `String(id)`
+| Field | Notes |
+|---|---|
+| `id` | From `meta/sequences.capabilities` |
+| `mvp_feature_id` | The owning record, nullable. Chosen by rule when a ref has several records, then `mvp_owner_ambiguous` = 1 (D-3) |
+| `mvp_ref` | The ref the source cited — kept so re-import still recognises the row after it is re-owned |
+| `text`, `actor` | Identity is (`mvp_ref`, ASCII-lowercased `text`). `actor` ∈ employer / staff / jobseeker / system |
+| `source_text` | The wording the source document used. Re-import matches on it, so a capability renamed in the app is updated, not duplicated. Hidden from the UI |
+| `release_id`, `phase_id`, `source_phase_label` | Nullable — an unmatched mapping-only capability has no placement. A hand move sets the label to the phase's name |
+| `question`, `source` | A question is an annotation; it does not mark the row manual |
 
-**`capabilities.question`** holds a question someone raised about a capability. It is not
-a source disagreement, so it stays out of every conflict count, and setting it does not
-flip `source` to `manual` — an annotation is not an edit of what the document said.
+### `pwc_feature_mvp_features` — doc id = `{pwc_feature_id}__{mvp_feature_id}`
+| Field | Notes |
+|---|---|
+| `pwc_feature_id`, `mvp_feature_id` | |
+| `source` | |
+| `removed_at` | **Tombstone.** Set when the link is removed in the app; the link is hidden but kept, so re-import cannot put it back (R-9.10). Re-adding clears it |
 
-**`capabilities.source_text` is what the import matches on, not `text`.**
-Identity by wording is right for the documents and wrong the moment someone
-corrects a typo: the import still carries the original text, matches nothing,
-and inserts a second capability beside the renamed one — 107 rows became 108.
-`source_text` records what the document said, so a renamed row is still
-recognised as the one that text belongs to. It is `NULL` for a capability
-created by hand, because no document named it and no import should claim it;
-the lookup falls back to `text` in that case, and for any row written before
-the column existed.
+### `pwc_feature_capabilities` — doc id = `String(id)`
+A feature citing a capability, and the conflict between where each source puts them.
 
-**`pwc_feature_capabilities.source_citations`** exists because F-079 cites both
-casings of ref 980 — one capability, cited twice. That is one edge carrying 2
-citations, so 123 parsed links become 122 rows and `SUM(source_citations)`
-still reconciles to 123.
+| Field | Notes |
+|---|---|
+| `id` | From `meta/sequences.pwc_feature_capabilities` |
+| `pwc_feature_id`, `capability_id` | One document per pair |
+| `source_citations` | F-079 cites both casings of ref 980 — one edge, 2 citations; the total still reconciles to the parsed links |
+| `matched` | 0 when the mapping cites text the table has no exact match for (never merged on a prefix, PRD §7) |
+| `release_conflict`, `phase_conflict`, `phase_conflict_merged` | 0/1. Recomputed whenever the feature or the capability moves (`src/lib/conflict-rules.ts`) |
+| `feature_release_id`, `capability_release_id`, `feature_phase_label`, `capability_phase_label` | Both placements, recorded only while they disagree (R-7.1) |
+| `resolution_state`, `resolution_note`, `resolved_at` | `unreviewed` / `mapping_wins` / `table_wins` / `both_correct` / `defect_raised`. Re-import never overwrites a decision |
+| `source`, `removed_at` | `removed_at` is a tombstone, as above |
 
-**`capabilities.mvp_feature_id` is nullable, and `mvp_ref` is kept alongside
-it.** Ten capabilities belong to a ref with more than one MVP record (938, 946,
-951), where the source never says which. The owner is chosen by rule — prefer
-the bare record, else the lowest option — and flagged with
-`mvp_owner_ambiguous`. Keeping `mvp_ref` means changing that answer (D-3) is an
-`UPDATE`, not a migration.
-
-**`capabilities.release_id` and `phase_id` are nullable** even though R-9.3
-requires both, because the one unmatched mapping-only capability genuinely has
-no placement. The CRUD path enforces the requirement in its validator.
-
-**Cascades (R-9.4):** both join tables cascade from their parent. `pwc_features`, `releases`, `phases` and `mvp_features` never cascade
-silently — the route refuses the delete and names what depends on it, using the
-`count*Dependents` repository functions.
-
-## Conventions
-
-- **All SQL lives in `server/repositories/`.** Never in a route handler.
-- **Statements are prepared lazily** (`??=`). Preparing at module load runs
-  before migrations have created the tables and throws on first boot.
-- **`RETURNING`** hands back the inserted row, avoiding a second SELECT.
-- User input is always bound with `?` placeholders, never interpolated.
+### `meta/sequences`
+`{ mvp_features, capabilities, pwc_feature_capabilities }` — the last id handed
+out for each. Seeded from SQLite's `sqlite_sequence`, which ran ahead of the
+data (SQLite's UPSERT spent a number on every re-saved link).
 
 ## Import
 
-`POST /api/import` (or first boot on an empty database) parses both markdown
-documents, reconciles them, and writes the result in one `db.transaction()`.
+`/import-scope` → `admin/import-scope.ts` → `admin/import/plan-import.ts`
+parses both markdown documents in `_docs/`, reconciles them, and plans the
+writes against the current store; `--apply` commits and verifies.
 
-- **Drift fails before any write.** The reconciled counts are checked against
-  the expected figures first; a mismatch throws and nothing is written (R-11.3).
-- **Re-import is additive.** A row whose `source` is `manual`, and a link whose
-  `resolution_state` is anything but `unreviewed`, are never overwritten
-  (R-11.4). Both are enforced in the `WHERE` clause of each upsert.
-- **Assumptions become the feature's `notes`** — the source's ordered
-  assumptions are written as a numbered markdown list, but only while
-  `notes_edited = 0`. Once someone edits the notes, re-import leaves them alone.
-  Editing notes sets `notes_edited`, not `source = 'manual'`, so it does not
-  freeze the feature's other fields against re-import. (Migration 011 replaced
-  the old `assumptions` table.)
-- **`mvp_features.details` has no import to protect it from.** Neither document
-  carries anything that lands in it, so it needs no `details_edited` flag; for
-  the same reason writing it does not set `source = 'manual'`, which would
-  freeze the record's title and placement against re-import. (Migration 013.)
-- After the first run, import is explicit only; boot verifies and logs but does
-  not re-import.
+- **Drift fails before any write.** Reconciled counts are checked against the
+  expected figures first (R-11.3); so are ids and references.
+- **Re-import is additive (R-11.4).** A row whose `source` is `manual`, a link
+  whose `resolution_state` is not `unreviewed`, a tombstoned link, and notes
+  with `notes_edited = 1` are never overwritten.
+- **Assumptions become a feature's `notes`** as a numbered markdown list, while
+  `notes_edited = 0`.
+- **Conflict flags are recomputed** across every live link after the writes,
+  so a hand-moved row is judged on where it is now.
+- **Stale rows are swept**: an imported release or MVP record the sources no
+  longer produce is deleted, unless something still points at it (then kept
+  and reported).
+- **Known effects:** imported phases' `display_order` is reset to the sources'
+  order; a capability or feature deleted in the app but still in the sources is
+  re-created (only links remember a removal).
 
-## Backups
+## Fields that break many views if wrong
 
-`npx tsx scripts/backup-db.ts` → `server/backups/msd-vd2-scope-<timestamp>.db`.
-
-Uses `VACUUM INTO`, **not** a file copy: under WAL mode recent commits live in
-the `-wal` file, so copying the `.db` alone produces a snapshot that is missing
-data while still opening as a valid database. The script verifies the snapshot
-is readable and reports its table count.
-
-`server/backups/*.db` is exempted from the `*.db` gitignore rule so a snapshot
-can be committed deliberately.
+- `release_id` / `phase_id` on features and capabilities — they place every card.
+- `removed_at` — a link with it set must not render; the derive filters on `=== null`.
+- `display_order` on releases and phases — column and row order.
+- `source` — `manual` is what protects an edit from re-import.

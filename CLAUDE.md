@@ -6,11 +6,11 @@ no design values — those belong in `_docs/` and in `src/globals.css` respectiv
 
 ## Stack
 
-Vite + React 19 + TypeScript · Tailwind CSS v4 (CSS-first) · Shadcn/UI · BEM component CSS · Express + better-sqlite3 · Anthropic API · TanStack Query · React Router v7 · Vitest
+Vite + React 19 + TypeScript · Tailwind CSS v4 (CSS-first) · Shadcn/UI · BEM component CSS · Firebase (Firestore + Google Auth, browser-direct) · TanStack Query · React Router v7 · Vitest · static hosting on cPanel
 
 **[`.claude/rules/rules-react-shadcn-tailwind.md`](.claude/rules/rules-react-shadcn-tailwind.md) is the source of truth** for file structure, naming, configuration, and patterns. Read it before any implementation. Where another rules file conflicts with it, it wins — *except on component CSS, where `rules-css-bem.md` wins (see Styling).*
 
-Frontend in `src/`, backend in `server/`, single root `package.json`. `npm run dev` starts both.
+The app is **static — there is no server.** The browser reads and writes Firestore directly; `firestore.rules` (single owner) is the security boundary. Frontend in `src/`; Admin-SDK scripts (re-import, backup) in `admin/`; single root `package.json`. `npm run dev` starts Vite at `http://localhost:5173/scopemap/`. Live at **https://masonherber.com/scopemap/**.
 
 ---
 
@@ -71,19 +71,26 @@ Skill: `/ui-from-prompt`
 Skill: `/icon-from-file`
 
 ### New page / route
-Rules: `rules-database.md` → **New page / route**
-Register the route in `src/routes/index.tsx` (not `main.tsx` — see rules-react-shadcn-tailwind.md → Routing).
+Rules: `rules-react-shadcn-tailwind.md` → **Routing**
+Create the page in `src/pages/`, register it lazily in `src/routes/index.tsx`, add it to navigation, and get its data from `useScope()` — derive, never add a read. Add a render test.
 
-### Data change — add or modify a table, column, or index
-Rules: `rules-database.md` → **Database change**
-Migration → repository → route → `api-client.ts` → hook → invalidate queries. Never write SQL in a route handler; never concatenate user input into SQL.
+### Data change — add or modify a collection or field
+Rules: `rules-firebase.md` → **Data change**
+Shape (`api-client.ts` / `scope-records.ts`) → existing documents (default or backfill) → planner in `scope-plan.ts` + zod schema → `firestore-client` + `apiClient` method → hook with `syncScopeAfterWrite` → derive → re-import if the sources produce it → tests, then `npm run test:emulator`. No migrations, no SQL. Field shapes stay verbatim (snake_case, 0/1, string timestamps).
 
 ### AI / API — create or update AI calls or prompts
 Rules: `rules-ai-api.md`
-Anthropic API called from Express. Prompts centralised in `server/prompts.json` with `{{variable}}` placeholders, substituted and sanitised at runtime. Service in `server/services/`, exposed via a rate-limited `/api/ai/` route, consumed through `src/lib/api-client.ts` and a hook. **The API key is server-side only — never a `VITE_` var.** Mock the provider at the boundary in tests.
+The app has no AI features today. Adding one means a Cloud Function (Blaze plan first): owner-UID guard, key as a Functions secret, prompts in `functions/src/prompts.ts`, no Firestore access inside the function, consumed through `src/lib/ai-client.ts` and a hook. **The API key is never in the client — never a `VITE_` var.** Mock at the boundary in tests.
 
-### Database backup
-Skill: `/backup-db` — timestamped SQLite snapshot into `server/backups/`.
+### Database backup / restore
+Skill: `/backup-db` — the whole Firestore store to a JSON file in `backups/`, and restore (dry run first).
+
+### Re-import the source documents
+Skill: `/import-scope` — re-reads the two PwC documents in `_docs/` into Firestore. Back up first; dry run by default; manual edits, decisions and removed links are never overwritten.
+
+### Deploy / hosting
+Rules: `rules-deploy-hosting.md` · Skill: `/setup-deploy-pipeline` (for a new pipeline)
+Push to `main` deploys (`.github/workflows/deploy.yml`): lint, test, build, artifact gate, FTPS to `public_html/scopemap/`, live smoke test. Rollback: Actions → Deploy → Run workflow with `redeploy_run_id`. Security rules deploy separately: `npx firebase deploy --only firestore:rules`.
 
 ### QA — review a build against its brief
 Agent: `qa-tester`
@@ -111,12 +118,6 @@ Skill: `/setup-site`
 ### Platform / stack migration
 Skill: `/migration-plan`
 
-### Reference-only rules — do not follow for day-to-day work
-`.claude/rules/_future/` holds rules for target states not yet in use, each carrying a
-`status: future` banner. SQLite via `rules-database.md` is the active data rule; `rules-firebase.md`
-and `rules-ai-api-firebase.md` are read only when running `/migration-plan` or when explicitly
-asked about that migration.
-
 ---
 
 ## Before Every Implementation
@@ -139,8 +140,9 @@ asked about that migration.
 - Preserve existing functionality unless explicitly told to remove it
 - Meet WCAG 2.1 AA as the accessibility baseline — keyboard operability, visible focus, sufficient contrast, correct semantics
 - Extract exact values from Figma — never approximate
-- Route all server state through a TanStack Query hook — never raw `fetch()` in a component
-- Write tests for new features; confirm `npm run test`, `npm run lint`, and `npm run build` all pass
+- Route all data through a TanStack Query hook and `apiClient` — never raw `fetch()` or a Firebase import in a component
+- Make every write through a planner in `src/lib/scope-plan.ts`, and sync the cache after it (`syncScopeAfterWrite`) instead of refetching
+- Write tests for new features; confirm `npm run test`, `npm run lint`, and `npm run build` all pass — plus `npm run test:emulator` after any data-layer or rules change
 - Ask before removing or replacing anything not shown in a design
 
 ## Never
@@ -150,8 +152,11 @@ asked about that migration.
 - Hardcode a color, spacing, or type value — use a token from `@theme`
 - Invent a design value that has no token or design source
 - Use arbitrary breakpoint values
-- Write SQL in a route handler, or concatenate user input into SQL
+- Add a per-view, per-row or per-component Firestore read — derive from the one store load (`rules-firebase.md`)
+- Write to Firestore outside a planner, or from a component
+- Change a stored field's shape (snake_case, 0/1 flags, string timestamps, numeric ids) without changing every reader
+- Use the Admin SDK (`admin/`) from the app, or commit `admin/service-account.json`
 - Expose a secret to the client (no API keys in `VITE_` vars)
-- Follow a `_future/` rules file for current work
+- Write a root-absolute URL — the site lives under `/scopemap/`
 - Use Bootstrap, Foundation, or other CSS frameworks
 - Commit secrets or database credentials

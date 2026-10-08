@@ -1,5 +1,5 @@
 # React Application Development Guide
-## Vite + Shadcn/UI + Tailwind CSS v4 + OpenAI + SQLite (better-sqlite3)
+## Vite + Shadcn/UI + Tailwind CSS v4 + Firebase (Firestore + Auth) — static, no server
 
 ---
 
@@ -12,30 +12,35 @@ project-root/
 │   │   ├── ui/           # Shadcn/UI components (owned, editable)
 │   │   └── icons/        # Custom SVG icon components
 │   ├── pages/            # Route-level page components
-│   ├── hooks/            # Custom React hooks + Context providers
-│   ├── lib/              # utils.ts (cn), api-client.ts, validators.ts
+│   ├── routes/index.tsx  # The route table (lazy pages, basename)
+│   ├── hooks/            # TanStack Query hooks + Context providers (AuthContext)
+│   ├── lib/
+│   │   ├── api-client.ts      # Every read and write the app makes — typed, Firestore underneath
+│   │   ├── scope-store.ts     # The held store: one load, queued writes
+│   │   ├── firestore-client.ts# Firestore IO: read the store, commit a plan
+│   │   ├── scope-plan.ts      # Pure planners — validation + writes, one per action
+│   │   ├── scope-graph.ts     # deriveScopeGraph — what every view renders
+│   │   ├── scope-records.ts   # Stored document shapes, collection names
+│   │   ├── firebase.ts        # SDK init from VITE_FIREBASE_*
+│   │   └── validators.ts      # zod schemas
+│   ├── assets/fonts/     # Fingerprinted by Vite — keep files out of public/
 │   ├── globals.css       # Tailwind import + all design tokens (@theme)
-│   ├── App.tsx
 │   └── main.tsx
 │
-├── server/
-│   ├── routes/           # Express route handlers
-│   ├── services/         # openai-service.ts, prompt-service.ts
-│   ├── migrations/       # Run-once migration files
-│   ├── repositories/     # One file per entity (user-repository.ts, etc.)
-│   ├── middleware/       # error-handler.ts, auth.ts
-│   ├── prompts.json      # Centralized AI prompts
-│   ├── database.ts
-│   └── server.ts
-│
-├── .env.example          # VITE_* vars for frontend
-├── server/.env.example   # Server-only vars
-├── components.json       # Shadcn/UI config
-├── vite.config.ts
-├── tsconfig.json
-├── package.json          # Single root package.json — runs both client and server
-└── .gitignore
+├── admin/                # Node + Admin SDK: re-import, backup, restore, seed (bypasses rules)
+│   └── import/           # Source-document parsers, reconcile, overrides, plan-import
+├── public/.htaccess      # Apache: SPA fallback, caching, https (copied into dist/)
+├── firestore.rules       # The security boundary — owner UID pinned
+├── firebase.json         # Emulator config
+├── .github/workflows/    # ci.yml (branches) + deploy.yml (main → cPanel)
+├── backups/              # Firestore JSON backups; sqlite/ = final pre-migration DB
+├── .env.example          # VITE_FIREBASE_* (public web config) + VITE_USE_EMULATORS
+├── vite.config.ts        # base: '/scopemap/'
+└── package.json          # single root package.json
 ```
+
+There is **no server**. The browser talks to Firestore; the host serves files.
+Data rules: `rules-firebase.md`. Hosting: `rules-deploy-hosting.md`.
 
 ---
 
@@ -47,25 +52,24 @@ project-root/
 - `@/lib` → `src/lib/`
 - `@/hooks` → `src/hooks/`
 
-**Dev proxy** — proxy `/api` to the Express server in `vite.config.ts` to avoid CORS issues in development. Do not hardcode `localhost` ports in frontend fetch calls; use the proxy path.
+**Base path** — the site is served from `/scopemap/`, so `base: '/scopemap/'`.
+The dev server is therefore at `http://localhost:5173/scopemap/`. Never write a
+root-absolute URL (`/foo`) in code or CSS; import assets so Vite rewrites them.
 
-**Ports (defaults):**
-- Vite dev server: `5173` (may increment if port is taken — see CORS note below)
-- Express server: `3001`
+**Environment variables** — client vars are `VITE_`-prefixed and compiled into
+the public bundle, so **nothing secret ever goes in one**. The Firebase web
+config is public by design (`firestore.rules` is the boundary). Never commit
+`.env`; keep `.env.example` listing every key. `src/lib/firebase.ts` fails
+loudly on a missing value.
 
-**Environment variables** — prefix client-side vars with `VITE_`. Backend vars need no prefix. Never commit `.env` files. Always maintain `.env.example` files with all required keys listed.
-
-Standard vars for this stack:
 ```
 # .env (root — read by Vite)
-VITE_API_URL=http://localhost:3001
-
-# server/.env
-PORT=3001
-CLIENT_URL=http://localhost:5173
+VITE_FIREBASE_API_KEY=… (six VITE_FIREBASE_* values)
+VITE_USE_EMULATORS=false   # true points the dev build at the local emulators
 ```
 
-**CORS** — the Express server reads `CLIENT_URL` from env to configure the allowed origin. If Vite increments its port (e.g. to `5174` because `5173` is in use), the CORS check will fail. Fix by killing whatever holds `5173` (`lsof -ti :5173 | xargs kill -9`) or updating `CLIENT_URL` to match the actual port. Using the Vite proxy for all `/api` calls avoids this problem entirely in development.
+Secrets live only in `admin/service-account.json` (Admin SDK, gitignored) and,
+if AI is ever added, Cloud Functions secrets (`rules-ai-api.md`).
 
 ---
 
@@ -197,49 +201,36 @@ Browse available icons at lucide.dev. Never install a separate icon library alon
 
 ## Routing
 
-**Library:** React Router v7. Configure in `src/main.tsx` using `createBrowserRouter` + `RouterProvider`.
+**Library:** React Router v7, `createBrowserRouter` + `RouterProvider`.
 
 Use v7, not v6. Every v6 release — including the latest, 6.30.6 — is affected by an open-redirect advisory (`>=6.0.0 <7.18.0`) that was never backported; the fix exists only in v7.18.0+. For a SPA using `createBrowserRouter`/`RouterProvider`/`NavLink`/`Outlet`, v7 is API-compatible with v6, so there is no migration cost. Run `npm audit` after installing and expect zero vulnerabilities.
 
-**Route config** — define all routes in `src/routes/index.tsx`. Keep `main.tsx` clean; it only mounts the router.
+**Route config** — define all routes in `src/routes/index.tsx`. Keep `main.tsx` clean; it only mounts the router. The router's `basename` is derived from Vite's `base` (`import.meta.env.BASE_URL`) — never hardcode it.
 
 **Lazy loading** — wrap every page component in `React.lazy()` and wrap the router with `<Suspense>`. This code-splits each page automatically.
 
 **Layout routes** — use a parent route with a shared layout component (Header, Sidebar, Footer) and `<Outlet />` for the page content. Nested routes inherit the layout without repeating it.
 
-**Protected routes** — create a `<ProtectedRoute>` wrapper component that checks auth state from Context and redirects to `/login` if unauthenticated. Wrap protected route groups with it in the route config.
+**Auth gate** — `<RequireAuth>` (in `main.tsx`, around the router) renders the sign-in page until Firebase has restored a session. It is a convenience, not security: `firestore.rules` decides what a signed-in account can read.
 
 **404** — always include a catch-all `path="*"` route at the end of the config that renders a not-found page.
 
 **Navigation** — use `<NavLink>` for navigation items (applies active class automatically) and `<Link>` for all other internal links. Never use `<a href>` for internal navigation.
 
-**Direct URL access** — configure the Express dev server (or Vite proxy) to serve `index.html` for all non-API routes so that refreshing a client-side URL works correctly.
+**Direct URL access** — Vite serves `index.html` for client routes in dev; in production `public/.htaccess` does (SPA fallback). A new route needs nothing extra.
 
 ---
 
-## SQLite — better-sqlite3 + Express
+## Data
 
-**Driver: `better-sqlite3`** — synchronous API, fastest Node.js SQLite driver, reliable across Node versions. The async `sqlite3` alternative breaks frequently on Node upgrades; do not use it.
+**Firestore, from the browser — see `rules-firebase.md`.** In short: one load of
+the whole store, every view derived from it, every write a pure planner in
+`src/lib/scope-plan.ts` committed in one transaction, the cache synced without a
+refetch. Components never import Firebase; they use hooks, and hooks use
+`apiClient`.
 
-**Database file** — stored at `server/msd-vd2-scope.db`, gitignored.
-
-**Repository pattern** — one file per entity in `server/repositories/`. Repositories encapsulate all SQL; route handlers call repository functions and never write SQL directly.
-
-**Prepared statements** — `better-sqlite3` makes these the natural default. Prepare once, run many times. Never concatenate user input into SQL strings.
-
-**Transactions** — use `better-sqlite3`'s transaction wrapper for any multi-step write. It handles rollback automatically on error.
-
-**Migrations** — run-once files in `server/migrations/`. Run on server start; track which have been applied in a `migrations` table.
-
-**Testing** — pass `:memory:` as the database path to get a clean in-memory database per test run. No file cleanup needed.
-
----
-
-## File Storage
-
-**Local development** — serve uploaded files from `server/uploads/`. Add `express.static('uploads')` to the Express server and store paths (not file contents) in the database.
-
-**Gitignore** — add `server/uploads/` to `.gitignore`.
+There is no file storage. If the app ever stores uploads, they go to Firebase
+Storage with a rule of their own — never into a Firestore document.
 
 ---
 
@@ -248,26 +239,27 @@ Use v7, not v6. Every v6 release — including the latest, 6.30.6 — is affecte
 **Tools:**
 - Vitest — unit and component tests
 - React Testing Library — component tests (query by role/label/text, not class names)
-- MSW (Mock Service Worker) — mock API responses in integration tests
-- Playwright — E2E for critical paths only
+- Firebase emulators — rules tests and the Web SDK smoke test (`npm run test:emulator`, needs Java)
 
-**Database tests** — use `better-sqlite3` in `:memory:` mode. Reset schema between tests. Test CRUD, constraints, and transaction rollback. Do not mock the database in repository tests.
+**Data tests** — planners are pure: build a `RawScope`, run the planner, assert `plan.result`, `plan.next`, or the `ApiError` it throws (`src/lib/scope-plan*.test.ts`, `scope-invariants.test.ts`). Page and hook tests mock `@/lib/api-client` with a **stateful** fake whose writes change the graph it returns — including `scope.cached` — so a write genuinely round-trips; a canned response per call passes while the wiring is broken. After any data-layer change, run `npm run test:emulator`: it is the only test that goes through the real SDK with rules enforced.
 
 **What not to test:**
 - Tailwind class names or exact styles
 - Shadcn/UI internals
 - React framework behavior
-- OpenAI/SQLite library internals — mock at the boundary
+- Firebase SDK internals — mock at the boundary (`@/lib/api-client`), or use the emulator
 
 **Scripts (root `package.json`):**
-- `npm run dev` — start both Vite and Express concurrently
-- `npm run client` — Vite dev server only
-- `npm run server` — Express API server only (watches for changes)
+- `npm run dev` — Vite dev server (`/scopemap/`)
 - `npm run build` — production build; must complete with zero errors
 - `npm run test` — Vitest (single run, exits)
 - `npm run test:watch` — Vitest in watch mode
 - `npm run test:ui` — Vitest with browser UI
 - `npm run lint` — ESLint
+- `npm run test:emulator` — rules + Web SDK smoke test against the emulators
+- `npm run emulators` — Auth + Firestore emulators, UI on :4000
+- `npm run import-scope` — re-import the source documents (dry run; see `/import-scope`)
+- `npm run backup-db` — Firestore backup to `backups/` (see `/backup-db`)
 
 ---
 
@@ -275,7 +267,8 @@ Use v7, not v6. Every v6 release — including the latest, 6.30.6 — is affecte
 
 - [ ] `npm run lint` passes
 - [ ] `npm run test` passes
-- [ ] No hardcoded secrets, ports, or color/spacing values
+- [ ] No hardcoded secrets, root-absolute URLs, or color/spacing values
 - [ ] No `console.log` left in
 - [ ] Environment variables used for all config
 - [ ] `npm run build` completes cleanly
+- [ ] Data-layer change → `npm run test:emulator` passes

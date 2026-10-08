@@ -1,5 +1,7 @@
 # QA scenarios
 
+> **2026-10-09 — serverless migration.** The Express server is gone. Test paths below point at where each test was ported (`src/lib/scope-plan*.test.ts`, `src/lib/scope-invariants.test.ts`, `admin/import/`). HTTP routes such as `PATCH /api/…` are named as the behaviour they described; that behaviour now lives in the matching planner in `src/lib/scope-plan.ts`, with the same status codes and messages.
+
 What should be true about this app, written so someone who has never seen the code can
 execute it. One `##` section per page or feature. Sections are updated in place, never
 rewritten wholesale.
@@ -18,7 +20,7 @@ rewritten wholesale.
 ## MSD feature detail panel — capabilities it owns
 
 **Route:** `/?view=mvp&selectedMvp=:id` · **Source:** `src/components/MvpDetailPanel.tsx`, wired in `src/pages/ScopeMap.tsx` ·
-**Tests:** `src/components/MvpDetailPanel.test.tsx`, `src/pages/ScopeMap.test.tsx`, `server/routes/entity-routes.test.ts`, `server/repositories/entity-crud.test.ts`
+**Tests:** `src/components/MvpDetailPanel.test.tsx`, `src/pages/ScopeMap.test.tsx`, `src/lib/scope-plan.routes.test.ts`, `src/lib/scope-plan.entities.test.ts`
 **Brief:** "View By MSD Feature: need to be able to edit the capabilities in the details panel (same as how it is done on the PwC feature detail)" — resolved as reassigning which capabilities the record *owns* (`capabilities.mvp_feature_id`), via the same LinkPicker interaction the PwC panel uses. Server path `PUT /api/mvp-features/:id/capabilities`.
 **Also covers:** "Need to be able to edit the title of the MSD feature in the detail panel when you tap the title" — `PATCH /api/mvp-features/:id`, the same in-place heading edit the capability panel uses.
 **Also covers:** "Need to be able to re-assign an MSD feature to a release" — resolved as moving the capabilities the record owns, since neither source gives an MSD feature a placement of its own. Release and stage move independently. Server path `PUT /api/mvp-features/:id/placement`. ·
@@ -147,7 +149,7 @@ toggles it.
 ## Capability detail panel — delete, and reaching what it links to
 
 **Route:** `/?view=capability&selectedCapability=:id` · **Source:** `src/components/CapabilityDetailPanel.tsx`, wired in `src/pages/ScopeMap.tsx` ·
-**Tests:** `src/components/CapabilityDetailPanel.test.tsx`, `src/pages/ScopeMap.test.tsx`, `server/routes/entity-routes.test.ts`
+**Tests:** `src/components/CapabilityDetailPanel.test.tsx`, `src/pages/ScopeMap.test.tsx`, `src/lib/scope-plan.routes.test.ts`
 **Brief:** "Capabilities detail: need to be able to delete the capability; need to be able to click through the features listed to view that feature details" — delete is a confirm-then-delete cascading the PwC citations where any exist (`DELETE /api/capabilities/:id?cascade=true`); the owning MSD feature block opens that record in the MSD-feature view. ·
 **Last reviewed:** 2026-09-18
 

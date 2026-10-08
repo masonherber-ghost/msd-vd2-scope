@@ -30,7 +30,9 @@ export const auth = getAuth(app)
 export const db = getFirestore(app)
 export const googleProvider = new GoogleAuthProvider()
 
-if (import.meta.env.VITE_USE_EMULATORS === 'true') {
+// Dev only: a stray VITE_USE_EMULATORS can never point a production build
+// at localhost.
+if (import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'true') {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
   connectFirestoreEmulator(db, '127.0.0.1', 8080)
 }
