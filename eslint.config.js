@@ -46,7 +46,7 @@ export default tseslint.config(
 
   // Server and scripts — console logging is the intended output here.
   {
-    files: ['server/**/*.ts', 'scripts/**/*.ts', 'vite.config.ts'],
+    files: ['server/**/*.ts', 'scripts/**/*.ts', 'admin/**/*.ts', 'vite.config.ts', 'vitest.emulator.config.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
