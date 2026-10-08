@@ -16,11 +16,9 @@ dist-ssr/
 *.db-journal
 *.db-wal
 *.db-shm
-# Backups are deliberately committable — see the /backup-db skill.
-!server/backups/*.db
-
-# Uploaded files live on disk; only filenames go in the database
-server/uploads/
+# Backups are deliberately committable — see the /backup-db skill. backups/sqlite/
+# holds the final pre-Firestore SQLite snapshot: the permanent rollback copy.
+!backups/**/*.db
 
 # Editor / OS
 .DS_Store
@@ -33,3 +31,12 @@ server/uploads/
 logs/
 *.log
 npm-debug.log*
+
+# Firebase: emulator state, debug logs, and the Admin SDK key (a real secret)
+.emulator-data/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/
+admin/service-account.json
+*firebase-adminsdk*.json

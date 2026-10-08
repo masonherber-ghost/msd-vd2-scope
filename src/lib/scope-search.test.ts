@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { EMPTY_SEARCH, searchScope } from '@/lib/scope-search'
 import { makeScopeGraph } from '@/test/scope-fixture'
 
+const base = makeScopeGraph()
 const graph = makeScopeGraph({
-  assumptions: [
-    {
-      id: 1,
-      pwc_feature_id: 'F-001',
-      position: 1,
-      text: 'Assumes out-of-the-box Salesforce capability for saving an Omniscript.',
-      source: 'mapping',
-    },
-  ],
+  pwcFeatures: base.pwcFeatures.map((f) =>
+    f.id === 'F-001'
+      ? {
+          ...f,
+          notes:
+            '1. CIAM limited to delegated auth only.\n' +
+            '2. Assumes out-of-the-box Salesforce capability for saving an Omniscript.',
+        }
+      : f,
+  ),
 })
 
 const search = (query: string) => searchScope(graph, query)
@@ -63,13 +65,27 @@ describe('searchScope — what it looks at (R-8.11)', () => {
     expect(kinds('Electronic T&Cs')).toContain('capability')
   })
 
-  it('finds an assumption by its text', () => {
+  it('finds a feature by the text of its notes', () => {
     const result = search('Omniscript')
-    expect(result.groups.map((g) => g.kind)).toEqual(['assumption'])
+    expect(result.groups.map((g) => g.kind)).toEqual(['notes'])
     expect(result.groups[0].hits[0]).toMatchObject({
       featureId: 'F-001',
-      title: 'F-001 · assumption 1',
+      title: 'F-001 · notes',
     })
+  })
+
+  it('shows only the matching line of the notes as context', () => {
+    const hit = search('Omniscript').groups[0].hits[0]
+    expect(hit.context).toBe(
+      '2. Assumes out-of-the-box Salesforce capability for saving an Omniscript.',
+    )
+    expect(hit.context.slice(hit.matchStart, hit.matchStart + hit.matchLength)).toBe(
+      'Omniscript',
+    )
+  })
+
+  it('gives one hit per feature however many lines match', () => {
+    expect(search('assumes').groups.find((g) => g.kind === 'notes')?.hits).toHaveLength(1)
   })
 
   it('finds a phase by its epic ref', () => {
@@ -96,7 +112,7 @@ describe('searchScope — grouping (R-8.12)', () => {
   it('orders the most direct hit first', () => {
     const result = search('e')
     const order = result.groups.map((g) => g.kind)
-    expect(order.indexOf('feature-name')).toBeLessThan(order.indexOf('assumption'))
+    expect(order.indexOf('feature-name')).toBeLessThan(order.indexOf('notes'))
   })
 
   it('flattens in group order, which is what the arrows walk', () => {

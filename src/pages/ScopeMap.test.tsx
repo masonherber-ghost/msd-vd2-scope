@@ -27,6 +27,15 @@ const { state } = await vi.hoisted(async () => ({
   },
 }))
 
+const { capturePdf } = vi.hoisted(() => ({ capturePdf: vi.fn() }))
+
+// The canvas render cannot run in jsdom; what the page is responsible for is
+// handing the right elements over and reporting what came back.
+vi.mock('@/lib/scope-pdf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/scope-pdf')>()),
+  captureScopeMapPdf: capturePdf,
+}))
+
 vi.mock('@/lib/api-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api-client')>()
   const failWrite = () => {
@@ -40,8 +49,9 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
           if (state.fail) throw new actual.ApiError(0, state.fail)
           return state.graph as ScopeGraph
         },
+        // What the data layer holds after a write — the same graph a refetch returns.
+        cached: () => state.graph as ScopeGraph,
       },
-      import: { run: async () => ({ status: 'ok', summary: {} as never }) },
       features: {
         nextId: async () => ({ id: state.nextId }),
         create: async (body: Record<string, unknown>) => {
@@ -275,6 +285,8 @@ beforeEach(() => {
   state.mvpPatches = []
   state.capabilityDeletes = []
   vi.spyOn(window, 'confirm').mockReturnValue(true)
+  capturePdf.mockReset()
+  capturePdf.mockResolvedValue('vd2-scope-map-by-pwc-release.pdf')
 })
 
 describe('ScopeMap page', () => {
@@ -409,7 +421,7 @@ describe('ScopeMap filter rail', () => {
     await openFilters(user)
 
     for (const group of [
-      'Release',
+      'Package',
       'Phase',
       'Actor',
       'MVP feature',
@@ -460,8 +472,8 @@ describe('ScopeMap filter rail', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     await openFilters(user)
 
-    const release = screen.getByRole('group', { name: /release/i })
-    await user.click(within(release).getByRole('checkbox', { name: /Release 1\.4/ }))
+    const release = screen.getByRole('group', { name: /package/i })
+    await user.click(within(release).getByRole('checkbox', { name: /Package 1\.4/ }))
 
     await waitFor(() => expect(url()).toContain('release=1.4'))
   })
@@ -497,10 +509,10 @@ describe('ScopeMap filter rail', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     await openFilters(user)
 
-    const release = screen.getByRole('group', { name: /release/i })
-    // Release 1.1 holds both features; 1.4 holds none.
-    expect(within(release).getByText('Release 1.1').closest('label')).toHaveTextContent('2')
-    expect(within(release).getByText('Release 1.4').closest('label')).toHaveTextContent('0')
+    const release = screen.getByRole('group', { name: /package/i })
+    // Package 1.1 holds both features; 1.4 holds none.
+    expect(within(release).getByText('Package 1.1').closest('label')).toHaveTextContent('2')
+    expect(within(release).getByText('Package 1.4').closest('label')).toHaveTextContent('0')
   })
 
   it('clears everything with one control', async () => {
@@ -568,7 +580,7 @@ describe('ScopeMap zero-result state (R-8.10)', () => {
 })
 
 describe('ScopeMap selection and detail panel', () => {
-  it('opens the panel beside the map, keeping the map visible', async () => {
+  it('opens the panel as a modal, leaving the map at full width behind it', async () => {
     const user = userEvent.setup()
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
@@ -578,8 +590,10 @@ describe('ScopeMap selection and detail panel', () => {
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Invite employer' })).toBeInTheDocument(),
     )
-    // The map is still there — the panel opened beside it, not over it.
-    expect(screen.getAllByRole('cell')).toHaveLength(4)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    // The grid is still rendered — it is inert behind the modal, not gone,
+    // so closing returns to exactly the map that was there.
+    expect(screen.getAllByRole('cell', { hidden: true })).toHaveLength(4)
   })
 
   it('keeps the active filters when the panel opens', async () => {
@@ -610,13 +624,16 @@ describe('ScopeMap selection and detail panel', () => {
     )
   })
 
-  it('marks the selected card as pressed', async () => {
+  it('marks the selected card as pressed behind the modal', async () => {
+    // The card keeps its selected state while the panel is over it, so
+    // closing lands the reader back on the card they opened.
     renderPage('/?selected=F-002')
-    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('closes on Escape and clears the URL', async () => {
@@ -632,13 +649,32 @@ describe('ScopeMap selection and detail panel', () => {
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
   })
 
-  it('clicking the open card again closes the panel', async () => {
+  it('closes from the panel’s own Close, clearing the selection', async () => {
+    // The card behind a modal cannot be clicked, so closing is the panel's
+    // job — Close, or Escape, both of which clear the URL.
     const user = userEvent.setup()
     renderPage('/?selected=F-002')
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(url()).not.toContain('selected'))
+  })
+
+  it('returns focus to the card it was opened from', async () => {
+    const user = userEvent.setup()
+    renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
-    await waitFor(() => expect(url()).not.toContain('selected'))
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toHaveFocus()
   })
 
   it('the pivot control filters the map without closing the panel (R-8.16)', async () => {
@@ -687,11 +723,11 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
 
     expect(screen.getByRole('form', { name: /new pwc feature/i })).toBeInTheDocument()
-    expect(screen.getByLabelText('Release')).toHaveValue('1.4')
+    expect(screen.getByLabelText('Package')).toHaveValue('1.4')
     expect(screen.getByLabelText('Phase')).toHaveValue('manage-vacancies')
   })
 
@@ -701,7 +737,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
 
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
@@ -717,7 +753,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Brand new feature')
@@ -739,7 +775,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     // No name.
@@ -756,7 +792,7 @@ describe('ScopeMap create (R-9.7)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     await user.click(
-      screen.getByRole('button', { name: 'Add a feature to Release 1.4, Manage Vacancies' }),
+      screen.getByRole('button', { name: 'Add a feature to Package 1.4, Manage Vacancies' }),
     )
     await waitFor(() => expect(screen.getByLabelText('Feature id')).toHaveValue('F-004'))
     await user.type(screen.getByLabelText('Name'), 'Duplicate')
@@ -824,7 +860,10 @@ describe('ScopeMap inline edit', () => {
     )
     // The typing is not lost, and the map still shows the stored value.
     expect(screen.getByLabelText('Name')).toHaveValue('Rejected name')
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+    // The card is inert behind the modal, but still showing the stored value.
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -887,7 +926,9 @@ describe('ScopeMap delete (R-9.4, R-9.5)', () => {
       expect(screen.getByRole('alert')).toHaveTextContent(/Cannot delete F-002/),
     )
     // Rolled back — the card is still on the map.
-    expect(screen.getByRole('button', { name: 'F-002 Verify employer' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'F-002 Verify employer', hidden: true }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -932,8 +973,8 @@ describe('ScopeMap placement editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: /edit release/i }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: /edit package/i }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: /^save$/i }))
 
     await waitFor(() => expect(state.patched).toHaveLength(1))
@@ -965,11 +1006,11 @@ describe('ScopeMap placement editing', () => {
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: /edit release/i }))
-    const select = screen.getByLabelText('Release')
+    await user.click(screen.getByRole('button', { name: /edit package/i }))
+    const select = screen.getByLabelText('Package')
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Release 1.1',
-      'Release 1.4',
+      'Package 1.1',
+      'Package 1.4',
     ])
   })
 })
@@ -1100,7 +1141,7 @@ describe('ScopeMap capability link editing', () => {
     const picker = await openCapabilityEditor(user)
     expect(within(picker).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
     expect(within(picker).getByText(/948 · employer/)).toBeInTheDocument()
-    expect(within(picker).getAllByText('Release 1.4').length).toBeGreaterThan(0)
+    expect(within(picker).getAllByText('Package 1.4').length).toBeGreaterThan(0)
   })
 
   it('shows the current assignment as checked', async () => {
@@ -1419,18 +1460,13 @@ describe('ScopeMap search (R-8.11 – R-8.13)', () => {
       ...base,
       pwcFeatures: base.pwcFeatures.map((f) =>
         f.id === 'F-002'
-          ? { ...f, foundational_build: 'Staff verify an employer before publishing.' }
+          ? {
+              ...f,
+              foundational_build: 'Staff verify an employer before publishing.',
+              notes: '1. Assumes an **Omniscript** saves the partial verification.',
+            }
           : f,
       ),
-      assumptions: [
-        {
-          id: 1,
-          pwc_feature_id: 'F-002',
-          position: 1,
-          text: 'Assumes an Omniscript saves the partial verification.',
-          source: 'mapping',
-        },
-      ],
     }
 
     renderPage('/?selected=F-002&q=Omniscript')
@@ -1458,8 +1494,8 @@ describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
     const rows = screen.getAllByRole('rowheader')
-    expect(rows[0]).toHaveTextContent('Release 1.1')
-    expect(screen.getByRole('button', { name: 'By PwC release' })).toHaveAttribute(
+    expect(rows[0]).toHaveTextContent('Package 1.1')
+    expect(screen.getByRole('button', { name: 'By PwC package' })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -1520,16 +1556,22 @@ describe('ScopeMap row-mode views (the design\'s transposed grid)', () => {
   })
 
   it('keeps selection and filters across a view change', async () => {
+    // The view tabs sit behind the modal, so the panel is closed first —
+    // the selection stays in the URL and the panel comes back with it.
     const user = userEvent.setup()
     renderPage('/?selected=F-002&actor=employer')
     await waitFor(() =>
       expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
     )
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'By actor' }))
 
-    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
     expect(url()).toContain('actor=employer')
+    expect(url()).toContain('view=actor')
   })
 })
 
@@ -1538,11 +1580,11 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const chips = screen.getByRole('list', { name: /filter by release/i })
-    expect(within(chips).getByRole('button', { name: /Release 1\.1/ })).toHaveTextContent(
+    const chips = screen.getByRole('list', { name: /filter by package/i })
+    expect(within(chips).getByRole('button', { name: /Package 1\.1/ })).toHaveTextContent(
       '2 features · 2 capabilities',
     )
-    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveTextContent(
+    expect(within(chips).getByRole('button', { name: /Package 1\.4/ })).toHaveTextContent(
       '0 features · 1 capabilities',
     )
   })
@@ -1552,11 +1594,11 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const chips = screen.getByRole('list', { name: /filter by release/i })
-    await user.click(within(chips).getByRole('button', { name: /Release 1\.4/ }))
+    const chips = screen.getByRole('list', { name: /filter by package/i })
+    await user.click(within(chips).getByRole('button', { name: /Package 1\.4/ }))
 
     await waitFor(() => expect(url()).toContain('release=1.4'))
-    expect(within(chips).getByRole('button', { name: /Release 1\.4/ })).toHaveAttribute(
+    expect(within(chips).getByRole('button', { name: /Package 1\.4/ })).toHaveAttribute(
       'aria-pressed',
       'true',
     )
@@ -1583,7 +1625,7 @@ describe('ScopeMap chrome from the design', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    const horizons = screen.getByRole('region', { name: /release horizons/i })
+    const horizons = screen.getByRole('region', { name: /package horizons/i })
     expect(within(horizons).getAllByRole('listitem')).toHaveLength(2)
     expect(within(horizons).getByText('Pilot')).toBeInTheDocument()
     expect(
@@ -1604,14 +1646,14 @@ describe('ScopeMap — the MSD feature view', () => {
   it('offers the view as a third tab', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'By PwC release' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'By PwC package' })).toBeInTheDocument(),
     )
     const tabs = screen.getByRole('group', { name: 'Map view' })
     expect(
       within(tabs)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['By PwC release', 'By actor', 'By MSD feature', 'By capability'])
+    ).toEqual(['By PwC package', 'By actor', 'By MSD feature', 'By capability'])
   })
 
   it('swaps PwC cards for MSD feature cards', async () => {
@@ -1627,9 +1669,9 @@ describe('ScopeMap — the MSD feature view', () => {
     const cards = screen.getAllByRole('button', { name: /^MSD feature / })
     // One card per MVP record, including both records under ref 938.
     expect(cards.map((c) => c.getAttribute('aria-label'))).toEqual([
-      'MSD feature 938 Additional users',
-      'MSD feature 938 · 1A Additional users',
-      'MSD feature 948 · 1B Verification methods',
+      'MSD feature SVD-938 Additional users',
+      'MSD feature SVD-938 · 1A Additional users',
+      'MSD feature SVD-948 · 1B Verification methods',
     ])
   })
 
@@ -1642,9 +1684,9 @@ describe('ScopeMap — the MSD feature view', () => {
     await openMsdView(user)
 
     // 948 is cited by F-002 in 1.1, but its capability is scheduled in 1.4.
-    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    const cell = screen.getByRole('cell', { name: /Package 1\.4, Manage Vacancies/ })
     expect(
-      within(cell).getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+      within(cell).getByRole('button', { name: 'MSD feature SVD-948 · 1B Verification methods' }),
     ).toBeInTheDocument()
   })
 
@@ -1657,7 +1699,7 @@ describe('ScopeMap — the MSD feature view', () => {
     await openMsdView(user)
     expect(url()).toContain('view=mvp')
 
-    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
+    await user.click(screen.getByRole('button', { name: 'By PwC package' }))
     expect(url()).not.toContain('view=mvp')
   })
 
@@ -1673,13 +1715,13 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }),
       ).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+    await user.click(screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }))
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('PwC features citing this (1)')).toBeInTheDocument()
     expect(within(panel).getByText('F-001')).toBeInTheDocument()
     expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
@@ -1693,15 +1735,15 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 · 1A Additional users' }),
       ).toBeInTheDocument(),
     )
 
     await user.click(
-      screen.getByRole('button', { name: 'MSD feature 938 · 1A Additional users' }),
+      screen.getByRole('button', { name: 'MSD feature SVD-938 · 1A Additional users' }),
     )
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938 · 1A' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938 · 1A' })
     expect(within(panel).getByText(/placed by the PwC features that cite it/i)).toBeInTheDocument()
     expect(within(panel).getByText(/owns no capability/i)).toBeInTheDocument()
   })
@@ -1711,12 +1753,12 @@ describe('ScopeMap — the MSD feature view', () => {
     renderPage('/?view=mvp')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 938 Additional users' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }),
       ).toBeInTheDocument(),
     )
-    await user.click(screen.getByRole('button', { name: 'MSD feature 938 Additional users' }))
+    await user.click(screen.getByRole('button', { name: 'MSD feature SVD-938 Additional users' }))
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     await user.click(within(panel).getByRole('button', { name: /F-001/ }))
 
     // Back in the feature view, with that feature's panel open.
@@ -1728,25 +1770,29 @@ describe('ScopeMap — the MSD feature view', () => {
   })
 
   it('keeps each view its own selection', async () => {
+    // Both selections ride in the URL at once; each view reads only its own,
+    // so switching back restores the panel that was open in it.
     const user = userEvent.setup()
-    renderPage('/?selected=F-002')
+    renderPage('/?view=mvp&selected=F-002')
     await waitFor(() =>
-      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: /MSD feature SVD-938 Additional users/ }),
+      ).toBeInTheDocument(),
     )
-
-    await openMsdView(user)
     // The PwC panel cannot render here, and no MSD card is selected yet.
     expect(screen.queryByRole('region', { name: 'Verify employer' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'By PwC release' }))
-    expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'By PwC package' }))
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
   })
 
   it('filters MSD cards with the same rail', async () => {
     renderPage('/?view=mvp&release=1.4')
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: 'MSD feature 948 · 1B Verification methods' }),
+        screen.getByRole('button', { name: 'MSD feature SVD-948 · 1B Verification methods' }),
       ).toBeInTheDocument(),
     )
     expect(screen.getAllByRole('button', { name: /^MSD feature / })).toHaveLength(1)
@@ -1792,7 +1838,8 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
   const openModal = async (user: ReturnType<typeof userEvent.setup>) => {
     const panel = await openPanel()
     await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
-    return screen.getByRole('dialog')
+    // The panel is itself a dialog now, so the modal is addressed by name.
+    return screen.getByRole('dialog', { name: /resolve this capability/i })
   }
 
   it('offers Resolve on a capability that conflicts', async () => {
@@ -1819,9 +1866,9 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const user = userEvent.setup()
     const dialog = await openModal(user)
     expect(within(dialog).getByText('Electronic T&Cs acceptance')).toBeInTheDocument()
-    expect(within(dialog).getByText(/F-002 ships in Release 1\.1/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/F-002 ships in Package 1\.1/)).toBeInTheDocument()
     expect(
-      within(dialog).getByText(/delivers this capability in Release 1\.4/),
+      within(dialog).getByText(/delivers this capability in Package 1\.4/),
     ).toBeInTheDocument()
   })
 
@@ -1884,7 +1931,7 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const dialog = await openModal(user)
 
     await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
-    await user.selectOptions(within(dialog).getByLabelText('Release'), '1.4')
+    await user.selectOptions(within(dialog).getByLabelText('Package'), '1.4')
     await user.selectOptions(
       within(dialog).getByLabelText('Phase'),
       'manage-vacancies',
@@ -1931,7 +1978,9 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
     const dialog = await openModal(user)
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
     expect(state.resolved).toHaveLength(0)
     expect(state.capabilityMoves).toHaveLength(0)
   })
@@ -1952,20 +2001,24 @@ describe('ScopeMap — resolving a capability conflict in a modal', () => {
 
   it('clears the conflict on the card once the capability is moved to meet it', async () => {
     const user = userEvent.setup()
+    // The panel is a modal, so the card behind it is inert — still rendered
+    // and still correct, which is what this checks.
     const card = () =>
-      screen.getByRole('button', { name: /^F-002 / }).closest('article') as HTMLElement
+      screen
+        .getByRole('button', { name: /^F-002 /, hidden: true })
+        .closest('article') as HTMLElement
 
     const panel = await openPanel()
-    // Checked before opening: Radix marks the rest of the page inert while
-    // the dialog is up, so the card is not queryable until it closes.
     expect(within(card()).getByTitle('Not yet reviewed')).toHaveTextContent('2 conflicts')
 
     await user.click(within(panel).getByRole('button', { name: 'Resolve' }))
-    const dialog = screen.getByRole('dialog')
+    const dialog = screen.getByRole('dialog', { name: /resolve this capability/i })
     await user.click(within(dialog).getByRole('radio', { name: /Move it to/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Confirm' }))
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // The release conflict is gone because the capability now sits with the
     // feature — the badge drops from 2 to 1, it is not merely marked decided.
@@ -1984,18 +2037,20 @@ describe('ScopeMap — a decided capability stops arguing its case', () => {
     )
 
     const panel = () => screen.getByRole('region', { name: 'Verify employer' })
-    expect(within(panel()).getByText(/Release differs:/)).toBeInTheDocument()
+    expect(within(panel()).getByText(/Package differs:/)).toBeInTheDocument()
 
     await user.click(within(panel()).getByRole('button', { name: 'Resolve' }))
     await user.click(
       within(screen.getByRole('dialog')).getByRole('button', { name: 'Confirm' }),
     )
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // The round trip carries the new state back, so the panel re-renders
     // collapsed without a reload.
     await waitFor(() =>
-      expect(within(panel()).queryByText(/Release differs:/)).not.toBeInTheDocument(),
+      expect(within(panel()).queryByText(/Package differs:/)).not.toBeInTheDocument(),
     )
     expect(
       within(panel()).getByRole('button', { name: /Reviewed: MSD features sequencing is right/ }),
@@ -2054,11 +2109,11 @@ describe('ScopeMap — the capability view', () => {
     await openCapabilityView(user)
 
     // Row header is the release, column header the stage — the same grid.
-    expect(screen.getByRole('rowheader', { name: /Release 1\.4/ })).toBeInTheDocument()
+    expect(screen.getByRole('rowheader', { name: /Package 1\.4/ })).toBeInTheDocument()
     expect(
       screen.getByRole('columnheader', { name: /Manage Vacancies/ }),
     ).toBeInTheDocument()
-    const cell = screen.getByRole('cell', { name: /Release 1\.4, Manage Vacancies/ })
+    const cell = screen.getByRole('cell', { name: /Package 1\.4, Manage Vacancies/ })
     expect(
       within(cell).getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
     ).toBeInTheDocument()
@@ -2072,7 +2127,7 @@ describe('ScopeMap — the capability view', () => {
     )
     await openCapabilityView(user)
     expect(
-      screen.getByRole('cell', { name: 'Release 1.1, Access & Onboarding: 2 capabilities' }),
+      screen.getByRole('cell', { name: 'Package 1.1, Access & Onboarding: 2 capabilities' }),
     ).toBeInTheDocument()
   })
 
@@ -2361,7 +2416,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('stays closed until the shown capability is tapped', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     expect(
       screen.queryByRole('group', { name: /Capabilities owned by/ }),
@@ -2370,28 +2425,28 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     await user.click(screen.getByRole('button', { name: 'Invite employer to register' }))
 
     expect(
-      screen.getByRole('group', { name: 'Capabilities owned by 938 — 2 selected' }),
+      screen.getByRole('group', { name: 'Capabilities owned by SVD-938 — 2 selected' }),
     ).toBeInTheDocument()
   })
 
   it('offers every capability, saying which record owns each one', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
 
-    const picker = screen.getByRole('group', { name: /Capabilities owned by 948 · 1B/ })
+    const picker = screen.getByRole('group', { name: /Capabilities owned by SVD-948 · 1B/ })
     expect(within(picker).getAllByRole('checkbox')).toHaveLength(3)
     expect(
-      within(picker).getByRole('checkbox', { name: /Invite employer to register.*owned by 938/ }),
+      within(picker).getByRole('checkbox', { name: /Invite employer to register.*owned by SVD-938/ }),
     ).toBeInTheDocument()
   })
 
   it('renames the record from its title, and shows the new name at once', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     await user.click(
       screen.getByRole('button', { name: 'Edit msd feature title: Additional users' }),
@@ -2406,7 +2461,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
         { id: 2, patch: { title: 'Additional employer portal users' } },
       ]),
     )
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     await waitFor(() =>
       expect(
         within(panel).getByRole('button', {
@@ -2416,50 +2471,39 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     )
   })
 
-  it('re-assigns the record to a release by moving what it owns', async () => {
+  it('places the record by writing the record’s own release', async () => {
+    // The same field Manage writes, so the two pages cannot disagree — and
+    // the server moves the capabilities it owns to match.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
-      expect(state.mvpPlacements).toEqual([{ id: 2, patch: { release_id: '1.4' } }]),
+      expect(state.mvpPatches).toEqual([{ id: 2, patch: { release_id: '1.4' } }]),
     )
+    // The old capability-moving endpoint is no longer what places a record.
+    expect(state.mvpPlacements).toEqual([])
   })
 
-  it('shows the record in its new release without a reload', async () => {
+  it('offers the placement editor on a record that owns nothing', async () => {
+    // Those five records could not be placed at all before: the old control
+    // worked by moving capabilities, and they have none.
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 · 1A Additional users')
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
-    await waitFor(() =>
-      expect(
-        within(panel).getByText('Release 1.4 · Access & Onboarding'),
-      ).toBeInTheDocument(),
-    )
-  })
-
-  it('offers no placement editor on a record with nothing to move', async () => {
-    const user = userEvent.setup()
-    renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 · 1A Additional users')
-
-    // It is placed by the features citing it, which this control cannot move.
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit package' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
   it('offers to assign, not change, on a record that owns nothing', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 · 1A Additional users')
+    await openRecord(user, 'MSD feature SVD-938 · 1A Additional users')
 
     expect(screen.getByRole('button', { name: 'Assign capabilities' })).toBeInTheDocument()
   })
@@ -2467,7 +2511,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('sends the complete new set when a capability is claimed', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
@@ -2482,14 +2526,14 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('shows the claimed capability under its new record without a reload', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
       screen.getByRole('checkbox', { name: /Invite employer to register/ }),
     )
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-948 · 1B' })
     await waitFor(() =>
       expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument(),
     )
@@ -2499,7 +2543,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('takes it off the record that owned it before', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 948 · 1B Verification methods')
+    await openRecord(user, 'MSD feature SVD-948 · 1B Verification methods')
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
       screen.getByRole('checkbox', { name: /Invite employer to register/ }),
@@ -2507,9 +2551,9 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     await waitFor(() => expect(state.mvpCapabilitySets).toHaveLength(1))
 
     await user.click(screen.getByRole('button', { name: 'Close' }))
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('Capabilities (1)')).toBeInTheDocument()
     expect(
       within(panel).queryByText('Invite employer to register'),
@@ -2519,7 +2563,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it('unticking leaves the capability on the map, owned by nothing', async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
     await user.click(
@@ -2529,7 +2573,10 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
       expect(state.mvpCapabilitySets).toEqual([{ id: 2, capabilityIds: [11] }]),
     )
 
-    // Still delivered scope — it simply has no owning record now.
+    // Still delivered scope — it simply has no owning record now. The view
+    // tabs sit behind the modal, so the panel is closed to reach them.
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'By capability' }))
     expect(
       await screen.findByRole('button', { name: /^Invite employer to register/ }),
@@ -2539,7 +2586,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
   it("surfaces the server's refusal and keeps the record as it was", async () => {
     const user = userEvent.setup()
     renderPage('/?view=mvp')
-    await openRecord(user, 'MSD feature 938 Additional users')
+    await openRecord(user, 'MSD feature SVD-938 Additional users')
 
     state.writeFail = 'No capability with id 10.'
     await user.click(screen.getByRole('button', { name: 'Change capabilities' }))
@@ -2548,7 +2595,7 @@ describe('ScopeMap — owning capabilities from the MSD feature panel', () => {
     )
 
     expect(await screen.findByRole('alert')).toHaveTextContent('No capability with id 10.')
-    const panel = screen.getByRole('complementary', { name: 'MSD feature 938' })
+    const panel = screen.getByRole('complementary', { name: 'MSD feature SVD-938' })
     expect(within(panel).getByText('Capabilities (2)')).toBeInTheDocument()
   })
 })
@@ -2594,8 +2641,9 @@ describe('ScopeMap — deleting a capability from its panel', () => {
     await user.click(within(panel).getByRole('button', { name: 'Cancel' }))
 
     expect(state.capabilityDeletes).toEqual([])
+    // Still on the map, inert behind the panel that is still open over it.
     expect(
-      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/, hidden: true }),
     ).toBeInTheDocument()
   })
 
@@ -2666,8 +2714,9 @@ describe('ScopeMap — deleting a capability from its panel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Cannot delete capability 12 — 1 PwC feature cites it.',
     )
+    // Still on the map, inert behind the panel that is still open over it.
     expect(
-      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/ }),
+      screen.getByRole('button', { name: /^Electronic T&Cs acceptance/, hidden: true }),
     ).toBeInTheDocument()
   })
 
@@ -2682,7 +2731,7 @@ describe('ScopeMap — deleting a capability from its panel', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('complementary', { name: 'MSD feature 948 · 1B' }),
+        screen.getByRole('complementary', { name: 'MSD feature SVD-948 · 1B' }),
       ).toBeInTheDocument(),
     )
     expect(url()).toContain('view=mvp')
@@ -2696,8 +2745,10 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('shows the current view as Markdown, in the source document’s shape', async () => {
@@ -2705,11 +2756,11 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?view=mvp')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('View by MSD feature')
-    expect(markdown).toContain('## **1. Release 1.1 — Pilot**')
+    expect(markdown).toContain('## **1. Package 1.1 — Pilot**')
     expect(markdown).toContain('#### **Access & Onboarding')
     expect(markdown).toContain('* **SVD-938**: Additional users')
   })
@@ -2719,7 +2770,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     expect((screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value).toContain(
       '* **F-001**: Invite employer',
     )
@@ -2730,7 +2781,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?feature=F-001')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('* **F-001**')
@@ -2744,7 +2795,7 @@ describe('ScopeMap export (the map as a document)', () => {
     renderPage('/?view=capability')
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     expect(screen.getByText('vd2-scope-by-capability.md')).toBeInTheDocument()
   })
 })
@@ -2755,12 +2806,14 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    screen.getByRole('button', { name: 'Export' }).focus()
+    screen.getByRole('button', { name: 'Export text' }).focus()
     await user.keyboard('{Enter}')
     expect(await screen.findByRole('dialog', { name: 'Export this view' })).toBeInTheDocument()
 
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
   })
 
   it('returns focus to the Export control when the dialog closes', async () => {
@@ -2768,15 +2821,17 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     // The dialog's own Close sits last; the header's X carries the same name.
     const closes = screen.getAllByRole('button', { name: 'Close' })
     await user.click(closes[closes.length - 1])
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
     // Otherwise a keyboard user is returned to the top of the document and
     // has to tab the whole toolbar again to get back where they were.
-    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Export text' })).toHaveFocus()
   })
 
   it('returns focus to the Export control when the dialog is dismissed with Escape', async () => {
@@ -2784,11 +2839,13 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     renderPage()
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await waitFor(() => expect(
+      screen.queryByRole('dialog', { name: /resolve this capability/i }),
+    ).not.toBeInTheDocument())
 
-    expect(screen.getByRole('button', { name: 'Export' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Export text' })).toHaveFocus()
   })
 
   it('explains an empty map without blaming a filter nobody set', async () => {
@@ -2803,9 +2860,9 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     } as ScopeGraph
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Export text' })).toBeEnabled())
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).not.toContain('Clearing a filter will bring some back')
@@ -2826,7 +2883,7 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
     expect(screen.getByText(/Not on the map/)).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Export' }))
+    await user.click(screen.getByRole('button', { name: 'Export text' }))
 
     const markdown = (screen.getByLabelText('Markdown export') as HTMLTextAreaElement).value
     expect(markdown).toContain('## **Not on the map**')
@@ -2837,7 +2894,202 @@ describe('ScopeMap export — reaching it and leaving it', () => {
     state.fail = 'Server unreachable'
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Export' })).toBeDisabled(),
+      expect(screen.getByRole('button', { name: 'Export text' })).toBeDisabled(),
     )
+  })
+})
+
+describe('ScopeMap PDF export (the map as a picture)', () => {
+  it('offers it from the toolbar, alongside the Markdown export', async () => {
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Export text' })).toBeInTheDocument()
+  })
+
+  it('hands over the heading, the legend and the grid, in that order', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const { blocks } = capturePdf.mock.calls[0][0]
+    expect(
+      blocks.map((block: { element: HTMLElement; background: string }) => [
+        block.element.className,
+        block.background,
+      ]),
+    ).toEqual([
+      // The heading is text, so it prints without a filled box behind it.
+      ['scope-chrome__heading', 'paper'],
+      ['scope-chrome__legend', 'app'],
+      ['scope-map-grid', 'app'],
+    ])
+  })
+
+  it('heads the document with the map’s title and the view it was taken from', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const [heading] = capturePdf.mock.calls[0][0].blocks as { element: HTMLElement }[]
+    expect(heading.element.textContent).toContain('VD2 package scope map')
+    expect(heading.element.textContent).toContain('View by MSD feature')
+  })
+
+  it('names the view the export was actually taken from, not a fixed one', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=capability')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    const [heading] = capturePdf.mock.calls[0][0].blocks as { element: HTMLElement }[]
+    expect(heading.element.textContent).toContain('View by capability')
+    expect(heading.element.textContent).not.toContain('View by MSD feature')
+  })
+
+  it('captures the view and filters the map is currently showing', async () => {
+    const user = userEvent.setup()
+    renderPage('/?view=mvp&release=1.1')
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => expect(capturePdf).toHaveBeenCalled())
+    expect(capturePdf.mock.calls[0][0]).toMatchObject({
+      view: 'mvp',
+      filters: expect.objectContaining({ release: ['1.1'] }),
+    })
+  })
+
+  it('says it is working, and stops saying so when it is done', async () => {
+    const user = userEvent.setup()
+    let finish: (name: string) => void = () => {}
+    capturePdf.mockReturnValue(new Promise<string>((resolve) => { finish = resolve }))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+    // A full map takes a few seconds; a button that looks idle invites a
+    // second click and a second render.
+    expect(await screen.findByRole('button', { name: 'Building PDF…' })).toBeDisabled()
+
+    finish('vd2-scope-map-by-pwc-release.pdf')
+    expect(await screen.findByRole('button', { name: 'Export PDF' })).toBeEnabled()
+  })
+
+  it('reports a failed render instead of looking like it did nothing', async () => {
+    const user = userEvent.setup()
+    capturePdf.mockRejectedValue(new Error('tainted canvas'))
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    await user.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/PDF could not be built/i)
+    expect(screen.getByRole('button', { name: 'Export PDF' })).toBeEnabled()
+  })
+
+  it('offers no PDF while the scope failed to load', async () => {
+    state.fail = 'Server unreachable'
+    renderPage()
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Export PDF' })).toBeDisabled(),
+    )
+  })
+})
+
+/**
+ * The map fits itself to the viewport once, on arrival.
+ *
+ * It used to re-fit whenever the model changed — and every write invalidates
+ * the scope query, so saving any edit handed back a fresh model and snapped
+ * the zoom back to fit. Someone reading at 100% lost their place on every
+ * keystroke they committed.
+ *
+ * jsdom reports no layout, so the two measurements `fitToWidth` divides are
+ * stubbed; without them the fit is a no-op and the regression is invisible.
+ */
+describe('ScopeMap zoom survives a save', () => {
+  /** Makes the grid measurable: a 1400px viewport over a 2800px map. */
+  const stubLayout = () => [
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('scope-map-grid') ? 1400 : 0
+    }),
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains('scope-map-grid__table') ? 2800 : 0
+    }),
+  ]
+
+  it('fits to the viewport on arrival', async () => {
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    // 1400 / 2800 = 50%.
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('50%')
+  })
+
+  it('keeps a chosen zoom when a feature edit is saved', async () => {
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+
+    // Zoom first: the toolbar is inert once the panel is over it.
+    await user.click(screen.getByRole('button', { name: '100%' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+
+    await user.click(screen.getByRole('button', { name: 'F-002 Verify employer' }))
+    await waitFor(() =>
+      expect(screen.getByRole('region', { name: 'Verify employer' })).toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: /edit name/i }))
+    const input = screen.getByLabelText('Name')
+    await user.clear(input)
+    await user.type(input, 'Renamed')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(state.patched).toHaveLength(1))
+    // The zoom readout sits behind the modal, so it is read there.
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+  })
+
+  it('keeps a chosen zoom when the filters change', async () => {
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await user.click(screen.getByRole('button', { name: '100%' }))
+
+    const rail = await openFilters(user)
+    await user.click(within(rail).getByRole('checkbox', { name: /Package 1\.1/ }))
+
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+  })
+
+  it('still fits on demand', async () => {
+    // The button is the way back, now that nothing re-fits on its own.
+    const user = userEvent.setup()
+    stubLayout()
+    renderPage()
+    await waitFor(() => expect(screen.getAllByRole('cell')).toHaveLength(4))
+    await user.click(screen.getByRole('button', { name: '100%' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('100%')
+
+    await user.click(screen.getByRole('button', { name: 'Fit' }))
+    expect(screen.getByLabelText('Zoom level')).toHaveTextContent('50%')
   })
 })

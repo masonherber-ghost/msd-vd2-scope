@@ -1,0 +1,23 @@
+rules_version = '2';
+
+// The only security boundary. The web config in .env is public, so anything
+// these rules allow, anyone can do from a browser console.
+//
+// Single owner: every document lives under users/{uid}/…, and only the owner's
+// UID may touch that subtree. OWNER_UID is pinned rather than "any signed-in
+// user", because Google sign-in is open to every Google account.
+//
+// The owner's UID is in Firebase console → Authentication → Users.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && uid == 'ZKiKolGTyMN64MeQXZV9QaY9Jsn1';
+    }
+
+    match /users/{uid}/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+  }
+}

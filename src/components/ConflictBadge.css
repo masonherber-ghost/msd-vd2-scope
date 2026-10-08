@@ -11,7 +11,10 @@
   border-radius: var(--radius-sm);
   font-size: 0.6875rem;
   line-height: 1.5;
-  white-space: nowrap;
+  /* It used to be `nowrap`, which assumed there was always room: inside a
+     narrow phase column "4 conflicts · reviewed" stuck out past the card.
+     It stays on one line wherever it fits, and wraps where it does not. */
+  max-width: 100%;
 }
 
 /* ========================================
@@ -36,4 +39,21 @@
 
 .conflict-badge__glyph {
   font-weight: 700;
+}
+
+/* ========================================
+   QUESTION
+   ======================================== */
+
+/* A question is an open item, not a defect, so it is flagged rather than
+   coloured like an unreviewed conflict. */
+.conflict-badge--question {
+  border-color: var(--color-border);
+  color: var(--color-foreground);
+}
+
+.conflict-badge__flag {
+  width: 0.75rem;
+  height: 0.75rem;
+  flex-shrink: 0;
 }

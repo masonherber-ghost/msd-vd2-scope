@@ -14,7 +14,7 @@ describe('buildFeatureDetail — identity and placement', () => {
     expect(detail).toMatchObject({
       id: 'F-001',
       name: 'Invite employer',
-      releaseLabel: 'Release 1.1',
+      releaseLabel: 'Package 1.1',
       phaseName: 'Access & Onboarding',
       epicRef: '179',
     })
@@ -50,7 +50,7 @@ describe('buildFeatureDetail — capabilities grouped by actor', () => {
     const [capability] = detail.actorGroups[0].capabilities
     expect(capability).toMatchObject({
       text: 'Electronic T&Cs acceptance',
-      releaseLabel: 'Release 1.4',
+      releaseLabel: 'Package 1.4',
       phaseName: 'Manage Vacancies',
     })
   })
@@ -94,8 +94,10 @@ describe('buildFeatureDetail — no capabilities (R-8.18)', () => {
           release_id: '1.1',
           phase_id: 'access-and-onboarding',
           source_phase_label: 'Access & onboarding',
-          capability_note: 'No direct individual capabilities mapped in Release 1.1–1.3 table',
-          display_order: 1,
+          capability_note: 'No direct individual capabilities mapped in Package 1.1–1.3 table',
+          question: null, display_order: 1,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],
@@ -106,7 +108,7 @@ describe('buildFeatureDetail — no capabilities (R-8.18)', () => {
     expect(detail.capabilityCount).toBe(0)
     expect(detail.actorGroups).toEqual([])
     expect(detail.capabilityNote).toBe(
-      'No direct individual capabilities mapped in Release 1.1–1.3 table',
+      'No direct individual capabilities mapped in Package 1.1–1.3 table',
     )
   })
 })
@@ -136,7 +138,9 @@ describe('buildFeatureDetail — connected features (R-8.17)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 1,
+          question: null, display_order: 1,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
         {
@@ -147,7 +151,9 @@ describe('buildFeatureDetail — connected features (R-8.17)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 2,
+          question: null, display_order: 2,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],
@@ -174,7 +180,9 @@ describe('buildFeatureDetail — connected features (R-8.17)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 3,
+          question: null, display_order: 3,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],
@@ -192,18 +200,16 @@ describe('buildFeatureDetail — connected features (R-8.17)', () => {
   })
 })
 
-describe('buildFeatureDetail — assumptions', () => {
-  it('returns them in source order', () => {
-    const withAssumptions = makeScopeGraph({
-      assumptions: [
-        { id: 3, pwc_feature_id: 'F-001', position: 3, text: 'third', source: 'mapping' },
-        { id: 1, pwc_feature_id: 'F-001', position: 1, text: 'first', source: 'mapping' },
-        { id: 2, pwc_feature_id: 'F-001', position: 2, text: 'second', source: 'mapping' },
-        { id: 4, pwc_feature_id: 'F-002', position: 1, text: 'other', source: 'mapping' },
-      ],
+describe('buildFeatureDetail — assumptions and notes', () => {
+  it("carries the feature's own markdown, and no other feature's", () => {
+    const base = makeScopeGraph()
+    const withNotes = makeScopeGraph({
+      pwcFeatures: base.pwcFeatures.map((f) => ({
+        ...f,
+        notes: f.id === 'F-001' ? '1. first\n2. second' : 'other',
+      })),
     })
-    const detail = buildFeatureDetail(withAssumptions, 'F-001')!
-    expect(detail.assumptions.map((a) => a.text)).toEqual(['first', 'second', 'third'])
+    expect(buildFeatureDetail(withNotes, 'F-001')!.notes).toBe('1. first\n2. second')
   })
 })
 

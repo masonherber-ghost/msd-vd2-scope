@@ -26,7 +26,7 @@ export const FILTER_GROUPS: readonly FilterGroup[] = [
 ]
 
 export const GROUP_LABEL: Record<FilterGroup, string> = {
-  release: 'Release',
+  release: 'Package',
   phase: 'Phase',
   actor: 'Actor',
   mvp: 'MVP feature',
@@ -175,8 +175,10 @@ function matchesConflict(feature: FeatureCardModel, wanted: ConflictFilter[]): b
         return unreviewed > 0
       case 'corrected':
         return feature.overridden
+      case 'question':
+        return feature.question !== null
       case 'none':
-        return !any && !feature.overridden
+        return !any && !feature.overridden && feature.question === null
     }
   })
 }

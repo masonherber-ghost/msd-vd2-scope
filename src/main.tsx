@@ -5,6 +5,14 @@ import { RouterProvider } from 'react-router-dom'
 import '@/globals.css'
 import { router } from '@/routes'
 import { AuthProvider } from '@/hooks/AuthContext'
+import { RequireAuth } from '@/components/RequireAuth'
+
+// A tab left open across a deploy asks for a lazy route chunk the deploy
+// deleted. Reload onto the new build instead of failing to render.
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  window.location.reload()
+})
 
 const rootElement = document.getElementById('root')
 if (!rootElement) throw new Error('Root element #root not found in index.html')
@@ -23,9 +31,11 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Suspense fallback={null}>
-          <RouterProvider router={router} />
-        </Suspense>
+        <RequireAuth>
+          <Suspense fallback={null}>
+            <RouterProvider router={router} />
+          </Suspense>
+        </RequireAuth>
       </AuthProvider>
     </QueryClientProvider>
   </StrictMode>,

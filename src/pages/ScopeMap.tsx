@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Download, Filter } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { Download, Eye, FileDown, Filter, Printer } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
@@ -9,6 +9,8 @@ import { FeatureForm, type FeatureFormValues } from '@/components/FeatureForm'
 import { FilterRail } from '@/components/FilterRail'
 import { ScopeMapGrid } from '@/components/ScopeMapGrid'
 import { ReleaseHorizons, ScopeMapChrome } from '@/components/ScopeMapChrome'
+import { CardDetailBar } from '@/components/CardDetailBar'
+import { ScopeDetailDialog } from '@/components/ScopeDetailDialog'
 import { ScopeExportDialog } from '@/components/ScopeExportDialog'
 import { ScopeSearch } from '@/components/ScopeSearch'
 import {
@@ -20,14 +22,9 @@ import {
   useUpdateFeature,
 } from '@/hooks/useFeatureMutations'
 import {
-  useCreateAssumption,
-  useDeleteAssumption,
   useDeleteCapability,
-  useMoveAssumption,
   useResolveConflict,
   useSetMvpCapabilities,
-  useSetMvpPlacement,
-  useUpdateAssumption,
   useUpdateCapability,
   useUpdateMvpFeature,
 } from '@/hooks/useEntityMutations'
@@ -56,6 +53,15 @@ import {
 import { buildConflictModel, unreviewedFeatureIds } from '@/lib/scope-conflicts'
 import { buildEdges, connectionDensity } from '@/lib/scope-edges'
 import { SCOPE_VIEW_LABEL, buildScopeExport } from '@/lib/scope-export'
+import {
+  hiddenCount,
+  parseDetail,
+  toggleDetail,
+  writeDetail,
+  ALL_DETAIL,
+  type DetailKey,
+} from '@/lib/card-detail'
+import { captureScopeMapPdf, type CaptureBlock } from '@/lib/scope-pdf'
 import { searchScope, type SearchHit } from '@/lib/scope-search'
 import {
   EMPTY_FILTERS,
@@ -88,6 +94,20 @@ export default function ScopeMap() {
   // pasted link reproduces the view and browser back steps through it.
   const [searchParams, setSearchParams] = useSearchParams()
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])
+
+  /**
+   * Which regions of a card are showing. URL state like everything else, so
+   * a pasted link reproduces the map the sender was reading — a stripped-back
+   * map is a different reading of the same data, not a private preference.
+   */
+  const cardDetail = useMemo(() => parseDetail(searchParams), [searchParams])
+
+  const setCardDetail = useCallback(
+    (next: typeof ALL_DETAIL) => {
+      setSearchParams((current) => writeDetail(next, current), { replace: false })
+    },
+    [setSearchParams],
+  )
 
   const setFilters = useCallback(
     (next: FilterState) => {
@@ -333,7 +353,9 @@ export default function ScopeMap() {
   // Each view has its own panel; only one can be open at a time.
   const mvpDetail = isMvpView ? selectedMvpCard : null
   const capabilityDetail = isCapabilityView ? selectedCapabilityCard : null
-  const panelOpen = detail !== null || mvpDetail !== null || capabilityDetail !== null
+  // Kept as the single answer to "is a panel open", which the edge overlay
+  // and the create flow both read even though the layout no longer does.
+  void (detail !== null || mvpDetail !== null || capabilityDetail !== null)
 
   // ---- Create / edit / delete -------------------------------------------
   const [creatingIn, setCreatingIn] = useState<{
@@ -343,21 +365,18 @@ export default function ScopeMap() {
   const [dirty, setDirty] = useState(false)
   // The rail is hidden until asked for, then opens as a column beside the map.
   const [filtersOpen, setFiltersOpen] = useState(false)
+  // Same idea for the card-detail toggles, which sit above the grid.
+  const [detailOpen, setDetailOpen] = useState(false)
 
   const createFeature = useCreateFeature()
   const updateFeature = useUpdateFeature()
   const deleteFeature = useDeleteFeature()
-  const addAssumption = useCreateAssumption()
-  const editAssumption = useUpdateAssumption()
-  const moveAssumption = useMoveAssumption()
-  const removeAssumption = useDeleteAssumption()
   const resolveConflict = useResolveConflict()
   const updateCapability = useUpdateCapability()
   const deleteCapability = useDeleteCapability()
   const setMvpLinks = useSetMvpLinks()
   const setCapabilityLinks = useSetCapabilityLinks()
   const setMvpCapabilities = useSetMvpCapabilities()
-  const setMvpPlacement = useSetMvpPlacement()
   const updateMvpFeature = useUpdateMvpFeature()
   const nextId = useNextFeatureId(creatingIn !== null)
 
@@ -495,6 +514,30 @@ export default function ScopeMap() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
   }, [dirty])
 
+  /**
+   * The card a panel was opened from, so focus goes back to it when the
+   * dialog closes rather than to `<body>` — the grid is long, and a keyboard
+   * user would otherwise restart at the top of the page (WCAG 2.4.3).
+   */
+  const cardButton = useCallback(
+    (selector: string) =>
+      document.querySelector<HTMLElement>(`${selector} button`) ??
+      document.querySelector<HTMLElement>(selector),
+    [],
+  )
+
+  const closeCapabilityPanel = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setSelectedCapability(null)
+  }, [confirmDiscard, setSelectedCapability])
+
+  const closeMvpPanel = useCallback(() => {
+    if (!confirmDiscard()) return
+    setDirty(false)
+    setSelectedMvp(null)
+  }, [confirmDiscard, setSelectedMvp])
+
   const closePanel = useCallback(() => {
     if (!confirmDiscard()) return
     setDirty(false)
@@ -567,21 +610,74 @@ export default function ScopeMap() {
     ],
   )
 
-  /** Scales the grid so its full width fits the viewport (R-8.7). */
+  /**
+   * The PDF is a render of the live DOM rather than of the model, so it
+   * reads three elements off the page: the heading, which names the map and
+   * the view it was taken from; the actor legend, which is the key; and the
+   * grid they explain. Only the last two carry the app's page colour behind
+   * them — the heading is text, and a filled rectangle behind it reads as a
+   * box around the words.
+   * Zoom and scroll are undone during the capture — they describe the
+   * screen, not the map.
+   */
+  const [pdfState, setPdfState] = useState<'idle' | 'working' | 'failed'>('idle')
+
+  const exportPdf = useCallback(async () => {
+    const found: [string, CaptureBlock['background']][] = [
+      ['.scope-chrome__heading', 'paper'],
+      ['.scope-chrome__legend', 'app'],
+      ['.scope-map-grid', 'app'],
+    ]
+    const blocks = found
+      .map(([selector, background]) => ({
+        element: document.querySelector<HTMLElement>(selector),
+        background,
+      }))
+      .filter((block): block is CaptureBlock => block.element !== null)
+    if (blocks.length === 0) {
+      setPdfState('failed')
+      return
+    }
+
+    setPdfState('working')
+    try {
+      await captureScopeMapPdf({ blocks, view, filters })
+      setPdfState('idle')
+    } catch {
+      // Rendering the DOM to a canvas can fail on a resource the browser
+      // will not let us read. Say so rather than leaving a button that
+      // looks like it did nothing.
+      setPdfState('failed')
+    }
+  }, [view, filters])
+
+  /**
+   * Scales the grid so its full width fits the viewport (R-8.7). Returns
+   * whether it could — the refs are not populated on the first pass.
+   */
   const fitToWidth = useCallback(() => {
     const container = scrollRef.current
     const content = contentRef.current
-    if (!container || !content) return
+    if (!container || !content) return false
     const available = container.clientWidth
     // offsetWidth is the unscaled width, so the ratio is the scale we need.
     const natural = content.offsetWidth
-    if (!available || !natural) return
+    if (!available || !natural) return false
     setZoom(clamp(available / natural))
+    return true
   }, [])
 
-  // Fit once the grid has rendered at its natural size.
+  /**
+   * Fit once, when the grid first has a size — not on every model.
+   *
+   * Every write invalidates the scope query, so `model` is a fresh object
+   * after each save. Fitting on that discarded whatever zoom someone had
+   * chosen: edit a feature at 100% and the map snapped back to 43%.
+   */
+  const hasFitted = useRef(false)
   useLayoutEffect(() => {
-    if (model) fitToWidth()
+    if (!model || hasFitted.current) return
+    hasFitted.current = fitToWidth()
   }, [model, fitToWidth])
 
   return (
@@ -612,7 +708,7 @@ export default function ScopeMap() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant={filtersOpen ? 'default' : 'outline'}
             size="sm"
@@ -636,6 +732,28 @@ export default function ScopeMap() {
           </Button>
 
           <Button
+            variant={detailOpen ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDetailOpen((open) => !open)}
+            aria-pressed={detailOpen}
+            aria-expanded={detailOpen}
+            aria-controls="scope-card-detail"
+            aria-label={
+              hiddenCount(view, cardDetail) > 0
+                ? `Card detail, ${hiddenCount(view, cardDetail)} hidden`
+                : 'Card detail'
+            }
+          >
+            <Eye aria-hidden="true" />
+            Detail
+            {hiddenCount(view, cardDetail) > 0 ? (
+              <span className="rounded-full bg-background px-1.5 text-foreground tabular-nums">
+                {hiddenCount(view, cardDetail)}
+              </span>
+            ) : null}
+          </Button>
+
+          <Button
             ref={exportButtonRef}
             variant="outline"
             size="sm"
@@ -643,7 +761,32 @@ export default function ScopeMap() {
             disabled={!model}
           >
             <Download aria-hidden="true" />
-            Export
+            Export text
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void exportPdf()}
+            disabled={!model || pdfState === 'working'}
+          >
+            <FileDown aria-hidden="true" />
+            {pdfState === 'working' ? 'Building PDF…' : 'Export PDF'}
+          </Button>
+
+          {/* The print view is the same map laid out for paper, printed by
+              the browser — so the text comes out as text rather than as a
+              picture of it. Opened in its own tab, since the map it was
+              taken from is usually still wanted. */}
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to={{ pathname: '/print', search: searchParams.toString() }}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <Printer aria-hidden="true" />
+              Print view
+            </Link>
           </Button>
 
           <Button
@@ -681,6 +824,30 @@ export default function ScopeMap() {
         </div>
       </div>
 
+      {/* Building the PDF takes a few seconds on a full map, so the wait is
+          announced rather than left to the button label alone. */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {pdfState === 'working' ? 'Building the PDF of the scope map' : ''}
+      </p>
+
+      {pdfState === 'failed' ? (
+        <p role="alert" className="text-sm text-destructive">
+          The PDF could not be built. The map is still on screen — try again, or use
+          Export for the Markdown list.
+        </p>
+      ) : null}
+
+      {detailOpen ? (
+        <CardDetailBar
+          id="scope-card-detail"
+          view={view}
+          state={cardDetail}
+          onToggle={(key: DetailKey) => setCardDetail(toggleDetail(cardDetail, key))}
+          onShowAll={() => setCardDetail(ALL_DETAIL)}
+          onClose={() => setDetailOpen(false)}
+        />
+      ) : null}
+
       {scope.isPending ? (
         <p className="text-sm text-muted-foreground">Loading scope…</p>
       ) : scope.isError ? (
@@ -693,13 +860,7 @@ export default function ScopeMap() {
       ) : model && projected ? (
         <div
           className={`flex flex-col gap-4 lg:grid lg:items-start ${
-            filtersOpen && panelOpen
-              ? 'lg:grid-cols-[14rem_minmax(0,1fr)_22rem]'
-              : filtersOpen
-                ? 'lg:grid-cols-[16rem_minmax(0,1fr)]'
-                : panelOpen
-                  ? 'lg:grid-cols-[minmax(0,1fr)_22rem]'
-                  : 'lg:grid-cols-1'
+            filtersOpen ? 'lg:grid-cols-[16rem_minmax(0,1fr)]' : 'lg:grid-cols-1'
           }`}
         >
           {filtersOpen ? (
@@ -770,6 +931,7 @@ export default function ScopeMap() {
                 edges={isMvpView ? [] : edges}
                 density={density}
                 unreviewedIds={unreviewedIds}
+                detail={cardDetail}
                 selectedId={selectedId}
                 onSelect={(id) => {
                   if (!confirmDiscard()) return
@@ -803,7 +965,7 @@ export default function ScopeMap() {
                   Not on the map ({capabilityProjection.unplaced.length})
                 </h2>
                 <p className="text-sm text-muted-foreground">
-                  The sequencing table never matched these, so they have no release or
+                  The sequencing table never matched these, so they have no package or
                   stage. Listed rather than dropped.
                 </p>
                 <ul className="mt-2 flex flex-col gap-1 text-sm">
@@ -899,6 +1061,14 @@ export default function ScopeMap() {
           </div>
 
           {capabilityDetail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closeCapabilityPanel()
+              }}
+              label={`Capability ${capabilityDetail.text}`}
+              returnFocusTo={() => cardButton(`[data-capability-id="${capabilityDetail.id}"]`)}
+            >
             <CapabilityDetailPanel
               card={capabilityDetail}
               onClose={() => setSelectedCapability(null)}
@@ -947,9 +1117,18 @@ export default function ScopeMap() {
                 })
               }}
             />
+            </ScopeDetailDialog>
           ) : null}
 
           {mvpDetail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closeMvpPanel()
+              }}
+              label={`MSD feature ${mvpCardLabel(mvpDetail)} ${mvpDetail.title}`}
+              returnFocusTo={() => cardButton(`[data-mvp-id="${mvpDetail.id}"]`)}
+            >
             <MvpDetailPanel
               card={mvpDetail}
               onClose={() => setSelectedMvp(null)}
@@ -962,11 +1141,19 @@ export default function ScopeMap() {
               }
               releaseOptions={releaseOptions}
               phaseOptions={phaseOptions}
-              onSetPlacement={(patch) =>
-                setMvpPlacement.mutateAsync({ id: mvpDetail.id, patch })
+              // The same field Manage writes, so the two agree and the card
+              // moves on the map.
+              onSetStatedPlacement={(patch) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch })
               }
               onSaveTitle={(title) =>
                 updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { title } })
+              }
+              onSaveQuestion={(question) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { question } })
+              }
+              onSaveDetails={(details) =>
+                updateMvpFeature.mutateAsync({ id: mvpDetail.id, patch: { details } })
               }
               onDirtyChange={setDirty}
               onSelectFeature={(id) => {
@@ -981,9 +1168,18 @@ export default function ScopeMap() {
                 })
               }}
             />
+            </ScopeDetailDialog>
           ) : null}
 
           {detail ? (
+            <ScopeDetailDialog
+              open
+              onOpenChange={(next) => {
+                if (!next) closePanel()
+              }}
+              label={`${detail.id} ${detail.name}`}
+              returnFocusTo={() => cardButton(`[data-feature-id="${detail.id}"]`)}
+            >
             <FeatureDetailPanel
               detail={detail}
               onClose={closePanel}
@@ -1026,15 +1222,8 @@ export default function ScopeMap() {
                   patch: { release_id: releaseId, phase_id: phaseId },
                 })
               }
-              onAddAssumption={(text) =>
-                addAssumption.mutateAsync({ featureId: detail.id, text })
-              }
-              onEditAssumption={(id, text) => editAssumption.mutateAsync({ id, text })}
-              onMoveAssumption={(id, direction) =>
-                moveAssumption.mutateAsync({ id, direction })
-              }
-              onDeleteAssumption={(id) => removeAssumption.mutateAsync(id)}
             />
+            </ScopeDetailDialog>
           ) : null}
         </div>
       ) : null}

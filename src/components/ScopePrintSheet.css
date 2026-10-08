@@ -1,0 +1,140 @@
+/* ========================================
+   PAGE BOX
+
+   The `@page` rule is not here: the sheet is A3 landscape wide but as tall as
+   the map turned out to be, and `@page` reads no custom property. The
+   component emits it with the measured height — see ScopePrintSheet.tsx.
+   ======================================== */
+
+/* ========================================
+   BLOCK BASE
+   ======================================== */
+
+.print-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+/* On screen the sheet is shown as paper: the same proportions the print
+   comes out at, so what is on the page is what prints. */
+@media screen {
+  .print-sheet {
+    /* The paper, at the size it prints: A3 landscape wide, and as long as
+       the map needs. What is on screen is what comes out. */
+    width: 420mm;
+    min-height: var(--print-sheet-height, 297mm);
+    margin: 0 auto;
+    padding: 10mm;
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+/* ========================================
+   HEADER
+   ======================================== */
+
+.print-sheet__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2);
+}
+
+.print-sheet__title {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--color-primary-900);
+}
+
+.print-sheet__subtitle {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.4;
+  color: var(--color-ink-700);
+}
+
+.print-sheet__meta {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-ink-500);
+}
+
+.print-sheet__legend {
+  margin-top: var(--spacing-2);
+}
+
+/* ========================================
+   THE MAP
+
+   The inner element is scaled by a factor the component measures; the outer
+   one carries the space that scaled result occupies, since a transform
+   leaves the layout box at natural size.
+   ======================================== */
+
+.print-sheet__map {
+  /* The map is scaled to the sheet's width, so nothing hangs over the edge.
+     Visible rather than hidden: a clip here would hide a measurement that
+     went wrong instead of showing it. */
+  overflow: visible;
+}
+
+.print-sheet__map-inner {
+  transform-origin: top left;
+  width: max-content;
+}
+
+/* The grid scrolls inside its own box on screen. On paper there is nothing
+   to scroll — the whole map is drawn, scaled to the sheet. */
+.print-sheet .scope-map-grid {
+  overflow: visible;
+  padding-bottom: 0;
+}
+
+.print-sheet .scope-map-grid__scaler {
+  transform: none;
+  width: max-content;
+  height: auto;
+}
+
+/* ========================================
+   PRINT
+
+   Everything that is screen furniture — the app's chrome, the sheet's own
+   paper styling, the toolbar above it — comes off, leaving the page box as
+   the only frame.
+   ======================================== */
+
+@media print {
+  .print-sheet {
+    width: auto;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    /* Cards, phase headers and actor pills are colour-coded; a print that
+       drops the fills loses the key the legend explains. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-sheet__map {
+    overflow: visible;
+  }
+
+  /* One map, one sheet: a page break inside the grid would split a row of
+     cards across two pieces of paper. */
+  .print-sheet,
+  .print-sheet__map,
+  .print-sheet__map-inner {
+    break-inside: avoid;
+  }
+}

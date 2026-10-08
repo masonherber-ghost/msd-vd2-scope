@@ -3,7 +3,7 @@ import {
   EXPECTED_RELEASE_CONFLICTS,
   findCountDrift,
   loadScopeFromSources,
-} from '../server/services/scope-source.js'
+} from '../admin/import/scope-source.js'
 
 const result = loadScopeFromSources()
 const s = result.summary

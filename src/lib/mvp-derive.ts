@@ -12,9 +12,13 @@ import {
  * features, so the map answers "where does this MSD feature land, and which
  * PwC features carry it" instead of the other way round.
  *
- * An MSD feature has no placement of its own — neither source gives it a
- * release or a phase. It is placed by what it owns, in this order:
+ * Neither source gives an MSD feature a release or a phase, so it is placed
+ * by what it owns, in this order:
  *
+ *   0. **A stated placement** on the record itself, set by hand. Nothing
+ *      derived can outrank someone saying where a record goes — and it is
+ *      the only thing that can place a record owning no capability, which
+ *      the other two rules cannot reach.
  *   1. **Its capabilities**, using the sequencing table's placement. This is
  *      the table's own opinion and covers 46 of the 51 records.
  *   2. **Its PwC features**, when it owns no placed capability. The five
@@ -27,7 +31,7 @@ import {
  * rows. Silently picking one would hide the straddle, which is the kind of
  * thing this app exists to surface.
  */
-export type MvpPlacement = 'capability' | 'feature' | 'unplaced'
+export type MvpPlacement = 'stated' | 'capability' | 'feature' | 'unplaced'
 
 export type MvpCapability = {
   id: number
@@ -57,6 +61,20 @@ export type MvpCardModel = {
   cells: { releaseId: string; phaseId: string }[]
   /** How the cells were derived, for the card to state its own footing. */
   placement: MvpPlacement
+  /**
+   * What the record itself states, whether or not it is complete. A partial
+   * statement (a release but no stage) cannot place a card, so it is carried
+   * here for the editor to show rather than silently discarded.
+   */
+  stated: { releaseId: string | null; phaseId: string | null }
+  /**
+   * A question someone raised about this record. Not a disagreement between
+   * the sources — a person flagging something that needs an answer — but it
+   * is flagged on the card like one, because it is the same kind of item.
+   */
+  question: string | null
+  /** Free-text detail someone recorded about this record, as markdown. */
+  details: string
   pwcFeatures: MvpPwcFeature[]
   capabilities: MvpCapability[]
   actorCounts: { actor: Actor; count: number }[]
@@ -65,9 +83,13 @@ export type MvpCardModel = {
   releaseIds: Set<string>
 }
 
-/** `947`, or `951 · 1B` where the record is an option variant. */
+/**
+ * `SVD-947`, or `SVD-951 · 1B` where the record is an option variant. The
+ * stored ref is the bare number; `SVD-` is how MSD writes it, so it is added
+ * on display rather than baked into the data.
+ */
 export const mvpCardLabel = (card: Pick<MvpCardModel, 'ref' | 'scopeOption'>) =>
-  card.scopeOption ? `${card.ref} · ${card.scopeOption}` : String(card.ref)
+  card.scopeOption ? `SVD-${card.ref} · ${card.scopeOption}` : `SVD-${card.ref}`
 
 function distinctCells(
   pairs: { releaseId: string | null; phaseId: string | null }[],
@@ -85,6 +107,14 @@ function buildCard(
   capabilities: CapabilityRow[],
   pwcFeatures: MvpPwcFeature[],
 ): MvpCardModel {
+  // A statement places the card only when it names both axes: a cell is a
+  // release AND a stage, so half of one is not a position.
+  const stated = { releaseId: mvp.release_id ?? null, phaseId: mvp.phase_id ?? null }
+  const statedCells =
+    stated.releaseId && stated.phaseId
+      ? [{ releaseId: stated.releaseId, phaseId: stated.phaseId }]
+      : []
+
   const counts = new Map<Actor, number>()
   for (const capability of capabilities) {
     counts.set(capability.actor, (counts.get(capability.actor) ?? 0) + 1)
@@ -95,15 +125,25 @@ function buildCard(
   const fromCapabilities = distinctCells(
     capabilities.map((c) => ({ releaseId: c.release_id, phaseId: c.phase_id })),
   )
+  const fromFeatures = distinctCells(
+    pwcFeatures.map((f) => ({ releaseId: f.releaseId, phaseId: f.phaseId })),
+  )
+
   const cells =
-    fromCapabilities.length > 0
-      ? fromCapabilities
-      : distinctCells(
-          pwcFeatures.map((f) => ({ releaseId: f.releaseId, phaseId: f.phaseId })),
-        )
+    statedCells.length > 0
+      ? statedCells
+      : fromCapabilities.length > 0
+        ? fromCapabilities
+        : fromFeatures
 
   const placement: MvpPlacement =
-    fromCapabilities.length > 0 ? 'capability' : cells.length > 0 ? 'feature' : 'unplaced'
+    statedCells.length > 0
+      ? 'stated'
+      : fromCapabilities.length > 0
+        ? 'capability'
+        : cells.length > 0
+          ? 'feature'
+          : 'unplaced'
 
   return {
     id: mvp.id,
@@ -113,6 +153,9 @@ function buildCard(
     source: mvp.source,
     cells,
     placement,
+    stated,
+    question: mvp.question,
+    details: mvp.details,
     pwcFeatures,
     capabilities: capabilities
       .map((c) => ({

@@ -17,10 +17,11 @@ import {
   useUpdateRelease,
 } from '@/hooks/useEntityMutations'
 import { useScope } from '@/hooks/useScope'
+import { buildMvpCards, type MvpCardModel } from '@/lib/mvp-derive'
 import { sourceLabel } from '@/lib/validators'
 
 const ENTITIES = [
-  { slug: 'releases', label: 'Releases' },
+  { slug: 'releases', label: 'Packages' },
   { slug: 'phases', label: 'Phases' },
   { slug: 'mvp-features', label: 'MVP features' },
   { slug: 'capabilities', label: 'Capabilities' },
@@ -30,7 +31,7 @@ type EntitySlug = (typeof ENTITIES)[number]['slug']
 
 /**
  * Bulk editing for the entities with no natural home on the map (R-9.2).
- * Features and assumptions are edited in the detail panel, in context.
+ * Features and their notes are edited in the detail panel, in context.
  */
 export default function Manage() {
   const { entity } = useParams<{ entity: string }>()
@@ -43,7 +44,7 @@ export default function Manage() {
         <h1 className="text-2xl font-semibold tracking-tight">Manage</h1>
         <p className="text-sm text-muted-foreground">
           Bulk editing for entities that have no single place on the map. Features and their
-          assumptions are edited on the map itself.
+          assumptions and notes are edited on the map itself.
         </p>
       </div>
 
@@ -103,7 +104,50 @@ function useWriteError() {
       return false
     }
   }
-  return { error, run }
+  /** A problem found here, before a request the server would only refuse. */
+  const fail = (message: string) => setError(message)
+  return { error, run, fail }
+}
+
+/**
+ * What is referencing a record, in the server's own words — or null when
+ * nothing is.
+ *
+ * The server refuses a delete with dependents (R-9.4, R-9.5) and says why in
+ * a 409. That message landed in one line above the table, which on a
+ * fifty-row table is off-screen from the button that was pressed: the button
+ * looked broken. The same count is already in the payload, so the reason can
+ * sit beside the button and the refusal never has to be discovered.
+ */
+function dependentsNote(
+  parts: { count: number; one: string; many: string }[],
+): string | null {
+  const holding = parts.filter((part) => part.count > 0)
+  if (holding.length === 0) return null
+  const named = holding.map(
+    (part) => `${part.count} ${part.count === 1 ? part.one : part.many}`,
+  )
+  // "1 capability references it", but "1 capability and 2 PwC features
+  // reference it" — the verb agrees with the whole subject, not the last part.
+  const verb = holding.length === 1 && holding[0].count === 1 ? 'references' : 'reference'
+  return `${named.join(' and ')} ${verb} it`
+}
+
+/**
+ * What is wrong with a new MVP feature, or null when it can be sent.
+ *
+ * The same two rules the server enforces, checked here so the first thing
+ * someone sees is which field needs filling in — not a 422 in the console
+ * and a page that appears to have ignored them.
+ */
+function newMvpProblem(draft: { ref: string; title: string }): string | null {
+  const ref = draft.ref.trim()
+  if (ref === '') return 'Give the MVP feature a ref — a whole number, like 994.'
+  if (!/^\d+$/.test(ref) || Number(ref) <= 0) {
+    return `“${ref}” is not an MVP ref. Refs are whole numbers, like 994.`
+  }
+  if (draft.title.trim() === '') return 'Give the MVP feature a title.'
+  return null
 }
 
 function ErrorLine({ error }: { error: string | null }) {
@@ -133,7 +177,7 @@ function Releases({ scope }: { scope: Scope }) {
 
       <div className="manage-table__scroll">
         <table className="manage-table__grid">
-          <caption className="sr-only">Releases</caption>
+          <caption className="sr-only">Packages</caption>
           <thead>
             <tr>
               <th scope="col">Id</th>
@@ -148,11 +192,29 @@ function Releases({ scope }: { scope: Scope }) {
             {scope.releases.map((release) => (
               <tr key={release.id}>
                 <td className="manage-table__mono">{release.id}</td>
-                <td>{release.label}</td>
+                <td>
+                  {/* Both fields are labelled by the release **id**, not by
+                      its label: the label is now editable, and two releases
+                      sharing one would leave the fields indistinguishable. */}
+                  <input
+                    className="manage-table__input"
+                    aria-label={`Label for release ${release.id}`}
+                    defaultValue={release.label}
+                    onBlur={(event) => {
+                      if (event.target.value === release.label) return
+                      void run(() =>
+                        update.mutateAsync({
+                          id: release.id,
+                          patch: { label: event.target.value },
+                        }),
+                      )
+                    }}
+                  />
+                </td>
                 <td>
                   <input
                     className="manage-table__input"
-                    aria-label={`Name for ${release.label}`}
+                    aria-label={`Name for release ${release.id}`}
                     defaultValue={release.name}
                     onBlur={(event) => {
                       if (event.target.value === release.name) return
@@ -185,25 +247,25 @@ function Releases({ scope }: { scope: Scope }) {
       </div>
 
       <div className="manage-table__create">
-        <h2 className="text-sm font-semibold">Add a release</h2>
+        <h2 className="text-sm font-semibold">Add a package</h2>
         <div className="manage-table__create-fields">
           <input
             className="manage-table__input"
-            aria-label="New release id"
+            aria-label="New package id"
             placeholder="2.1"
             value={draft.id}
             onChange={(event) => setDraft({ ...draft, id: event.target.value })}
           />
           <input
             className="manage-table__input"
-            aria-label="New release label"
-            placeholder="Release 2.1"
+            aria-label="New package label"
+            placeholder="Package 2.1"
             value={draft.label}
             onChange={(event) => setDraft({ ...draft, label: event.target.value })}
           />
           <input
             className="manage-table__input"
-            aria-label="New release name"
+            aria-label="New package name"
             placeholder="Name"
             value={draft.name}
             onChange={(event) => setDraft({ ...draft, name: event.target.value })}
@@ -218,7 +280,7 @@ function Releases({ scope }: { scope: Scope }) {
             if (ok) setDraft({ id: '', label: '', name: '' })
           }}
         >
-          Add release
+          Add package
         </Button>
       </div>
     </div>
@@ -374,19 +436,73 @@ function Phases({ scope }: { scope: Scope }) {
 
 // ---------------------------------------------------------------------------
 
+const mvpLabel = (mvp: { ref: number; scope_option: string | null }) =>
+  `${mvp.ref}${mvp.scope_option ? ` Option ${mvp.scope_option}` : ''}`
+
+/**
+ * What actually put this record where it is.
+ *
+ * A stated release and stage outrank both derived placements, so the column
+ * has to say which is in force — otherwise someone sets one axis, sees the
+ * card stay where it was, and cannot tell whether the edit took. Naming the
+ * half-set case explicitly is the point: a cell needs both axes.
+ */
+function placementNote(card: MvpCardModel | undefined): string {
+  if (!card) return '—'
+  const half = card.stated.releaseId ? 'stage' : 'release'
+  switch (card.placement) {
+    case 'stated':
+      return 'Stated here'
+    case 'capability':
+      return card.stated.releaseId || card.stated.phaseId
+        ? `Its capabilities — set a ${half} too to override`
+        : 'Its capabilities'
+    case 'feature':
+      return card.stated.releaseId || card.stated.phaseId
+        ? `The features citing it — set a ${half} too to override`
+        : 'The features citing it'
+    default:
+      return card.stated.releaseId || card.stated.phaseId
+        ? `Nothing yet — set a ${half} too`
+        : 'Nothing — unplaced'
+  }
+}
+
 function MvpFeatures({ scope }: { scope: Scope }) {
   const create = useCreateMvpFeature()
   const update = useUpdateMvpFeature()
   const remove = useDeleteMvpFeature()
   const { error, run } = useWriteError()
+  /**
+   * The create row has its own error line. One shared line above the table
+   * is an unscrolled screen away from the controls down here, so a refused
+   * create looked like a button that did nothing.
+   */
+  const creating = useWriteError()
   const [draft, setDraft] = useState<{
     ref: string
     scope_option: '' | '1A' | '1B'
     title: string
-  }>({ ref: '', scope_option: '', title: '' })
+    release_id: string
+    phase_id: string
+  }>({ ref: '', scope_option: '', title: '', release_id: '', phase_id: '' })
 
   const linkCount = (id: number) =>
     scope.featureMvpLinks.filter((l) => l.mvp_feature_id === id).length
+
+  const ownedCount = (id: number) =>
+    scope.capabilities.filter((c) => c.mvp_feature_id === id).length
+
+  /** Null when the record can go; otherwise what is holding it. */
+  const blockedBy = (id: number) =>
+    dependentsNote([
+      { count: linkCount(id), one: 'PwC feature', many: 'PwC features' },
+      { count: ownedCount(id), one: 'capability', many: 'capabilities' },
+    ])
+
+  // The same derivation the map uses, so this table and the map agree on
+  // where a record sits and on what put it there.
+  const cardById = new Map(buildMvpCards(scope).map((card) => [card.id, card]))
 
   return (
     <div className="manage-table">
@@ -400,6 +516,9 @@ function MvpFeatures({ scope }: { scope: Scope }) {
               <th scope="col">Ref</th>
               <th scope="col">Option</th>
               <th scope="col">Title</th>
+              <th scope="col">Package</th>
+              <th scope="col">Stage</th>
+              <th scope="col">Placed by</th>
               <th scope="col">Features</th>
               <th scope="col">Actions</th>
             </tr>
@@ -427,16 +546,82 @@ function MvpFeatures({ scope }: { scope: Scope }) {
                     }}
                   />
                 </td>
+                <td>
+                  <select
+                    className="manage-table__input"
+                    aria-label={`Package for MVP ${mvpLabel(mvp)}`}
+                    value={mvp.release_id ?? ''}
+                    onChange={(event) =>
+                      void run(() =>
+                        update.mutateAsync({
+                          id: mvp.id,
+                          // Empty clears the statement and hands the record
+                          // back to whatever the sources place it by.
+                          patch: { release_id: event.target.value || null },
+                        }),
+                      )
+                    }
+                  >
+                    <option value="">Not stated</option>
+                    {scope.releases.map((release) => (
+                      <option key={release.id} value={release.id}>
+                        {release.label}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td>
+                  <select
+                    className="manage-table__input"
+                    aria-label={`Stage for MVP ${mvpLabel(mvp)}`}
+                    value={mvp.phase_id ?? ''}
+                    onChange={(event) =>
+                      void run(() =>
+                        update.mutateAsync({
+                          id: mvp.id,
+                          patch: { phase_id: event.target.value || null },
+                        }),
+                      )
+                    }
+                  >
+                    <option value="">Not stated</option>
+                    {scope.phases.map((phase) => (
+                      <option key={phase.id} value={phase.id}>
+                        {phase.name}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="manage-table__muted">
+                  {placementNote(cardById.get(mvp.id))}
+                </td>
                 <td className="manage-table__mono">{linkCount(mvp.id)}</td>
                 <td>
                   <div className="manage-table__actions">
+                    {/* `aria-disabled` rather than `disabled`: a disabled
+                        button is skipped by the keyboard, so the reason it
+                        cannot be used would be unreachable for anyone
+                        tabbing through the table (WCAG 2.1 AA, 2.4.3). */}
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => void run(() => remove.mutateAsync(mvp.id))}
+                      className="aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+                      aria-disabled={blockedBy(mvp.id) !== null}
+                      aria-describedby={
+                        blockedBy(mvp.id) !== null ? `mvp-${mvp.id}-blocked` : undefined
+                      }
+                      onClick={() => {
+                        if (blockedBy(mvp.id) !== null) return
+                        void run(() => remove.mutateAsync(mvp.id))
+                      }}
                     >
                       Delete
                     </Button>
+                    {blockedBy(mvp.id) !== null ? (
+                      <span className="manage-table__blocked" id={`mvp-${mvp.id}-blocked`}>
+                        Cannot delete — {blockedBy(mvp.id)}.
+                      </span>
+                    ) : null}
                   </div>
                 </td>
               </tr>
@@ -449,7 +634,9 @@ function MvpFeatures({ scope }: { scope: Scope }) {
         <h2 className="text-sm font-semibold">Add an MVP feature</h2>
         <p className="manage-table__muted text-xs">
           Uniqueness is on ref plus option, so the same ref with a different option is a
-          separate record.
+          separate record. A package and stage are optional: leave them unstated and the
+          record is placed by its capabilities, or by the features citing it. Stating both
+          overrides that — stating one does nothing on its own, because a cell needs both.
         </p>
         <div className="manage-table__create-fields">
           <input
@@ -481,18 +668,57 @@ function MvpFeatures({ scope }: { scope: Scope }) {
             value={draft.title}
             onChange={(event) => setDraft({ ...draft, title: event.target.value })}
           />
+          <select
+            className="manage-table__input"
+            aria-label="New MVP package"
+            value={draft.release_id}
+            onChange={(event) => setDraft({ ...draft, release_id: event.target.value })}
+          >
+            <option value="">Package not stated</option>
+            {scope.releases.map((release) => (
+              <option key={release.id} value={release.id}>
+                {release.label}
+              </option>
+            ))}
+          </select>
+          <select
+            className="manage-table__input"
+            aria-label="New MVP stage"
+            value={draft.phase_id}
+            onChange={(event) => setDraft({ ...draft, phase_id: event.target.value })}
+          >
+            <option value="">Stage not stated</option>
+            {scope.phases.map((phase) => (
+              <option key={phase.id} value={phase.id}>
+                {phase.name}
+              </option>
+            ))}
+          </select>
         </div>
+        <ErrorLine error={creating.error} />
         <Button
           size="sm"
           onClick={async () => {
-            const ok = await run(() =>
+            // A blank or non-numeric ref becomes NaN, which serialises as
+            // `null` and comes back a 422 — the request was never going to
+            // succeed, so say what is missing instead of sending it.
+            const problem = newMvpProblem(draft)
+            if (problem) {
+              creating.fail(problem)
+              return
+            }
+            const ok = await creating.run(() =>
               create.mutateAsync({
-                ref: Number(draft.ref),
+                ref: Number(draft.ref.trim()),
                 scope_option: draft.scope_option === '' ? null : draft.scope_option,
-                title: draft.title,
+                title: draft.title.trim(),
+                release_id: draft.release_id || null,
+                phase_id: draft.phase_id || null,
               }),
             )
-            if (ok) setDraft({ ref: '', scope_option: '', title: '' })
+            if (ok) {
+              setDraft({ ref: '', scope_option: '', title: '', release_id: '', phase_id: '' })
+            }
           }}
         >
           Add MVP feature
@@ -553,7 +779,7 @@ function Capabilities({ scope }: { scope: Scope }) {
               <th scope="col">Ref</th>
               <th scope="col">Text</th>
               <th scope="col">Actor</th>
-              <th scope="col">Release</th>
+              <th scope="col">Package</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
@@ -653,11 +879,11 @@ function Capabilities({ scope }: { scope: Scope }) {
           </select>
           <select
             className="manage-table__input"
-            aria-label="New capability release"
+            aria-label="New capability package"
             value={draft.release_id}
             onChange={(event) => setDraft({ ...draft, release_id: event.target.value })}
           >
-            <option value="">Choose a release</option>
+            <option value="">Choose a package</option>
             {scope.releases.map((release) => (
               <option key={release.id} value={release.id}>
                 {release.label}

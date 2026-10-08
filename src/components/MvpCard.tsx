@@ -1,6 +1,8 @@
 import type { CSSProperties } from 'react'
+import { ConflictBadge } from '@/components/ConflictBadge'
+import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
 import { mvpCardLabel, type MvpCardModel } from '@/lib/mvp-derive'
-import { releaseTokenSuffix } from '@/lib/scope-derive'
+import { releaseShortLabel, releaseTokenSuffix } from '@/lib/scope-derive'
 
 const ACTOR_LABEL: Record<string, string> = {
   employer: 'Employer',
@@ -18,6 +20,8 @@ export type MvpCardProps = {
   compact?: boolean
   selected?: boolean
   onSelect?: (mvpId: number) => void
+  /** Which regions of the card are showing. Defaults to all of them. */
+  detail?: DetailState
 }
 
 /**
@@ -32,6 +36,7 @@ export function MvpCard({
   compact = false,
   selected = false,
   onSelect,
+  detail = ALL_DETAIL,
 }: MvpCardProps) {
   const label = mvpCardLabel(card)
   const style = {
@@ -72,14 +77,16 @@ export function MvpCard({
         ) : (
           <span className="mvp-card__ref">{label}</span>
         )}
-        {releaseLabel ? (
-          <span className="mvp-card__release">{releaseLabel}</span>
+        {detail.release && releaseLabel ? (
+          <span className="mvp-card__release" title={releaseLabel}>
+            {releaseShortLabel(releaseLabel)}
+          </span>
         ) : null}
       </div>
 
       <h3 className="mvp-card__title">{card.title}</h3>
 
-      {card.pwcFeatures.length > 0 ? (
+      {!detail.refs ? null : card.pwcFeatures.length > 0 ? (
         <ul
           className="mvp-card__chips"
           aria-label={`PwC features citing ${label}`}
@@ -94,17 +101,25 @@ export function MvpCard({
         <p className="mvp-card__note">No PwC feature cites this</p>
       )}
 
-      {card.actorCounts.length > 0 ? (
+      {detail.actors && card.actorCounts.length > 0 ? (
         <ul className="mvp-card__actors">
-          {card.actorCounts.map(({ actor, count }) => (
+          {/* Which actors this touches is the signal; the per-actor count was
+              noise at card size, so the pill names the actor only. */}
+          {card.actorCounts.map(({ actor }) => (
             <li key={actor} className={`mvp-card__actor mvp-card__actor--${actor}`}>
               {ACTOR_LABEL[actor]}
-              <span className="mvp-card__actor-count">{count}</span>
             </li>
           ))}
         </ul>
       ) : null}
 
+      {detail.questions && card.question !== null ? (
+        <div className="mvp-card__badges">
+          <ConflictBadge count={1} kind="question" />
+        </div>
+      ) : null}
+
+      {detail.capabilities ? (
       <div className="mvp-card__badges">
         <span className="mvp-card__badge">
           {card.capabilities.length} capabilit
@@ -123,6 +138,7 @@ export function MvpCard({
           </span>
         ) : null}
       </div>
+      ) : null}
     </article>
   )
 }

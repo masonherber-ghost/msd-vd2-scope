@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { MvpDetailPanel } from '@/components/MvpDetailPanel'
@@ -41,10 +41,10 @@ const editable = (onSetCapabilities = vi.fn().mockResolvedValue(undefined)) => (
 const releaseOptions = graph.releases.map((r) => ({ value: r.id, label: r.label }))
 const phaseOptions = graph.phases.map((p) => ({ value: p.id, label: p.name }))
 
-const placeable = (onSetPlacement = vi.fn().mockResolvedValue(undefined)) => ({
+const placeable = (onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)) => ({
   releaseOptions,
   phaseOptions,
-  onSetPlacement,
+  onSetStatedPlacement,
 })
 
 describe('MvpDetailPanel — renaming the record', () => {
@@ -119,88 +119,127 @@ describe('MvpDetailPanel — renaming the record', () => {
   })
 })
 
-describe('MvpDetailPanel — re-assigning the record', () => {
+describe('MvpDetailPanel — placing the record', () => {
   it('offers nothing without a placement handler', () => {
     renderPanel()
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit package' })).not.toBeInTheDocument()
   })
 
-  it('offers a release and a stage when it owns capabilities to move', () => {
+  it('offers a release and a stage on any record', () => {
+    // Including one that owns no capability: the record's own placement is
+    // the only thing that can reach those.
     renderPanel(placeable())
-    expect(screen.getByRole('button', { name: 'Edit release' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit package' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Edit stage' })).toBeInTheDocument()
   })
 
-  it('shows where its capabilities currently sit', () => {
+  it('shows "Not stated" until someone places it', () => {
     renderPanel(placeable())
-    // Both owned capabilities are in 1.1 · Access & Onboarding.
-    expect(screen.getAllByText('Release 1.1').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Not stated').length).toBeGreaterThan(0)
   })
 
-  it('moves the record by moving what it owns', async () => {
-    const user = userEvent.setup()
-    const onSetPlacement = vi.fn().mockResolvedValue(undefined)
-    renderPanel(placeable(onSetPlacement))
+  it('shows the placement stated on the record, not where its capabilities are', () => {
+    // The fixture's capabilities sit in 1.1; the statement says 1.4. The
+    // statement is what places the card, so it is what the field shows.
+    renderPanel({
+      ...placeable(),
+      card: {
+        ...card,
+        stated: { releaseId: '1.4', phaseId: 'manage-vacancies' },
+      },
+    })
+    expect(screen.getByText('Package 1.4')).toBeInTheDocument()
+    expect(screen.getByText('Manage Vacancies')).toBeInTheDocument()
+  })
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+  it('places the record by writing its own release', async () => {
+    const user = userEvent.setup()
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel(placeable(onSetStatedPlacement))
+
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    // One axis at a time: the stage each capability sits in is left alone.
-    expect(onSetPlacement).toHaveBeenCalledWith({ release_id: '1.4' })
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ release_id: '1.4' }),
+    )
   })
 
-  it('moves the stage without touching the release', async () => {
+  it('sets the stage without touching the release', async () => {
     const user = userEvent.setup()
-    const onSetPlacement = vi.fn().mockResolvedValue(undefined)
-    renderPanel(placeable(onSetPlacement))
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel(placeable(onSetStatedPlacement))
 
     await user.click(screen.getByRole('button', { name: 'Edit stage' }))
     await user.selectOptions(screen.getByLabelText('Stage'), 'manage-vacancies')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(onSetPlacement).toHaveBeenCalledWith({ phase_id: 'manage-vacancies' })
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ phase_id: 'manage-vacancies' }),
+    )
   })
 
-  it('says a straddling record is mixed rather than naming one release', () => {
+  it('hands the record back to the sources when set to "Not stated"', async () => {
+    const user = userEvent.setup()
+    const onSetStatedPlacement = vi.fn().mockResolvedValue(undefined)
+    renderPanel({
+      ...placeable(onSetStatedPlacement),
+      card: { ...card, stated: { releaseId: '1.4', phaseId: null } },
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    // Null, not an empty string — an empty string would be a placement
+    // pointing at nothing.
+    await waitFor(() =>
+      expect(onSetStatedPlacement).toHaveBeenCalledWith({ release_id: null }),
+    )
+  })
+
+  it('says half a statement places nothing', async () => {
+    renderPanel({
+      ...placeable(),
+      card: { ...card, stated: { releaseId: '1.4', phaseId: null } },
+    })
+    expect(screen.getByText(/Set the stage too/)).toBeInTheDocument()
+  })
+
+  it('says a stated placement outranks the derived ones', () => {
     renderPanel({
       ...placeable(),
       card: {
         ...card,
-        capabilities: [
-          { ...card.capabilities[0], releaseId: '1.1' },
-          { ...card.capabilities[1], releaseId: '1.4' },
-        ],
+        placement: 'stated' as const,
+        stated: { releaseId: '1.4', phaseId: 'manage-vacancies' },
       },
     })
-
-    expect(screen.getByText(/Mixed — Release 1.1, Release 1.4/)).toBeInTheDocument()
-  })
-
-  it('says what a move actually does, since the record has no release of its own', () => {
-    renderPanel(placeable())
     expect(
-      screen.getByText(/moves the 2 capabilities this record owns/),
+      screen.getByText(/outranks where its capabilities and citing features are/),
     ).toBeInTheDocument()
-  })
-
-  it('offers no placement editor when the record owns nothing to move', () => {
-    renderPanel({ ...placeable(), card: { ...card, capabilities: [] } })
-    expect(screen.queryByRole('button', { name: 'Edit release' })).not.toBeInTheDocument()
   })
 
   it('surfaces the server’s refusal in place', async () => {
     const user = userEvent.setup()
-    const onSetPlacement = vi
+    const onSetStatedPlacement = vi
       .fn()
       .mockRejectedValue(new Error('There is no release "9.9".'))
-    renderPanel(placeable(onSetPlacement))
+    renderPanel(placeable(onSetStatedPlacement))
 
-    await user.click(screen.getByRole('button', { name: 'Edit release' }))
-    await user.selectOptions(screen.getByLabelText('Release'), '1.4')
+    await user.click(screen.getByRole('button', { name: 'Edit package' }))
+    await user.selectOptions(screen.getByLabelText('Package'), '1.4')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('There is no release "9.9".')
+  })
+
+  it('no longer offers a separate control for moving its capabilities', () => {
+    // Capabilities follow the record now; a control that moved them apart
+    // would put the two back out of step.
+    renderPanel(placeable())
+    expect(screen.queryByText(/Where its capabilities sit/i)).not.toBeInTheDocument()
   })
 })
 
@@ -238,7 +277,7 @@ describe('MvpDetailPanel — capabilities it owns', () => {
 
     await user.click(screen.getByRole('button', { name: 'Invite employer to register' }))
 
-    expect(screen.getByRole('group', { name: /Capabilities owned by 938/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /Capabilities owned by SVD-938/ })).toBeInTheDocument()
   })
 
   it('sends the complete new set when one is ticked', async () => {
@@ -331,7 +370,7 @@ describe('MvpDetailPanel — keyboard (WCAG 2.4.3)', () => {
     screen.getByRole('button', { name: 'Change capabilities' }).focus()
     await user.keyboard('{Enter}')
 
-    expect(screen.getByRole('group', { name: /Capabilities owned by 938/ })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /Capabilities owned by SVD-938/ })).toBeInTheDocument()
   })
 
   it('keeps focus inside the panel when the lookup replaces the button', async () => {
@@ -346,5 +385,113 @@ describe('MvpDetailPanel — keyboard (WCAG 2.4.3)', () => {
     const panel = screen.getByRole('complementary', { name: /^MSD feature/ })
     expect(document.activeElement).not.toBe(document.body)
     expect(panel.contains(document.activeElement)).toBe(true)
+  })
+})
+
+/**
+ * A question raised against an MSD feature record — the third thing on the
+ * map that can carry one, after capabilities and PwC features.
+ */
+describe('MvpDetailPanel — questions', () => {
+  const renderEditable = (question: string | null = null) => {
+    const base = buildMvpCards(graph).find((c) => c.id === 2)!
+    const onSaveQuestion = vi.fn().mockResolvedValue(undefined)
+    render(
+      <MvpDetailPanel
+        card={{ ...base, question }}
+        onClose={vi.fn()}
+        onSaveQuestion={onSaveQuestion}
+      />,
+    )
+    return { onSaveQuestion }
+  }
+
+  it('shows a question that has been raised', () => {
+    renderEditable('Does this belong in 1.4?')
+    expect(screen.getByRole('note')).toHaveTextContent('Does this belong in 1.4?')
+  })
+
+  it('offers to add one when there is none', () => {
+    renderEditable()
+    expect(screen.getByRole('button', { name: /add a question/i })).toBeInTheDocument()
+  })
+
+  it('saves a question against the record', async () => {
+    const user = userEvent.setup()
+    const { onSaveQuestion } = renderEditable()
+
+    await user.click(screen.getByRole('button', { name: /add a question/i }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveQuestion).toHaveBeenCalledWith('Who owns this?'))
+  })
+
+  it('clears the question when the field is emptied', async () => {
+    // Otherwise an answered question lingers as a blank flag on the card.
+    const user = userEvent.setup()
+    const { onSaveQuestion } = renderEditable('Old question')
+
+    await user.click(screen.getByRole('button', { name: /edit question/i }))
+    await user.clear(screen.getByLabelText('Question'))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveQuestion).toHaveBeenCalledWith(null))
+  })
+
+  it('offers no editor when the panel is read-only', () => {
+    const base = buildMvpCards(graph).find((c) => c.id === 2)!
+    render(<MvpDetailPanel card={base} onClose={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /add a question/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('MvpDetailPanel — details', () => {
+  const detailsSection = () =>
+    screen.getByRole('heading', { name: /^details$/i }).closest('section') as HTMLElement
+
+  const renderDetails = (details: string, onSaveDetails?: (next: string) => Promise<unknown>) =>
+    renderPanel({ card: { ...card, details }, onSaveDetails })
+
+  it('renders the markdown rather than showing its syntax', () => {
+    renderDetails('1. Covers **delegated** access only.\n2. Employers only.')
+    const items = within(detailsSection()).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual([
+      'Covers delegated access only.',
+      'Employers only.',
+    ])
+    expect(within(detailsSection()).getByText('delegated').tagName).toBe('STRONG')
+  })
+
+  it('shows raw HTML as text, never as markup', () => {
+    renderDetails('<img src=x onerror="alert(1)">')
+    expect(detailsSection().querySelector('img')).toBeNull()
+  })
+
+  it('says when there are none', () => {
+    renderDetails('')
+    expect(within(detailsSection()).getByText('None recorded.')).toBeInTheDocument()
+  })
+
+  it('edits the whole block as markdown source and saves it as one field', async () => {
+    const user = userEvent.setup()
+    const onSaveDetails = vi.fn().mockResolvedValue(undefined)
+    renderDetails('First line.', onSaveDetails)
+
+    await user.click(screen.getByRole('button', { name: /edit details/i }))
+    const field = screen.getByRole('textbox', { name: /details/i })
+    expect(field).toHaveValue('First line.')
+
+    await user.type(field, '\n\nSecond line.')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(onSaveDetails).toHaveBeenCalledWith('First line.\n\nSecond line.'),
+    )
+  })
+
+  it('offers to add them when there are none', () => {
+    renderDetails('', vi.fn())
+    expect(screen.getByRole('button', { name: 'Add details' })).toBeInTheDocument()
   })
 })

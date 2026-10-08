@@ -60,7 +60,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
       makeScopeGraph({
         mvpFeatures: [
           ...graph.mvpFeatures,
-          { id: 9, ref: 937, scope_option: null, title: 'Access recovery', source: 'mapping' },
+          { id: 9, ref: 937, scope_option: null, title: 'Access recovery', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
         ],
       }),
     )
@@ -74,7 +74,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
       makeScopeGraph({
         mvpFeatures: [
           ...graph.mvpFeatures,
-          { id: 9, ref: 950, scope_option: null, title: 'Audit histories', source: 'sequencing' },
+          { id: 9, ref: 950, scope_option: null, title: 'Audit histories', release_id: null, phase_id: null, question: null, details: '', source: 'sequencing' },
         ],
         featureMvpLinks: [],
       }),
@@ -93,8 +93,10 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
             release_id: '1.1',
             phase_id: 'access-and-onboarding',
             source_phase_label: null,
-            capability_note: 'Mapped under Release 2+ in table',
-            display_order: 1,
+            capability_note: 'Mapped under Package 2+ in table',
+            question: null, display_order: 1,
+            notes: '',
+            notes_edited: 0,
             source: 'mapping',
           },
         ],
@@ -103,7 +105,7 @@ describe('buildCoverage — orphans in both directions (R-8.22)', () => {
       }),
     )
     expect(noCaps.orphans.featuresWithoutCapabilities).toEqual([
-      { id: 'F-008', label: 'F-008', detail: 'Mapped under Release 2+ in table' },
+      { id: 'F-008', label: 'F-008', detail: 'Mapped under Package 2+ in table' },
     ])
   })
 

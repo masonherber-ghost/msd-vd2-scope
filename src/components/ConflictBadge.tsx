@@ -1,3 +1,4 @@
+import { Flag } from 'lucide-react'
 import { RESOLUTION_LABEL, type ResolutionState } from '@/lib/validators'
 
 export type ConflictBadgeProps = {
@@ -25,12 +26,19 @@ export function ConflictBadge({
       : kind === 'question'
         ? `question${count === 1 ? '' : 's'}`
         : `conflict${count === 1 ? '' : 's'}`
-  // A question is asking, not warning: "?" rather than "!".
-  const glyph = unreviewed ? (kind === 'question' ? '?' : '!') : '✓'
+  // A question is flagged, not warned about — and the same flag wherever it
+  // appears, so one signal means one thing across the whole map.
+  const glyph = unreviewed ? '!' : '✓'
 
   return (
     <span
-      className={`conflict-badge conflict-badge--${unreviewed ? 'unreviewed' : 'reviewed'}`}
+      className={[
+        'conflict-badge',
+        `conflict-badge--${unreviewed ? 'unreviewed' : 'reviewed'}`,
+        kind === 'question' ? 'conflict-badge--question' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       title={
         kind === 'question'
           ? 'A question has been raised'
@@ -39,9 +47,13 @@ export function ConflictBadge({
             : RESOLUTION_LABEL[state]
       }
     >
-      <span className="conflict-badge__glyph" aria-hidden="true">
-        {glyph}
-      </span>
+      {kind === 'question' ? (
+        <Flag className="conflict-badge__flag" aria-hidden="true" />
+      ) : (
+        <span className="conflict-badge__glyph" aria-hidden="true">
+          {glyph}
+        </span>
+      )}
       {count} {noun}
       {unreviewed ? '' : ' · reviewed'}
     </span>

@@ -55,7 +55,7 @@ export function CapabilityResolutionModal({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const here = `${capability.releaseLabel ?? 'no release'} · ${
+  const here = `${capability.releaseLabel ?? 'no package'} · ${
     capability.phaseName ?? 'no phase'
   }`
 
@@ -138,7 +138,7 @@ export function CapabilityResolutionModal({
 
           <div className="capability-resolve__target" aria-hidden={choice !== 'move'}>
             <label className="capability-resolve__field">
-              <span>Release</span>
+              <span>Package</span>
               <select
                 className="capability-resolve__select"
                 value={releaseId}
@@ -182,7 +182,7 @@ export function CapabilityResolutionModal({
 
         {choice === 'move' && unchanged ? (
           <p className="capability-resolve__warning" role="status">
-            That is where it already sits. Pick a different release or phase, or keep it
+            That is where it already sits. Pick a different package or phase, or keep it
             here.
           </p>
         ) : null}

@@ -1,8 +1,9 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { useLayoutEffect, useMemo, useState, type CSSProperties } from 'react'
 import { FeatureCard } from '@/components/FeatureCard'
 import { CapabilityCard } from '@/components/CapabilityCard'
 import { MvpCard } from '@/components/MvpCard'
 import { ScopeEdgeOverlay } from '@/components/ScopeEdgeOverlay'
+import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
 import type { CapabilityCardModel } from '@/lib/capability-derive'
 import type { MvpCardModel } from '@/lib/mvp-derive'
 import {
@@ -46,6 +47,8 @@ export type ScopeMapGridProps = {
   density?: Map<string, number>
   /** Features with at least one unreviewed conflict, badged on the map (R-7.4). */
   unreviewedIds?: Set<string>
+  /** Which regions of each card are showing. Defaults to all of them. */
+  detail?: DetailState
 }
 
 export function ScopeMapGrid({
@@ -68,6 +71,7 @@ export function ScopeMapGrid({
   edges = [],
   density,
   unreviewedIds,
+  detail = ALL_DETAIL,
 }: ScopeMapGridProps) {
   const rowMode = rowModeFor(view)
   const isMvpView = view === 'mvp'
@@ -98,9 +102,39 @@ export function ScopeMapGrid({
     return (key: string) => model.cellIndex.get(key)?.features.length ?? 0
   }, [isMvpView, isCapabilityView, model.cellIndex, mvpCellIndex, capabilityCellIndex])
 
+  /**
+   * The table's laid-out size, which a CSS transform does not change.
+   *
+   * The scaler is painted at `natural × zoom`, but its *layout* box stays at
+   * the natural size — so the scroll container reserved room for a map far
+   * bigger than the one on screen: at 40% you could scroll 1400px past the
+   * right-hand edge, with a thousand pixels of blank space below it. Giving
+   * the scaler the scaled size makes the box match what is painted.
+   */
+  const [natural, setNatural] = useState({ width: 0, height: 0 })
+
+  useLayoutEffect(() => {
+    if (!table) return
+    const measure = () =>
+      setNatural((current) =>
+        current.width === table.offsetWidth && current.height === table.offsetHeight
+          ? current
+          : { width: table.offsetWidth, height: table.offsetHeight },
+      )
+    measure()
+    // Filters, view changes and card-detail toggles all reshape the table.
+    const observer = new ResizeObserver(measure)
+    observer.observe(table)
+    return () => observer.disconnect()
+  }, [table])
+
   const style = {
     '--scope-zoom': zoom,
     '--scope-phase-count': model.phases.length,
+    // Before the first measurement the CSS fallback (`max-content`) holds.
+    ...(natural.width > 0
+      ? { width: natural.width * zoom, height: natural.height * zoom }
+      : null),
   } as CSSProperties
 
   return (
@@ -116,7 +150,7 @@ export function ScopeMapGrid({
         >
           <div className="scope-map-grid__corner" role="columnheader">
             <span className="scope-map-grid__axis-label">
-              {rowMode === 'actor' ? 'Actor' : 'Release'} / Stage
+              {rowMode === 'actor' ? 'Actor' : 'Package'} / Stage
             </span>
           </div>
 
@@ -167,6 +201,7 @@ export function ScopeMapGrid({
               selectedCapabilityId={selectedCapabilityId}
               onSelectCapability={onSelectCapability}
               countIn={countIn}
+              detail={detail}
             />
           ))}
 
@@ -201,6 +236,7 @@ function ScopeMapRow({
   density,
   onActivate,
   unreviewedIds,
+  detail,
   rowMode,
   releaseLabels,
   isMvpView,
@@ -233,6 +269,7 @@ function ScopeMapRow({
   selectedCapabilityId: number | null
   onSelectCapability?: (capabilityId: number) => void
   countIn: (key: string) => number
+  detail: DetailState
 }) {
   const shown = model.phases.reduce(
     (total, phase) => total + countIn(cellKey(row.key, phase.id)),
@@ -312,6 +349,7 @@ function ScopeMapRow({
                         key={card.id}
                         card={card}
                         compact={compact}
+                        detail={detail}
                         selected={card.id === selectedCapabilityId}
                         onSelect={onSelectCapability}
                       />
@@ -324,6 +362,7 @@ function ScopeMapRow({
                         releaseId={row.key}
                         releaseLabel={releaseLabels.get(row.key)}
                         compact={compact}
+                        detail={detail}
                         selected={card.id === selectedMvpId}
                         onSelect={onSelectMvp}
                       />
@@ -333,6 +372,7 @@ function ScopeMapRow({
                         key={feature.id}
                         feature={feature}
                         compact={compact}
+                        detail={detail}
                         selected={feature.id === selectedId}
                         onSelect={onSelect}
                         density={density?.get(feature.id) ?? 0}

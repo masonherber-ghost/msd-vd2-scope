@@ -258,6 +258,9 @@ from the top of the document to reach the confirm and cancel controls they just 
 | SX-10 | A release section carries its number, label and name; the label alone where there is no name | P2 | automated | `scope-export.test.ts` › heads each release section with its number, label and name · › falls back to the label alone |
 | SX-11 | A phase heading carries its epic ref, as the source document does | P1 | automated | `scope-export.test.ts` › heads each phase with its epic, as the source document does |
 | SX-11b | A phase with no epic ref is headed by its name alone, with no empty parenthetical | P2 | automated | `scope-export.test.ts` › heads a phase with no epic by its name alone |
+| SX-35 | In capability view, capabilities group under one heading per owning MSD record | P1 | automated | `scope-export.test.ts` › heads each group with the ref and lists its capabilities beneath · › names the ref once per group · › gives each option variant of a ref its own heading |
+| SX-36 | Group headings are surrounded by blank lines, so every parser sees a list | P2 | automated | `scope-export.test.ts` › separates one group from the next with a blank line |
+| SX-37 | The header counts records, not the headings and blank lines around them | P2 | automated | `scope-export.test.ts` › counts the capabilities, not the headings and blank lines around them |
 | SX-12 | Phases run in journey order; a phase nothing lands in is omitted | P2 | automated | `scope-export.test.ts` › orders phases by the journey · › omits a phase nothing lands in · › omits a release nothing lands in |
 | SX-13 | Actor view repeats a feature under each actor and counts records, not bullets | P2 | automated | `scope-export.test.ts` › groups by actor in actor view · › counts records rather than bullets |
 | SX-14 | A record no source places is listed rather than dropped | P2 | automated | `scope-export.test.ts` › lists an unplaced MSD feature rather than dropping it · `ScopeMap.test.tsx` › carries a record the map itself lists as unplaced |
@@ -331,6 +334,23 @@ exist, so focus fell to `<body>`.
 `onCloseAutoFocus` focuses it.
 **Still open, not this feature:** `CapabilityResolutionModal` is mounted the same way
 (`src/components/FeatureDetailPanel.tsx`) and has the same behaviour.
+
+#### SX-35 — Capabilities read as a list under their ref · P1
+**Given** the capability view, where a single MSD record often owns four or five capabilities
+**When** the view is exported as text
+**Then** the ref appears once, as a heading, with its capabilities as bullets beneath it —
+rather than repeated at the head of every bullet. Grouping is by the **owning record**, not by the
+ref, so the 1A and 1B variants of a ref get a heading each; a capability whose ref resolved to no
+record groups under the bare ref.
+
+#### SX-36 — The groups survive being pasted · P2
+**Given** an exported capability view with several groups under one phase
+**When** the Markdown is rendered
+**Then** each group is a heading followed by a list. A blank line sits on both sides of every
+heading: without one before it, a parser reads the heading as a lazy continuation of the bullet
+above and swallows it; without one after, the stricter parsers render the bullets as paragraph
+text instead of a list. Both render identically to the compact form wherever the compact form
+works.
 
 #### SX-26 — The one error message in the feature is legible · P2
 **Given** a browser where clipboard access is refused (insecure context, or permission denied)

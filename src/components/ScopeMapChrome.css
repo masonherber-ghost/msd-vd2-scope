@@ -72,12 +72,32 @@
   margin-bottom: var(--spacing-4);
 }
 
+/* The title and the view it is showing, as one block — the PDF export
+   captures this element whole for its heading. */
+.scope-chrome__heading {
+  /* Only as wide as its own text. The PDF sizes its page to the widest block
+     it captures, so a heading stretched to the full column would set the page
+     width from the chrome rather than from the map, and put back the empty
+     margins the trimmed page exists to remove. `fit-content`, not
+     `max-content`, so a narrow screen still wraps instead of overflowing. */
+  width: fit-content;
+  margin: 0 0 var(--spacing-3);
+}
+
 .scope-chrome__title {
   font-size: 2.5rem;
   line-height: 1.05;
   font-weight: 700;
   color: var(--color-primary-900);
-  margin: 0 0 var(--spacing-3);
+  margin: 0;
+}
+
+.scope-chrome__subtitle {
+  font-size: 1.125rem;
+  line-height: 1.3;
+  font-weight: 600;
+  color: var(--color-primary-700);
+  margin: var(--spacing-2) 0 0;
 }
 
 .scope-chrome__lede {

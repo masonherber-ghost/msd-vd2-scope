@@ -1,4 +1,6 @@
 import { NavLink } from 'react-router-dom'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/AuthContext'
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
   [
@@ -9,6 +11,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   ].join(' ')
 
 export function Header() {
+  const { user, signOut } = useAuth()
+
   return (
     <header className="border-b border-border">
       <div className="app-main-inner--fixed flex items-center justify-between gap-4 px-4 py-3">
@@ -29,6 +33,14 @@ export function Header() {
             </NavLink>
           </nav>
         </div>
+        {user && (
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">{user.name}</span>
+            <Button variant="outline" size="sm" onClick={() => void signOut()}>
+              Sign out
+            </Button>
+          </div>
+        )}
       </div>
     </header>
   )

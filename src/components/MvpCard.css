@@ -24,7 +24,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-2);
+  gap: var(--spacing-1) var(--spacing-2);
+  /* The ref and its release pill sat on one unbreakable line, which pushed
+     the pill past the edge of a narrow column. */
+  flex-wrap: wrap;
 }
 
 .mvp-card__ref {
@@ -157,20 +160,34 @@
   padding: 0.0625rem var(--spacing-2);
   border-radius: var(--radius-pill);
   border: 1px solid var(--actor-accent, var(--color-line));
+  /* Filled with a tint of the border's own hue so the pill reads as that
+     colour. The tint stays light enough for ink text, so contrast holds
+     (R-10.6 — the label carries the meaning, not the colour). */
+  background-color: var(--actor-tint, transparent);
   font-size: 0.6875rem;
   line-height: 1.5;
   color: var(--color-ink-700);
 }
 
 /* The label carries the meaning; the colour is a scanning aid (R-10.6). */
-.mvp-card__actor--employer { --actor-accent: var(--color-actor-employer); }
-.mvp-card__actor--staff { --actor-accent: var(--color-actor-staff); }
-.mvp-card__actor--jobseeker { --actor-accent: var(--color-actor-jobseeker); }
-.mvp-card__actor--system { --actor-accent: var(--color-actor-system); }
+.mvp-card__actor--employer {
+  --actor-accent: var(--color-actor-employer);
+  --actor-tint: var(--color-actor-employer-tint);
+}
 
-.mvp-card__actor-count {
-  font-family: var(--font-mono);
-  font-weight: 700;
+.mvp-card__actor--staff {
+  --actor-accent: var(--color-actor-staff);
+  --actor-tint: var(--color-actor-staff-tint);
+}
+
+.mvp-card__actor--jobseeker {
+  --actor-accent: var(--color-actor-jobseeker);
+  --actor-tint: var(--color-actor-jobseeker-tint);
+}
+
+.mvp-card__actor--system {
+  --actor-accent: var(--color-actor-system);
+  --actor-tint: var(--color-actor-system-tint);
 }
 
 /* ========================================

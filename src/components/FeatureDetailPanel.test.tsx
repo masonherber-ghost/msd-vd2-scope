@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { FeatureDetailPanel } from '@/components/FeatureDetailPanel'
@@ -31,7 +31,7 @@ describe('FeatureDetailPanel — header', () => {
   it('names the feature and its placement', () => {
     renderPanel('F-002')
     expect(screen.getByRole('heading', { level: 2, name: 'Verify employer' })).toBeInTheDocument()
-    expect(screen.getByText(/Release 1\.1 · Access & Onboarding · epic 179/)).toBeInTheDocument()
+    expect(screen.getByText(/Package 1\.1 · Access & Onboarding · epic 179/)).toBeInTheDocument()
   })
 
   it('no longer contradicts itself about the phase name', () => {
@@ -52,7 +52,7 @@ describe('FeatureDetailPanel — capability placement (R-8.15)', () => {
     renderPanel('F-002')
     expect(
       screen.getByText(
-        /the feature ships in Release 1\.1, the MSD features sequencing delivers this capability in Release 1\.4/i,
+        /the feature ships in Package 1\.1, the MSD features sequencing delivers this capability in Package 1\.4/i,
       ),
     ).toBeInTheDocument()
   })
@@ -96,8 +96,10 @@ describe('FeatureDetailPanel — no capabilities (R-8.18)', () => {
           release_id: '1.1',
           phase_id: 'access-and-onboarding',
           source_phase_label: 'Access & onboarding',
-          capability_note: 'Mapped under Release 2+ in table',
-          display_order: 1,
+          capability_note: 'Mapped under Package 2+ in table',
+          question: null, display_order: 1,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],
@@ -116,7 +118,7 @@ describe('FeatureDetailPanel — no capabilities (R-8.18)', () => {
     )
     expect(
       screen.getByText(
-        /The PwC features sequencing states: “Mapped under Release 2\+ in table”/,
+        /The PwC features sequencing states: “Mapped under Package 2\+ in table”/,
       ),
     ).toBeInTheDocument()
   })
@@ -163,7 +165,9 @@ describe('FeatureDetailPanel — connected features (R-8.17)', () => {
           phase_id: 'access-and-onboarding',
           source_phase_label: null,
           capability_note: null,
-          display_order: 3,
+          question: null, display_order: 3,
+          notes: '',
+          notes_edited: 0,
           source: 'mapping',
         },
       ],
@@ -185,7 +189,7 @@ describe('FeatureDetailPanel — connected features (R-8.17)', () => {
     )
 
     const connection = screen.getByRole('button', { name: /F-003/ })
-    expect(within(connection).getByText('crosses release')).toBeInTheDocument()
+    expect(within(connection).getByText('crosses package')).toBeInTheDocument()
 
     await user.click(connection)
     expect(onSelectFeature).toHaveBeenCalledWith('F-003')
@@ -218,8 +222,8 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
     onKeepCapability: vi.fn().mockResolvedValue(undefined),
     onMoveCapability: vi.fn().mockResolvedValue(undefined),
     releaseOptions: [
-      { value: '1.1', label: 'Release 1.1' },
-      { value: '1.4', label: 'Release 1.4' },
+      { value: '1.1', label: 'Package 1.1' },
+      { value: '1.4', label: 'Package 1.4' },
     ],
     phaseOptions: [
       { value: 'access-and-onboarding', label: 'Access & Onboarding' },
@@ -250,13 +254,13 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
 
   it('argues the case while it is unreviewed', () => {
     renderWithState('unreviewed')
-    expect(screen.getByText(/Release differs:/)).toBeInTheDocument()
+    expect(screen.getByText(/Package differs:/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Resolve' })).toBeInTheDocument()
   })
 
   it('stops arguing it once decided', () => {
     renderWithState('table_wins')
-    expect(screen.queryByText(/Release differs:/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Package differs:/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Phase differs:/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Resolve' })).not.toBeInTheDocument()
   })
@@ -288,9 +292,9 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
 
     const dialog = screen.getByRole('dialog')
     // Collapsed in the panel, still stated in full in the modal.
-    expect(within(dialog).getByText(/F-002 ships in Release 1\.1/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/F-002 ships in Package 1\.1/)).toBeInTheDocument()
     expect(
-      within(dialog).getByText(/delivers this capability in Release 1\.4/),
+      within(dialog).getByText(/delivers this capability in Package 1\.4/),
     ).toBeInTheDocument()
   })
 
@@ -313,7 +317,7 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
   it('collapses without a reload once the decision is confirmed', async () => {
     const user = userEvent.setup()
     renderWithState('unreviewed')
-    expect(screen.getByText(/Release differs:/)).toBeInTheDocument()
+    expect(screen.getByText(/Package differs:/)).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Resolve' }))
     await user.click(
@@ -321,5 +325,128 @@ describe('FeatureDetailPanel — a reviewed capability collapses (R-8.23)', () =
     )
 
     expect(resolvers.onKeepCapability).toHaveBeenCalled()
+  })
+})
+
+/**
+ * A question raised against a PwC feature. Capabilities have carried one
+ * since 006; a feature could not, so a question about a feature had to be
+ * hung off one of its capabilities or written down elsewhere.
+ */
+describe('FeatureDetailPanel — questions', () => {
+  const renderEditable = (question: string | null = null) => {
+    const base = buildFeatureDetail(graph, 'F-002')!
+    const onSaveField = vi.fn().mockResolvedValue(undefined)
+    render(
+      <FeatureDetailPanel
+        detail={{ ...base, question }}
+        onClose={vi.fn()}
+        onPivotToMvp={vi.fn()}
+        onSelectFeature={vi.fn()}
+        activeMvpRefs={[]}
+        onSaveField={onSaveField}
+      />,
+    )
+    return { onSaveField }
+  }
+
+  it('shows a question that has been raised', () => {
+    renderEditable('Is this still in 1.1?')
+    expect(screen.getByRole('note')).toHaveTextContent('Is this still in 1.1?')
+  })
+
+  it('offers to add one when there is none', () => {
+    renderEditable()
+    expect(screen.getByRole('button', { name: /add a question/i })).toBeInTheDocument()
+  })
+
+  it('saves a question against the feature', async () => {
+    const user = userEvent.setup()
+    const { onSaveField } = renderEditable()
+
+    await user.click(screen.getByRole('button', { name: /add a question/i }))
+    await user.type(screen.getByLabelText('Question'), 'Who owns this?')
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() =>
+      expect(onSaveField).toHaveBeenCalledWith({ question: 'Who owns this?' }),
+    )
+  })
+
+  it('clears the question when the field is emptied', async () => {
+    // Otherwise an answered question lingers as a blank flag on the card.
+    const user = userEvent.setup()
+    const { onSaveField } = renderEditable('Old question')
+
+    await user.click(screen.getByRole('button', { name: /edit question/i }))
+    await user.clear(screen.getByLabelText('Question'))
+    await user.click(screen.getByRole('button', { name: /^save$/i }))
+
+    await waitFor(() => expect(onSaveField).toHaveBeenCalledWith({ question: null }))
+  })
+})
+
+describe('FeatureDetailPanel — assumptions and notes', () => {
+  const withNotes = (notes: string) =>
+    buildFeatureDetail(
+      makeScopeGraph({
+        pwcFeatures: graph.pwcFeatures.map((f) => (f.id === 'F-002' ? { ...f, notes } : f)),
+      }),
+      'F-002',
+    )!
+
+  const renderNotes = (notes: string, onSaveField?: (patch: object) => Promise<unknown>) =>
+    render(
+      <FeatureDetailPanel
+        detail={withNotes(notes)}
+        onClose={vi.fn()}
+        onPivotToMvp={vi.fn()}
+        onSelectFeature={vi.fn()}
+        activeMvpRefs={[]}
+        onSaveField={onSaveField}
+      />,
+    )
+
+  it('renders the markdown rather than showing its syntax', () => {
+    renderNotes('1. CIAM limited to **delegated** auth only.\n2. Email only.')
+    const notes = section(/assumptions & notes/i)
+    const items = within(notes).getAllByRole('listitem')
+    expect(items.map((li) => li.textContent)).toEqual([
+      'CIAM limited to delegated auth only.',
+      'Email only.',
+    ])
+    expect(within(notes).getByText('delegated').tagName).toBe('STRONG')
+  })
+
+  it('shows raw HTML as text, never as markup', () => {
+    renderNotes('<img src=x onerror="alert(1)">')
+    expect(section(/assumptions & notes/i).querySelector('img')).toBeNull()
+  })
+
+  it('says when there are none', () => {
+    renderNotes('')
+    expect(within(section(/assumptions & notes/i)).getByText('None recorded.')).toBeInTheDocument()
+  })
+
+  it('edits the whole block as markdown source and saves it as one field', async () => {
+    const user = userEvent.setup()
+    const onSaveField = vi.fn().mockResolvedValue(undefined)
+    renderNotes('1. First.', onSaveField)
+
+    await user.click(screen.getByRole('button', { name: /edit assumptions and notes/i }))
+    const field = screen.getByRole('textbox', { name: /assumptions and notes/i })
+    expect(field).toHaveValue('1. First.')
+
+    await user.type(field, '\n2. Second.')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onSaveField).toHaveBeenCalledWith({ notes: '1. First.\n2. Second.' })
+  })
+
+  it('offers to add them when there are none', () => {
+    renderNotes('', vi.fn())
+    expect(
+      screen.getByRole('button', { name: 'Add assumptions or notes' }),
+    ).toBeInTheDocument()
   })
 })

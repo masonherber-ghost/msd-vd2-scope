@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { InlineEditField } from '@/components/InlineEditField'
 import { LinkPicker, type LinkOption } from '@/components/LinkPicker'
+import { MarkdownText } from '@/components/MarkdownText'
 import { Button } from '@/components/ui/button'
 import { mvpCardLabel, type MvpCardModel } from '@/lib/mvp-derive'
 import { SOURCE_LABEL } from '@/lib/validators'
@@ -12,8 +13,13 @@ const ACTOR_LABEL: Record<string, string> = {
   system: 'System',
 }
 
+/** The option that hands the record back to the sources. */
+const UNSTATED = 'Not stated — placed by its capabilities'
+
 const PLACEMENT_NOTE: Record<MvpCardModel['placement'], string> = {
-  capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a release of its own.`,
+  stated:
+    'Placed by hand on the record itself, which outranks both derived placements. Set the package and stage back to “not stated” to hand it back to the sources.',
+  capability: `Placed where the ${SOURCE_LABEL.sequencing} schedules its capabilities. Neither source gives an MSD feature a package of its own.`,
   feature:
     `This record owns no placed capability, so it is placed by the PwC features that cite it. That is a weaker footing than the ${SOURCE_LABEL.sequencing}’s own placement.`,
   unplaced: 'Nothing places this record: it owns no capability and no PwC feature cites it.',
@@ -36,12 +42,20 @@ export type MvpDetailPanelProps = {
   releaseOptions?: { value: string; label: string }[]
   phaseOptions?: { value: string; label: string }[]
   /**
-   * Re-assigns the record by moving the capabilities it owns. Rejects with
-   * the server's message, which the field surfaces.
+   * Places the record itself. This is the same field Manage writes, and it
+   * outranks both derived placements, so a change here moves the card on the
+   * map. `null` clears it and hands the record back to the sources.
    */
-  onSetPlacement?: (patch: { release_id?: string; phase_id?: string }) => Promise<unknown>
+  onSetStatedPlacement?: (patch: {
+    release_id?: string | null
+    phase_id?: string | null
+  }) => Promise<unknown>
   /** Renames the record. Rejects with the server's message. */
   onSaveTitle?: (title: string) => Promise<unknown>
+  /** Saves a question, or clears it when the text is emptied. */
+  onSaveQuestion?: (question: string | null) => Promise<unknown>
+  /** Saves the markdown details. Emptying it clears them. */
+  onSaveDetails?: (details: string) => Promise<unknown>
   onDirtyChange?: (dirty: boolean) => void
 }
 
@@ -65,8 +79,10 @@ export function MvpDetailPanel({
   onSetCapabilities,
   releaseOptions,
   phaseOptions,
-  onSetPlacement,
+  onSetStatedPlacement,
   onSaveTitle,
+  onSaveQuestion,
+  onSaveDetails,
   onDirtyChange,
 }: MvpDetailPanelProps) {
   const label = mvpCardLabel(card)
@@ -107,39 +123,6 @@ export function MvpDetailPanel({
   const placeName = (releaseId: string, phaseId: string) =>
     `${releaseLabels?.get(releaseId) ?? releaseId} · ${phaseNames?.get(phaseId) ?? phaseId}`
 
-  /**
-   * The one value every owned capability shares on an axis, or '' where they
-   * disagree. A record whose capabilities straddle two releases has no single
-   * release to show, and saying "1.1" would be a lie about half of them.
-   */
-  const sharedValue = (of: (c: MvpCardModel['capabilities'][number]) => string | null) => {
-    const values = new Set(card.capabilities.map((capability) => of(capability) ?? ''))
-    return values.size === 1 ? [...values][0] : ''
-  }
-  const sharedRelease = sharedValue((capability) => capability.releaseId)
-  const sharedPhase = sharedValue((capability) => capability.phaseId)
-
-  const mixedOf = (
-    of: (c: MvpCardModel['capabilities'][number]) => string | null,
-    name: (value: string) => string,
-  ) =>
-    `Mixed — ${[...new Set(card.capabilities.map((c) => of(c)))]
-      .map((value) => (value ? name(value) : 'not placed'))
-      .join(', ')}`
-
-  // Only offered where there is something to move: a record owning no
-  // capability is placed by the features citing it, and this control cannot
-  // move those.
-  const canPlace = Boolean(
-    onSetPlacement && releaseOptions && phaseOptions && card.capabilities.length > 0,
-  )
-  /** Prepended when the record straddles, so the select has a value to show. */
-  const withMixed = (
-    options: { value: string; label: string }[],
-    shared: string,
-    label: string,
-  ) => (shared === '' ? [{ value: '', label }, ...options] : options)
-
   return (
     <aside className="mvp-detail" aria-label={`MSD feature ${label}`}>
       <div className="mvp-detail__header">
@@ -175,47 +158,82 @@ export function MvpDetailPanel({
 
       <p className="mvp-detail__note">{PLACEMENT_NOTE[card.placement]}</p>
 
-      {canPlace && releaseOptions && phaseOptions && onSetPlacement ? (
+      {card.question ? (
+        <p className="mvp-detail__question" role="note">
+          <span className="mvp-detail__question-label">Question:</span> {card.question}
+        </p>
+      ) : null}
+
+      <section className="mvp-detail__section">
+        <h3 className="mvp-detail__section-title">Details</h3>
+        {onSaveDetails ? (
+          <InlineEditField
+            label="Details"
+            value={card.details}
+            markdown
+            emptyText="None recorded."
+            addLabel="Add details"
+            onSave={onSaveDetails}
+            onDirtyChange={onDirtyChange}
+          />
+        ) : card.details === '' ? (
+          <p className="mvp-detail__note">None recorded.</p>
+        ) : (
+          <MarkdownText text={card.details} />
+        )}
+      </section>
+
+      {onSaveQuestion ? (
+        <section className="mvp-detail__section">
+          <h3 className="mvp-detail__section-title">Question</h3>
+          <InlineEditField
+            label="Question"
+            value={card.question ?? ''}
+            multiline
+            addLabel="Add a question"
+            // Emptying it clears the question rather than storing a blank one.
+            onSave={(next) => onSaveQuestion(next.trim() === '' ? null : next)}
+            onDirtyChange={onDirtyChange}
+          />
+        </section>
+      ) : null}
+
+      {releaseOptions && phaseOptions && onSetStatedPlacement ? (
         <section className="mvp-detail__section">
           <h3 className="mvp-detail__section-title">Placement</h3>
           <InlineEditField
-            label="Release"
-            value={sharedRelease}
+            label="Package"
+            value={card.stated.releaseId ?? ''}
             displayValue={
-              sharedRelease
-                ? (releaseLabels?.get(sharedRelease) ?? sharedRelease)
-                : mixedOf(
-                    (capability) => capability.releaseId,
-                    (value) => releaseLabels?.get(value) ?? value,
-                  )
+              card.stated.releaseId
+                ? (releaseLabels?.get(card.stated.releaseId) ?? card.stated.releaseId)
+                : 'Not stated'
             }
-            options={withMixed(releaseOptions, sharedRelease, 'Mixed — choose one to move them all')}
-            onSave={(release_id) => onSetPlacement({ release_id })}
+            options={[{ value: '', label: UNSTATED }, ...releaseOptions]}
+            onSave={(release_id) => onSetStatedPlacement({ release_id: release_id || null })}
             onDirtyChange={onDirtyChange}
           />
           <InlineEditField
             label="Stage"
-            value={sharedPhase}
+            value={card.stated.phaseId ?? ''}
             displayValue={
-              sharedPhase
-                ? (phaseNames?.get(sharedPhase) ?? sharedPhase)
-                : mixedOf(
-                    (capability) => capability.phaseId,
-                    (value) => phaseNames?.get(value) ?? value,
-                  )
+              card.stated.phaseId
+                ? (phaseNames?.get(card.stated.phaseId) ?? card.stated.phaseId)
+                : 'Not stated'
             }
-            options={withMixed(phaseOptions, sharedPhase, 'Mixed — choose one to move them all')}
-            onSave={(phase_id) => onSetPlacement({ phase_id })}
+            options={[{ value: '', label: UNSTATED }, ...phaseOptions]}
+            onSave={(phase_id) => onSetStatedPlacement({ phase_id: phase_id || null })}
             onDirtyChange={onDirtyChange}
           />
-          {/* The record has no placement of its own, so say what is actually
-              being moved — and that it is shared with the features citing it. */}
+          {/* A cell is a release AND a stage, so half a statement places
+              nothing — say so rather than letting a half-set record look
+              like the control did not work. */}
           <p className="mvp-detail__note">
-            Re-assigning moves the {card.capabilities.length} capabilit
-            {card.capabilities.length === 1 ? 'y' : 'ies'} this record owns. That
-            placement is shared with every PwC feature citing them, so a move can settle
-            a conflict or create one. Changing the release leaves each capability in its
-            own stage.
+            {card.placement === 'stated'
+              ? 'This is where the record sits on the map. It outranks where its capabilities and citing features are.'
+              : card.stated.releaseId || card.stated.phaseId
+                ? `Set the ${card.stated.releaseId ? 'stage' : 'package'} too — a cell is a package and a stage, so half a statement places nothing and the record stays where the sources put it.`
+                : 'Set both to place this record by hand. That outranks where its capabilities and citing features are, and moves the card on the map.'}
           </p>
         </section>
       ) : null}

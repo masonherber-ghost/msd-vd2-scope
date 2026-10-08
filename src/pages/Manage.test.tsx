@@ -24,7 +24,11 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
   return {
     ...actual,
     apiClient: {
-      scope: { get: async () => state.graph as ScopeGraph },
+      scope: {
+        get: async () => state.graph as ScopeGraph,
+        // What the data layer holds after a write — the same graph a refetch returns.
+        cached: () => state.graph as ScopeGraph,
+      },
       releases: {
         create: record('releases.create'),
         update: record('releases.update'),
@@ -81,7 +85,7 @@ describe('Manage — navigation', () => {
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument())
 
     const nav = screen.getByRole('navigation', { name: 'Entities' })
-    for (const label of ['Releases', 'Phases', 'MVP features', 'Capabilities']) {
+    for (const label of ['Packages', 'Phases', 'MVP features', 'Capabilities']) {
       expect(within(nav).getByRole('link', { name: label })).toBeInTheDocument()
     }
   })
@@ -89,7 +93,7 @@ describe('Manage — navigation', () => {
   it('defaults to releases when no entity is named', async () => {
     renderManage('/manage')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
   })
 
@@ -104,12 +108,13 @@ describe('Manage — releases', () => {
   it('lists each release with how many features use it', async () => {
     renderManage('/manage/releases')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
     const rows = screen.getAllByRole('row')
     // Header plus two releases.
     expect(rows).toHaveLength(3)
-    expect(rows[1]).toHaveTextContent('Release 1.1')
+    // The label is an editable field now, so it reads as a value not as text.
+    expect(screen.getByLabelText('Label for release 1.1')).toHaveValue('Package 1.1')
     expect(rows[1]).toHaveTextContent('2')
   })
 
@@ -117,10 +122,10 @@ describe('Manage — releases', () => {
     const user = userEvent.setup()
     renderManage('/manage/releases')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
 
-    const input = screen.getByLabelText('Name for Release 1.1')
+    const input = screen.getByLabelText('Name for release 1.1')
     await user.clear(input)
     await user.type(input, 'Controlled Pilot')
     await user.tab()
@@ -133,10 +138,10 @@ describe('Manage — releases', () => {
     const user = userEvent.setup()
     renderManage('/manage/releases')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
 
-    await user.click(screen.getByLabelText('Name for Release 1.1'))
+    await user.click(screen.getByLabelText('Name for release 1.1'))
     await user.tab()
 
     expect(called('releases.update')).toHaveLength(0)
@@ -146,17 +151,17 @@ describe('Manage — releases', () => {
     const user = userEvent.setup()
     renderManage('/manage/releases')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
 
-    await user.type(screen.getByLabelText('New release id'), '2.1')
-    await user.type(screen.getByLabelText('New release label'), 'Release 2.1')
-    await user.click(screen.getByRole('button', { name: /add release/i }))
+    await user.type(screen.getByLabelText('New package id'), '2.1')
+    await user.type(screen.getByLabelText('New package label'), 'Package 2.1')
+    await user.click(screen.getByRole('button', { name: /add package/i }))
 
     await waitFor(() => expect(called('releases.create')).toHaveLength(1))
     expect(called('releases.create')[0].args[0]).toMatchObject({
       id: '2.1',
-      label: 'Release 2.1',
+      label: 'Package 2.1',
     })
   })
 
@@ -165,7 +170,7 @@ describe('Manage — releases', () => {
     state.writeFail = 'Cannot delete release 1.1 — 20 PwC features reference it.'
     renderManage('/manage/releases')
     await waitFor(() =>
-      expect(screen.getByRole('table', { name: /releases/i })).toBeInTheDocument(),
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
     )
 
     await user.click(screen.getAllByRole('button', { name: /delete/i })[0])
@@ -252,6 +257,9 @@ describe('Manage — MVP features', () => {
       ref: 994,
       scope_option: null,
       title: 'Something new',
+      // Unstated, so the record is placed by whatever the sources say.
+      release_id: null,
+      phase_id: null,
     })
   })
 
@@ -286,6 +294,158 @@ describe('Manage — MVP features', () => {
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent(/already exists/),
     )
+  })
+})
+
+describe('Manage — adding an MSD feature', () => {
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('asks for the ref rather than sending a request that cannot succeed', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP title'), 'No ref given')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    // An empty ref is NaN, which serialises as null and comes back a 422.
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Give the MVP feature a ref/)
+  })
+
+  it('names a ref that is not a number back to the person who typed it', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '99a')
+    await user.type(screen.getByLabelText('New MVP title'), 'Typo')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/“99a” is not an MVP ref/)
+  })
+
+  it('asks for the title too', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '994')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    expect(called('mvp.create')).toHaveLength(0)
+    expect(screen.getByRole('alert')).toHaveTextContent(/Give the MVP feature a title/)
+  })
+
+  it('puts the refusal beside the controls it belongs to', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+    // The create block, not the line above a fifty-row table.
+    const createBlock = screen
+      .getByRole('button', { name: /add MVP feature/i })
+      .closest('.manage-table__create') as HTMLElement
+    expect(within(createBlock).getByRole('alert')).toBeInTheDocument()
+  })
+
+  it('trims what it sends and clears the draft on success', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), ' 994 ')
+    await user.type(screen.getByLabelText('New MVP title'), '  Something new  ')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    await waitFor(() => expect(called('mvp.create')).toHaveLength(1))
+    expect(called('mvp.create')[0].args[0]).toMatchObject({
+      ref: 994,
+      title: 'Something new',
+    })
+    expect(screen.getByLabelText('New MVP ref')).toHaveValue('')
+  })
+})
+
+describe('Manage — deleting an MSD feature', () => {
+  /** The row for a ref, found by the ref cell rather than by position. */
+  const rowFor = (ref: string) =>
+    screen
+      .getAllByRole('row')
+      .slice(1)
+      .find((row) => within(row).queryAllByRole('cell')[0]?.textContent === ref) as HTMLElement
+
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('says at the row what is holding a record it cannot delete', async () => {
+    await openTable()
+    // 948 is cited by one PwC feature and owns one capability.
+    expect(rowFor('948')).toHaveTextContent(
+      /Cannot delete — 1 PwC feature and 1 capability reference it/,
+    )
+  })
+
+  it('agrees the verb with what is actually holding the record', async () => {
+    await openTable()
+    // The first 938 row is cited once and owns nothing — one thing, so
+    // "references", not the compound "reference".
+    expect(rowFor('938')).toHaveTextContent(/1 PwC feature references it/)
+  })
+
+  it('does not ask the server for a delete it knows will be refused', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(within(rowFor('948')).getByRole('button', { name: 'Delete' }))
+    expect(called('mvp.remove')).toHaveLength(0)
+  })
+
+  it('marks the button disabled to assistive tech, but keeps it reachable', async () => {
+    await openTable()
+    const button = within(rowFor('948')).getByRole('button', { name: 'Delete' })
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    // Not the `disabled` attribute: that would skip it in the tab order and
+    // the reason beside it would never be announced.
+    expect(button).not.toBeDisabled()
+    expect(button).toHaveAccessibleDescription(/Cannot delete/)
+  })
+
+  it('deletes a record nothing references', async () => {
+    const user = userEvent.setup()
+    state.graph = makeScopeGraph({
+      mvpFeatures: [
+        {
+          id: 7,
+          ref: 999,
+          scope_option: null,
+          title: 'Unreferenced',
+          release_id: null,
+          phase_id: null,
+          question: null,
+          details: '',
+          source: 'manual',
+        },
+      ],
+      featureMvpLinks: [],
+      capabilities: [],
+    })
+    await openTable()
+
+    const row = rowFor('999')
+    expect(row).not.toHaveTextContent(/Cannot delete/)
+    const button = within(row).getByRole('button', { name: 'Delete' })
+    expect(button).not.toHaveAttribute('aria-disabled', 'true')
+
+    await user.click(button)
+    await waitFor(() => expect(called('mvp.remove')).toHaveLength(1))
+    expect(called('mvp.remove')[0].args[0]).toBe(7)
   })
 })
 
@@ -347,7 +507,7 @@ describe('Manage — capabilities', () => {
 
     await user.type(screen.getByLabelText('New capability ref'), '994')
     await user.type(screen.getByLabelText('New capability text'), 'Do a new thing')
-    await user.selectOptions(screen.getByLabelText('New capability release'), '1.1')
+    await user.selectOptions(screen.getByLabelText('New capability package'), '1.1')
     await user.selectOptions(
       screen.getByLabelText('New capability phase'),
       'manage-vacancies',
@@ -362,5 +522,169 @@ describe('Manage — capabilities', () => {
       release_id: '1.1',
       phase_id: 'manage-vacancies',
     })
+  })
+})
+
+/**
+ * A placement stated on the record itself. An MSD feature has none of its
+ * own in either source, so this is the only way to say where one goes — and
+ * the only thing that reaches a record owning no capability.
+ */
+describe('Manage — stating an MSD feature’s placement', () => {
+  const openTable = async () => {
+    renderManage('/manage/mvp-features')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /MVP features/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('offers a release and a stage on every row', async () => {
+    await openTable()
+    expect(screen.getByLabelText('Package for MVP 938 Option 1A')).toBeInTheDocument()
+    expect(screen.getByLabelText('Stage for MVP 938 Option 1A')).toBeInTheDocument()
+  })
+
+  it('states a release on an existing record', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Package for MVP 938'), '1.4')
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    expect(called('mvp.update')[0].args[1]).toEqual({ release_id: '1.4' })
+  })
+
+  it('states a stage on an existing record', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(
+      screen.getByLabelText('Stage for MVP 938'),
+      'manage-vacancies',
+    )
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    expect(called('mvp.update')[0].args[1]).toEqual({ phase_id: 'manage-vacancies' })
+  })
+
+  it('clears a statement with null rather than an empty string', async () => {
+    // Null is what hands the record back to the sources; '' would be stored
+    // as a placement pointing at nothing.
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Package for MVP 938'), '1.4')
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(1))
+    await user.selectOptions(screen.getByLabelText('Package for MVP 938'), '')
+
+    await waitFor(() => expect(called('mvp.update')).toHaveLength(2))
+    expect(called('mvp.update')[1].args[1]).toEqual({ release_id: null })
+  })
+
+  it('says what actually placed each record', async () => {
+    await openTable()
+    const rows = screen.getAllByRole('row').slice(1)
+    // Record 2 owns the fixture's capabilities; record 1 is cited by F-001.
+    expect(rows.map((row) => row.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('Its capabilities')]),
+    )
+  })
+
+  it('creates a record already placed', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.type(screen.getByLabelText('New MVP ref'), '994')
+    await user.type(screen.getByLabelText('New MVP title'), 'Placed on arrival')
+    await user.selectOptions(screen.getByLabelText('New MVP package'), '1.4')
+    await user.selectOptions(screen.getByLabelText('New MVP stage'), 'manage-vacancies')
+    await user.click(screen.getByRole('button', { name: /add MVP feature/i }))
+
+    await waitFor(() => expect(called('mvp.create')).toHaveLength(1))
+    expect(called('mvp.create')[0].args[0]).toMatchObject({
+      release_id: '1.4',
+      phase_id: 'manage-vacancies',
+    })
+  })
+
+  it('surfaces a rejected placement', async () => {
+    const user = userEvent.setup()
+    state.writeFail = 'There is no release "9.9".'
+    await openTable()
+
+    await user.selectOptions(screen.getByLabelText('Package for MVP 938'), '1.4')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('There is no release')
+  })
+})
+
+/**
+ * The label is what every view calls the release — the chips, the row
+ * headers, the export headings — so it is the field most likely to need
+ * correcting, and it was the one cell in the table that could not be.
+ */
+describe('Manage — renaming a release label', () => {
+  const openTable = async () => {
+    renderManage('/manage/releases')
+    await waitFor(() =>
+      expect(screen.getByRole('table', { name: /packages/i })).toBeInTheDocument(),
+    )
+  }
+
+  it('offers the label as an editable field on every row', async () => {
+    await openTable()
+    expect(screen.getByLabelText('Label for release 1.1')).toHaveValue('Package 1.1')
+    expect(screen.getByLabelText('Label for release 1.4')).toHaveValue('Package 1.4')
+  })
+
+  it('saves a new label on blur', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    const input = screen.getByLabelText('Label for release 1.1')
+    await user.clear(input)
+    await user.type(input, 'Pilot 1.1')
+    await user.tab()
+
+    await waitFor(() => expect(called('releases.update')).toHaveLength(1))
+    expect(called('releases.update')[0].args).toEqual(['1.1', { label: 'Pilot 1.1' }])
+  })
+
+  it('writes nothing when the label is left alone', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    await user.click(screen.getByLabelText('Label for release 1.1'))
+    await user.tab()
+
+    expect(called('releases.update')).toHaveLength(0)
+  })
+
+  it('surfaces the server’s refusal of an empty label', async () => {
+    // The label is what the release is called everywhere; a blank one would
+    // leave every chip and heading nameless.
+    const user = userEvent.setup()
+    state.writeFail = 'label: Give the release a label.'
+    await openTable()
+
+    const input = screen.getByLabelText('Label for release 1.1')
+    await user.clear(input)
+    await user.tab()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Give the release a label')
+  })
+
+  it('keeps the label and the name as separate fields', async () => {
+    const user = userEvent.setup()
+    await openTable()
+
+    const label = screen.getByLabelText('Label for release 1.1')
+    await user.clear(label)
+    await user.type(label, 'Pilot')
+    await user.tab()
+
+    await waitFor(() => expect(called('releases.update')).toHaveLength(1))
+    // Only the label moved; the name is untouched.
+    expect(called('releases.update')[0].args[1]).toEqual({ label: 'Pilot' })
   })
 })

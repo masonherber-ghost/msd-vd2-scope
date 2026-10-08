@@ -32,7 +32,7 @@ export default function Coverage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold tracking-tight">Coverage</h1>
         <p className="text-sm text-muted-foreground">
-          Which MVP features carry the most scope, which cross a release boundary, and where
+          Which MVP features carry the most scope, which cross a package boundary, and where
           the two documents leave gaps or say the same thing twice.
         </p>
       </div>
@@ -87,14 +87,14 @@ export default function Coverage() {
 
       <section className="coverage__section" aria-labelledby="cross-release">
         <h2 className="coverage__title" id="cross-release">
-          MVP features spanning more than one release ({model.crossRelease.length})
+          MVP features spanning more than one package ({model.crossRelease.length})
         </h2>
         <p className="coverage__note">
           These are the couplings that matter most to a delivery plan: one MVP feature is
           claimed by features shipping at different times.
         </p>
         {model.crossRelease.length === 0 ? (
-          <p className="coverage__note">None — every MVP feature sits inside one release.</p>
+          <p className="coverage__note">None — every MVP feature sits inside one package.</p>
         ) : (
           <ul className="coverage__list">
             {model.crossRelease.map((entry) => (
@@ -157,14 +157,14 @@ export default function Coverage() {
 
       <section className="coverage__section" aria-labelledby="per-release">
         <h2 className="coverage__title" id="per-release">
-          Per release
+          Per package
         </h2>
         <div className="coverage__scroll">
           <table className="coverage__table">
-            <caption className="sr-only">Counts and actor breakdown per release</caption>
+            <caption className="sr-only">Counts and actor breakdown per package</caption>
             <thead>
               <tr>
-                <th scope="col">Release</th>
+                <th scope="col">Package</th>
                 <th scope="col">Features</th>
                 <th scope="col">Capabilities</th>
                 <th scope="col">Actors</th>

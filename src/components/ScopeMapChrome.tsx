@@ -1,15 +1,19 @@
 import type { CSSProperties } from 'react'
 import { ACTOR_ROWS, releaseTokenSuffix, type ViewMode } from '@/lib/scope-derive'
 import type { ReleaseRow } from '@/lib/api-client'
+import { SCOPE_VIEW_LABEL } from '@/lib/scope-export'
 import { SOURCE_LABEL } from '@/lib/validators'
 
 const accent = (token: string) => ({ '--chip-accent': `var(${token})` }) as CSSProperties
 
+/** The map's name, shown on the page and at the top of the PDF. */
+export const SCOPE_MAP_TITLE = 'VD2 package scope map'
+
 const VIEW_TABS: { mode: ViewMode; label: string; lede: string }[] = [
   {
     mode: 'release',
-    label: 'By PwC release',
-    lede: 'the release they ship in',
+    label: 'By PwC package',
+    lede: 'the package they ship in',
   },
   {
     mode: 'actor',
@@ -19,12 +23,12 @@ const VIEW_TABS: { mode: ViewMode; label: string; lede: string }[] = [
   {
     mode: 'mvp',
     label: 'By MSD feature',
-    lede: 'the release their capabilities are scheduled in',
+    lede: 'the package their capabilities are scheduled in',
   },
   {
     mode: 'capability',
     label: 'By capability',
-    lede: 'the release the table delivers them in',
+    lede: 'the package the table delivers them in',
   },
 ]
 
@@ -69,7 +73,14 @@ export function ScopeMapChrome({
       <div className="scope-chrome__intro">
         <div>
           <span className="scope-chrome__eyebrow">Discovery artefact · Scope map</span>
-          <h1 className="scope-chrome__title">VD2 release scope map</h1>
+          {/* Title and view, in one element — this is the block the PDF
+              export captures as its heading, so the two have to travel
+              together. On screen it also names the view in words, which the
+              pressed tab alone leaves implicit. */}
+          <div className="scope-chrome__heading">
+            <h1 className="scope-chrome__title">{SCOPE_MAP_TITLE}</h1>
+            <p className="scope-chrome__subtitle">{SCOPE_VIEW_LABEL[view]}</p>
+          </div>
           <p className="scope-chrome__lede">
             {view === 'mvp'
               ? 'MSD features plotted across the seven canonical journey phases, each card naming the PwC features that cite it. '
@@ -77,12 +88,12 @@ export function ScopeMapChrome({
                 ? 'Capabilities plotted across the seven canonical journey phases, each card naming its actor, its MSD feature and the PwC features citing it. '
                 : 'PwC features plotted across the seven canonical journey phases, each card naming the MVP features it cites. '}
             Rows group them by{' '}
-            {VIEW_TABS.find((t) => t.mode === view)?.lede ?? 'the release they ship in'}. An
+            {VIEW_TABS.find((t) => t.mode === view)?.lede ?? 'the package they ship in'}. An
             empty cell is information: nothing in that phase lands there.
           </p>
         </div>
 
-        <ul className="scope-chrome__chips" aria-label="Filter by release">
+        <ul className="scope-chrome__chips" aria-label="Filter by package">
           {releases.map((release) => {
             const pressed = activeReleases.includes(release.id)
             return (
@@ -106,23 +117,34 @@ export function ScopeMapChrome({
         </ul>
       </div>
 
-      <ul className="scope-chrome__legend" aria-label="Actors">
-        <li className="scope-chrome__legend-title">Actors</li>
-        {ACTOR_ROWS.filter((row) => row.key !== 'no-actor').map((row) => (
-          <li key={row.key} className="scope-chrome__legend-item">
-            <span
-              className="scope-chrome__legend-dot"
-              style={
-                { '--legend-accent': `var(--color-actor-${row.tokenSuffix})` } as CSSProperties
-              }
-              aria-hidden="true"
-            />
-            <span className="scope-chrome__legend-name">{row.label}</span>
-            <span className="scope-chrome__legend-note">{row.blurb}</span>
-          </li>
-        ))}
-      </ul>
+      <ActorLegend />
     </>
+  )
+}
+
+/**
+ * The key to the cards' colour coding. Its own component because the print
+ * sheet needs the same key without the tabs and chips around it — two keys
+ * that could drift apart would be two different maps.
+ */
+export function ActorLegend() {
+  return (
+    <ul className="scope-chrome__legend" aria-label="Actors">
+      <li className="scope-chrome__legend-title">Actors</li>
+      {ACTOR_ROWS.filter((row) => row.key !== 'no-actor').map((row) => (
+        <li key={row.key} className="scope-chrome__legend-item">
+          <span
+            className="scope-chrome__legend-dot"
+            style={
+              { '--legend-accent': `var(--color-actor-${row.tokenSuffix})` } as CSSProperties
+            }
+            aria-hidden="true"
+          />
+          <span className="scope-chrome__legend-name">{row.label}</span>
+          <span className="scope-chrome__legend-note">{row.blurb}</span>
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -141,11 +163,11 @@ export function ReleaseHorizons({
   return (
     <section aria-labelledby="release-horizons">
       <h2 className="scope-chrome__section-title" id="release-horizons">
-        Release horizons
+        Package horizons
       </h2>
       <p className="scope-chrome__lede" style={{ marginBottom: 'var(--spacing-6)' }}>
-        What each release carries. Descriptions come from the {SOURCE_LABEL.mapping}; a
-        release the {SOURCE_LABEL.sequencing} alone knows about has none.
+        What each package carries. Descriptions come from the {SOURCE_LABEL.mapping}; a
+        package the {SOURCE_LABEL.sequencing} alone knows about has none.
       </p>
       <ul className="scope-chrome__horizons">
         {releases.map((release) => (
@@ -167,7 +189,7 @@ export function ReleaseHorizons({
             </span>
             <span className="scope-chrome__horizon-desc">
               {release.description ||
-                `This release appears only in the ${SOURCE_LABEL.sequencing}.`}
+                `This package appears only in the ${SOURCE_LABEL.sequencing}.`}
             </span>
           </li>
         ))}

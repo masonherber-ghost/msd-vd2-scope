@@ -178,3 +178,24 @@ button.mvp-detail__feature:focus-visible {
   outline: 2px solid var(--color-ring);
   outline-offset: 2px;
 }
+
+/* ========================================
+   QUESTION
+   ======================================== */
+
+/* The same treatment the feature and capability panels use, so an open
+   question reads the same wherever it was raised. */
+.mvp-detail__question {
+  display: block;
+  margin: 0;
+  padding: var(--spacing-2);
+  border-left: 3px solid var(--color-destructive);
+  background-color: var(--color-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  text-wrap: pretty;
+}
+
+.mvp-detail__question-label {
+  font-weight: 600;
+}

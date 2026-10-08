@@ -1,7 +1,7 @@
 import type { ScopeGraph } from '@/lib/api-client'
 
 /**
- * What matched, not just that something did — a hit inside an assumption
+ * What matched, not just that something did — a hit inside the notes
  * means something different from a hit on a title (R-8.12).
  */
 export type MatchKind =
@@ -11,7 +11,8 @@ export type MatchKind =
   | 'mvp-ref'
   | 'mvp-title'
   | 'capability'
-  | 'assumption'
+  | 'notes'
+  | 'details'
   | 'epic-ref'
 
 export const MATCH_LABEL: Record<MatchKind, string> = {
@@ -21,7 +22,8 @@ export const MATCH_LABEL: Record<MatchKind, string> = {
   'mvp-ref': 'MVP feature ref',
   'mvp-title': 'MVP feature title',
   capability: 'Capability',
-  assumption: 'Assumption',
+  notes: 'Assumptions & notes',
+  details: 'MSD feature details',
   'epic-ref': 'Epic ref',
 }
 
@@ -32,7 +34,8 @@ const KIND_ORDER: MatchKind[] = [
   'mvp-ref',
   'mvp-title',
   'capability',
-  'assumption',
+  'notes',
+  'details',
   'foundational-build',
   'epic-ref',
 ]
@@ -116,14 +119,12 @@ export function searchScope(graph: ScopeGraph, rawQuery: string): SearchResult {
     )
   }
 
-  for (const assumption of graph.assumptions) {
-    push(
-      'assumption',
-      `assumption-${assumption.id}`,
-      assumption.pwc_feature_id,
-      `${assumption.pwc_feature_id} · assumption ${assumption.position}`,
-      assumption.text,
-    )
+  for (const feature of graph.pwcFeatures) {
+    // The line the term sits on, so the context reads as a sentence rather
+    // than the whole markdown block.
+    const line = feature.notes.split('\n').find((l) => find(l, needle) !== -1)
+    if (line === undefined) continue
+    push('notes', `notes-${feature.id}`, feature.id, `${feature.id} · notes`, line.trim())
   }
 
   // An MVP feature is not on the map itself, so a hit resolves to the first
@@ -146,6 +147,13 @@ export function searchScope(graph: ScopeGraph, rawQuery: string): SearchResult {
 
     push('mvp-ref', `mvp-ref-${mvp.id}`, owner, `${label} · ${cited}`, String(mvp.ref))
     push('mvp-title', `mvp-title-${mvp.id}`, owner, `${label} · ${cited}`, mvp.title)
+
+    // As with a feature's notes: the line the term sits on, not the whole
+    // markdown block.
+    const line = mvp.details.split('\n').find((l) => find(l, needle) !== -1)
+    if (line !== undefined) {
+      push('details', `details-${mvp.id}`, owner, `${label} · details`, line.trim())
+    }
   }
 
   const featuresByCapability = new Map<number, string[]>()

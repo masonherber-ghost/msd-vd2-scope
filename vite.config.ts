@@ -6,6 +6,9 @@ import { fileURLToPath, URL } from 'node:url'
 const src = (p: string) => fileURLToPath(new URL(p, import.meta.url))
 
 export default defineConfig({
+  // Served from masonherber.com/scopemap/. The router's basename and
+  // public/.htaccess's RewriteBase derive from / must match this.
+  base: '/scopemap/',
   plugins: [react(), tailwindcss()],
   resolve: {
     // Most specific aliases first — the resolver matches in order.
@@ -20,15 +23,13 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}', 'server/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'admin/**/*.test.ts'],
+    // Need the emulators — run via `npm run test:emulator`.
+    exclude: ['**/node_modules/**', 'src/test/emulator/**'],
     restoreMocks: true,
   },
   server: {
     port: 5173,
     strictPort: true,
-    proxy: {
-      '/api': { target: 'http://localhost:3001', changeOrigin: true },
-      '/uploads': { target: 'http://localhost:3001', changeOrigin: true },
-    },
   },
 })

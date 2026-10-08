@@ -26,6 +26,12 @@ export type FeatureCardModel = {
   conflicts: { release: number; phase: number; unmatched: number; unreviewed: number }
   /** True when the source documents were corrected for this feature. */
   overridden: boolean
+  /**
+   * A question someone raised about this feature. Not a disagreement between
+   * the sources — a person flagging something that needs an answer — but it
+   * is shown on the card like one, because it is the same kind of open item.
+   */
+  question: string | null
   /** Provenance: mapping | sequencing | both | manual (R-9.9). */
   source: string
   /** Distinct actors across this feature's capabilities, for filtering. */
@@ -214,6 +220,7 @@ function buildFeatureCard(
     capabilityCount: links.length,
     conflicts: { release, phase, unmatched, unreviewed },
     overridden: overriddenIds.has(feature.id),
+    question: feature.question,
   }
 }
 
@@ -339,6 +346,14 @@ export function buildScopeMap(graph: ScopeGraph): ScopeMapModel {
 
 /** Token suffix for a release id: `1.1` → `1-1`. */
 export const releaseTokenSuffix = (releaseId: string) => releaseId.replace(/\./g, '-')
+
+/**
+ * Pill shorthand for a package label: `Package 1.1` → `P1.1`. Card tags are
+ * the most repeated place the label appears, so the word is dropped there; the
+ * full label stays on row headers, detail panels and exports. A label that is
+ * not a package name is returned untouched.
+ */
+export const releaseShortLabel = (label: string) => label.replace(/^Package\s+/i, 'P')
 
 /**
  * Recomputes the grid for a subset of features. The full model keeps every

@@ -19,7 +19,11 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
   return {
     ...actual,
     apiClient: {
-      scope: { get: async () => state.graph as ScopeGraph },
+      scope: {
+        get: async () => state.graph as ScopeGraph,
+        // What the data layer holds after a write — the same graph a refetch returns.
+        cached: () => state.graph as ScopeGraph,
+      },
       conflicts: {
         resolve: async (id: number, body: unknown) => {
           if (state.writeFail) throw new actual.ApiError(409, state.writeFail)
@@ -86,7 +90,7 @@ describe('Reconciliation — grouping', () => {
   it('groups conflicts by type', async () => {
     renderPage()
     await waitFor(() =>
-      expect(screen.getByRole('heading', { name: /^Release conflicts/ })).toBeInTheDocument(),
+      expect(screen.getByRole('heading', { name: /^Package conflicts/ })).toBeInTheDocument(),
     )
     expect(screen.getByRole('heading', { name: /^Phase conflicts/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /^Unmatched links/ })).toBeInTheDocument()
@@ -94,15 +98,15 @@ describe('Reconciliation — grouping', () => {
 
   it('shows both placements side by side (R-7.1)', async () => {
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
-    const row = within(queue(/^Release conflicts/)).getByRole('article', {
+    const row = within(queue(/^Package conflicts/)).getByRole('article', {
       name: /F-002 — Electronic T&Cs acceptance/,
     })
     expect(row).toHaveTextContent('PwC features sequencing — feature ships in')
-    expect(row).toHaveTextContent('Release 1.1')
+    expect(row).toHaveTextContent('Package 1.1')
     expect(row).toHaveTextContent('MSD features sequencing — capability delivered in')
-    expect(row).toHaveTextContent('Release 1.4')
+    expect(row).toHaveTextContent('Package 1.4')
   })
 
   it('has no merge-settled phase disagreements left to explain', async () => {
@@ -126,9 +130,9 @@ describe('Reconciliation — grouping', () => {
 describe('Reconciliation — resolving (R-7.2, R-7.3)', () => {
   it('offers every resolution state', async () => {
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
-    const select = within(queue(/^Release conflicts/)).getByLabelText(
+    const select = within(queue(/^Package conflicts/)).getByLabelText(
       /Resolution for F-002/,
     )
     expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
@@ -143,10 +147,10 @@ describe('Reconciliation — resolving (R-7.2, R-7.3)', () => {
   it('sends the decision without leaving the list', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
     await user.selectOptions(
-      within(queue(/^Release conflicts/)).getByLabelText(/Resolution for F-002/),
+      within(queue(/^Package conflicts/)).getByLabelText(/Resolution for F-002/),
       'defect_raised',
     )
 
@@ -156,15 +160,15 @@ describe('Reconciliation — resolving (R-7.2, R-7.3)', () => {
       body: { resolution_state: 'defect_raised', resolution_note: null },
     })
     // Still on the same page.
-    expect(screen.getByRole('heading', { name: /^Release conflicts/ })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^Package conflicts/ })).toBeInTheDocument()
   })
 
   it('saves a note against the decision', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
-    const note = within(queue(/^Release conflicts/)).getByLabelText(/Note for F-002/)
+    const note = within(queue(/^Package conflicts/)).getByLabelText(/Note for F-002/)
     await user.type(note, 'Raised with the programme')
     await user.tab()
 
@@ -178,10 +182,10 @@ describe('Reconciliation — resolving (R-7.2, R-7.3)', () => {
     const user = userEvent.setup()
     state.writeFail = 'There is no conflict 102.'
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
     await user.selectOptions(
-      within(queue(/^Release conflicts/)).getByLabelText(/Resolution for F-002/),
+      within(queue(/^Package conflicts/)).getByLabelText(/Resolution for F-002/),
       'table_wins',
     )
 
@@ -195,7 +199,7 @@ describe('Reconciliation — filtering by state', () => {
   it('puts the filter in the URL', async () => {
     const user = userEvent.setup()
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
 
     await user.click(screen.getByRole('button', { name: 'Defect raised' }))
     await waitFor(() => expect(url()).toContain('state=defect_raised'))
@@ -203,8 +207,8 @@ describe('Reconciliation — filtering by state', () => {
 
   it('shrinks the unreviewed list as work happens', async () => {
     renderPage('/reconciliation?state=unreviewed')
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'Release conflicts (1)' })).toBeInTheDocument()
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Package conflicts (1)' })).toBeInTheDocument()
 
     // The same link is resolved, so it drops out of the unreviewed filter.
     state.graph = makeScopeGraph({
@@ -216,21 +220,21 @@ describe('Reconciliation — filtering by state', () => {
 
     renderPage('/reconciliation?state=unreviewed')
     await waitFor(() =>
-      expect(screen.getAllByRole('heading', { name: 'Release conflicts (0)' })[0]).toBeInTheDocument(),
+      expect(screen.getAllByRole('heading', { name: 'Package conflicts (0)' })[0]).toBeInTheDocument(),
     )
   })
 
   it('says so when a filter matches nothing, rather than showing a bare list', async () => {
     renderPage('/reconciliation?state=defect_raised')
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
-    expect(screen.getByText('No release conflicts match this filter.')).toBeInTheDocument()
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
+    expect(screen.getByText('No package conflicts match this filter.')).toBeInTheDocument()
   })
 })
 
 describe('Reconciliation — release decomposition (D-1)', () => {
   it('is hidden when nothing sits in the decomposed release', async () => {
     renderPage()
-    await waitFor(() => expect(queue(/^Release conflicts/)).toBeInTheDocument())
+    await waitFor(() => expect(queue(/^Package conflicts/)).toBeInTheDocument())
     expect(screen.queryByRole('region', { name: /decomposes/i })).not.toBeInTheDocument()
   })
 
@@ -252,8 +256,8 @@ describe('Reconciliation — release decomposition (D-1)', () => {
     )
     const section = screen.getByRole('region', { name: /decomposes/i })
     // Named for the release it decomposes, and counting where the table puts it.
-    expect(section).toHaveTextContent('Release 1.4')
-    expect(section).toHaveTextContent('Release 1.1')
+    expect(section).toHaveTextContent('Package 1.4')
+    expect(section).toHaveTextContent('Package 1.1')
     expect(section).toHaveTextContent('1 link')
   })
 })

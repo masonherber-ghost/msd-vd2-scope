@@ -48,7 +48,7 @@ describe('ScopeExportDialog — what it shows', () => {
     // The label also appears inside the markdown, so match the sentence
     // the dialog itself writes around it.
     expect(
-      screen.getByText(/grouped by release and journey phase\. View by MSD feature\./),
+      screen.getByText(/grouped by package and journey phase\. View by MSD feature\./),
     ).toBeInTheDocument()
   })
 
@@ -134,6 +134,80 @@ describe('ScopeExportDialog — downloading', () => {
   })
 })
 
+describe('ScopeExportDialog — formatted view', () => {
+  function stubRichClipboard(write = vi.fn().mockResolvedValue(undefined)) {
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { write, writeText: vi.fn() },
+      configurable: true,
+      writable: true,
+    })
+    vi.stubGlobal(
+      'ClipboardItem',
+      class {
+        items: Record<string, Blob>
+        constructor(items: Record<string, Blob>) {
+          this.items = items
+        }
+      },
+    )
+    return write
+  }
+
+  it('opens on the markdown and renders it on the Formatted tab', async () => {
+    renderDialog()
+    expect(screen.getByRole('tab', { name: 'Markdown' })).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Formatted' }))
+
+    const rendered = screen.getByRole('region', { name: 'Formatted export' })
+    expect(rendered.querySelector('h1')).toHaveTextContent('Scope for VD2')
+    expect(rendered.querySelector('strong')).toHaveTextContent('SVD-941')
+    expect(rendered).not.toHaveTextContent('**')
+  })
+
+  it('relabels the actions to match the tab', async () => {
+    renderDialog()
+    await userEvent.click(screen.getByRole('tab', { name: 'Formatted' }))
+
+    expect(screen.getByRole('button', { name: 'Copy formatted text' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Download .html' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy Markdown' })).not.toBeInTheDocument()
+  })
+
+  it('copies rich text with a plain-text fallback', async () => {
+    const write = stubRichClipboard()
+    renderDialog()
+    await userEvent.click(screen.getByRole('tab', { name: 'Formatted' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy formatted text' }))
+
+    const [item] = write.mock.calls[0][0] as { items: Record<string, Blob> }[]
+    await expect(item.items['text/html'].text()).resolves.toContain('<strong>SVD-941</strong>')
+    await expect(item.items['text/plain'].text()).resolves.not.toContain('<')
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Formatted text copied to the clipboard',
+    )
+    vi.unstubAllGlobals()
+  })
+
+  it('saves the formatted view as an HTML page', async () => {
+    renderDialog()
+    await userEvent.click(screen.getByRole('tab', { name: 'Formatted' }))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download .html' }))
+
+    const anchor = click.mock.instances[0] as HTMLAnchorElement
+    expect(anchor.download).toBe('vd2-scope-by-msd-feature.html')
+    const blob = (URL.createObjectURL as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0][0] as Blob
+    expect(blob.type).toBe('text/html;charset=utf-8')
+    const html = await blob.text()
+    expect(html).toContain('<title>Scope for VD2</title>')
+    expect(html).toContain('<h1>Scope for VD2</h1>')
+  })
+})
+
 describe('ScopeExportDialog — announcing what happened', () => {
   it('names itself, so the dialog is identifiable without sight of the heading', () => {
     renderDialog()
@@ -173,7 +247,10 @@ describe('ScopeExportDialog — announcing what happened', () => {
     stubClipboard()
     renderDialog()
 
-    // Focus opens on the preview; the actions follow it in reading order.
+    // Focus opens on the format tabs; the preview and then the actions
+    // follow in reading order.
+    expect(screen.getByRole('tab', { name: 'Markdown' })).toHaveFocus()
+    await user.tab()
     expect(screen.getByLabelText('Markdown export')).toHaveFocus()
     await user.tab()
     await user.tab()

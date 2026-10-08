@@ -1,7 +1,21 @@
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
 import { Header } from '@/components/Header'
+
+const { signOut } = vi.hoisted(() => ({ signOut: vi.fn(async () => {}) }))
+
+// The real provider initialises Firebase on import.
+vi.mock('@/hooks/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'owner', name: 'Test Owner', email: 'owner@example.com' },
+    isAuthenticated: true,
+    isLoading: false,
+    signIn: vi.fn(),
+    signOut,
+  }),
+}))
 
 function renderHeader(initialPath = '/') {
   return render(
@@ -47,5 +61,13 @@ describe('Header', () => {
     expect(screen.getByRole('link', { name: 'Scope map' })).not.toHaveAttribute(
       'aria-current',
     )
+  })
+
+  it('shows who is signed in and signs them out', async () => {
+    renderHeader()
+    expect(screen.getByText('Test Owner')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    expect(signOut).toHaveBeenCalledOnce()
   })
 })

@@ -1,0 +1,439 @@
+import fs from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { parseMappingDocument } from './mapping-parser.js'
+import { parseSequencingTable } from './sequencing-parser.js'
+import { reconcile } from './reconcile.js'
+import { ParseError } from './scope-types.js'
+import {
+  EXPECTED_COUNTS,
+  EXPECTED_RELEASE_CONFLICTS,
+  EXPECTED_SOURCE_COUNTS,
+  EXPECTED_SOURCE_RELEASE_CONFLICTS,
+  MAPPING_PATH,
+  SEQUENCING_PATH,
+  findCountDrift,
+  loadScopeFromSources,
+  loadScopeFromSourcesRaw,
+} from './scope-source.js'
+
+const result = loadScopeFromSources()
+const raw = loadScopeFromSourcesRaw()
+
+/**
+ * The raw figures are asserted separately from the post-override ones so a
+ * declared override can never mask a real change to a source document.
+ */
+describe('the documents as written still reconcile to the PRD figures', () => {
+  it('has no drift from PRD §6 with no overrides applied', () => {
+    expect(findCountDrift(raw, EXPECTED_SOURCE_COUNTS)).toEqual([])
+  })
+
+  it.each(Object.entries(EXPECTED_SOURCE_COUNTS))('raw %s is %i', (key, expected) => {
+    expect(raw.summary[key as keyof typeof EXPECTED_SOURCE_COUNTS]).toBe(expected)
+  })
+
+  it('breaks raw release conflicts down exactly as PRD §7 does', () => {
+    expect(raw.summary.releaseConflictBreakdown).toEqual([
+      ...EXPECTED_SOURCE_RELEASE_CONFLICTS,
+    ])
+  })
+})
+
+describe('the real source documents reconcile to the PRD counts', () => {
+  it('has no count drift from PRD §6', () => {
+    // Reported as a list so a failure names every drifted metric at once.
+    expect(findCountDrift(result)).toEqual([])
+  })
+
+  it.each(Object.entries(EXPECTED_COUNTS))('%s is %i', (key, expected) => {
+    expect(result.summary[key as keyof typeof EXPECTED_COUNTS]).toBe(expected)
+  })
+
+  it('breaks release conflicts down exactly as PRD §7 does', () => {
+    expect(result.summary.releaseConflictBreakdown).toEqual([...EXPECTED_RELEASE_CONFLICTS])
+  })
+
+  it('raises no phase conflict from the two documents’ words for one phase', () => {
+    // This used to be 11 conflicts, every one of them saying "Onboarding via
+    // invite" and "Access & Onboarding" are the same phase.
+    expect(result.conflicts.phase.filter((c) => c.resolvedByCanonicalMerge)).toEqual([])
+    for (const conflict of result.conflicts.phase) {
+      expect(conflict.featurePhaseId).not.toBe(conflict.capabilityPhaseId)
+    }
+  })
+
+  it('labels every feature and capability with its canonical phase name', () => {
+    const names = new Set(result.phases.map((p) => p.name))
+    for (const feature of result.features) expect(names).toContain(feature.sourcePhaseLabel)
+    for (const capability of result.capabilities) {
+      if (capability.sourcePhaseLabel === null) continue
+      expect(names).toContain(capability.sourcePhaseLabel)
+    }
+  })
+
+  it('reports the two truncated F-050 / F-051 links as unmatched', () => {
+    expect(result.conflicts.unmatched).toEqual([
+      { pwcFeatureId: 'F-050', text: 'Review & publish vacancies', actor: 'staff', ref: 947 },
+      { pwcFeatureId: 'F-051', text: 'Review & publish vacancies', actor: 'staff', ref: 947 },
+    ])
+  })
+
+  it('never merges the unmatched link onto the table\'s longer row', () => {
+    // The table's nearest row is a superset of this text. A prefix match
+    // would silently absorb it.
+    const longer = result.capabilities.find(
+      (c) => c.ref === 947 && c.text.length > 'Review & publish vacancies'.length,
+    )
+    expect(longer?.releaseId).not.toBeNull()
+    const exact = result.capabilities.find(
+      (c) => c.ref === 947 && c.text === 'Review & publish vacancies',
+    )
+    expect(exact?.releaseId).toBeNull()
+  })
+
+  it('applies OV-003, merging release 1.9 into the table\u2019s 1.4', () => {
+    expect(result.appliedAliases).toHaveLength(1)
+    const [applied] = result.appliedAliases
+    expect(applied.alias).toMatchObject({ id: 'OV-003', from: '1.9', to: '1.4' })
+    expect(applied.features).toHaveLength(15)
+  })
+
+  it('leaves no trace of 1.9 in the reconciled model', () => {
+    expect(result.releases.map((r) => r.id)).toEqual(['1.1', '1.2', '1.3', '1.4', '2'])
+    expect(result.features.some((f) => f.releaseId === '1.9')).toBe(false)
+    expect(result.capabilities.some((c) => c.releaseId === '1.9')).toBe(false)
+    for (const entry of result.summary.releaseConflictBreakdown) {
+      expect([entry.from, entry.to]).not.toContain('1.9')
+    }
+  })
+
+  it('makes 1.4 a release both documents name, carrying the 1.9 prose', () => {
+    const merged = result.releases.find((r) => r.id === '1.4')!
+    expect(merged).toMatchObject({
+      label: 'Package 1.4',
+      name: 'General Availability & Scale-Up',
+      inMappingSource: true,
+      inSequencingSource: true,
+    })
+  })
+
+  it('clears the five 1.9 \u2192 1.4 conflicts without touching the others', () => {
+    const raw = new Map(
+      EXPECTED_SOURCE_RELEASE_CONFLICTS.map((e) => [`${e.from}->${e.to}`, e.links]),
+    )
+    expect(raw.get('1.9->1.4')).toBe(5)
+    // Nothing conflicts with itself once the two ids are one release.
+    expect(
+      result.summary.releaseConflictBreakdown.some(
+        (e) => e.from === '1.4' && e.to === '1.4',
+      ),
+    ).toBe(false)
+    const after = new Map(
+      result.summary.releaseConflictBreakdown.map((e) => [`${e.from}->${e.to}`, e.links]),
+    )
+    // The 1.9 -> 2 row survives intact, renamed to 1.4. The 1.9 -> 1.1 row
+    // does not: OV-005 moved 948's three links into 1.4, where F-011 already
+    // sat, so they became agreements.
+    expect(after.get('1.4->2')).toBe(raw.get('1.9->2'))
+    expect(after.get('1.4->1.1')).toBe(3)
+  })
+
+  it('leaves release 1.1 holding exactly the twelve approved MSD features', () => {
+    // The whole point of OV-004…OV-006. Asserted on the reconciled model, so
+    // it covers the reallocations and the OV-002 revision together.
+    const APPROVED = [939, 940, 941, 944, 946, 947, 955, 959, 962, 968, 972, 991]
+    const in11 = [
+      ...new Set(
+        result.capabilities.filter((c) => c.releaseId === '1.1').map((c) => c.ref),
+      ),
+    ].sort((a, b) => a - b)
+    expect(in11).toEqual(APPROVED)
+  })
+
+  it('applies the three declared reallocations', () => {
+    expect(
+      result.appliedReallocations.map((a) => [
+        a.reallocation.id,
+        a.reallocation.from,
+        a.reallocation.to,
+        a.moved.reduce((n, m) => n + m.capabilities, 0),
+      ]),
+    ).toEqual([
+      ['OV-004', '1.1', '1.4', 11],
+      ['OV-005', '1.1', '1.2', 7],
+      ['OV-006', '1.2', '1.1', 1],
+    ])
+  })
+
+  it('splits Option A from Option B and labels both (OV-007/OV-008)', () => {
+    expect(result.appliedOptionMerges.map((a) => [a.merge.id, a.merge.ref])).toEqual([
+      ['OV-007', 938],
+      ['OV-008', 946],
+    ])
+    // 51 records before the merges, 49 after — 938 and 946 each lose a bare.
+    expect(result.summary.mvpRecords).toBe(49)
+    expect(result.summary.mvpRefs).toBe(48)
+
+    const optioned = result.mvpFeatures
+      .filter((m) => m.scopeOption)
+      .map((m) => `${m.ref}${m.scopeOption} ${m.title}`)
+      .sort()
+    expect(optioned).toEqual([
+      '9381A Staff can Create and Manage Additional Employer Portal Users (Option A)',
+      '9461A Employer Portal User Access and Permissions (Option A)',
+      '9481B Employer Verification Methods (Option B)',
+      '9511A Register for the Employer Portal - New organisation (Option A)',
+      '9511B Register for the Employer Portal - New organisation (Option B)',
+    ])
+  })
+
+  it('leaves no ref carrying both a bare and an optioned record', () => {
+    const byRef = new Map<number, (string | null)[]>()
+    for (const m of result.mvpFeatures) {
+      byRef.set(m.ref, [...(byRef.get(m.ref) ?? []), m.scopeOption])
+    }
+    for (const [ref, options] of byRef) {
+      if (options.length === 1) continue
+      expect(options, `ref ${ref}`).not.toContain(null)
+    }
+  })
+
+  it('applies OV-002, splitting F-085 into F-085 and F-093', () => {
+    expect(result.appliedSplits).toHaveLength(1)
+    const [applied] = result.appliedSplits
+    expect(applied.split.id).toBe('OV-002')
+    expect(applied.from).toMatchObject({
+      featureId: 'F-085',
+      name: 'Record recruitment outcome',
+      releaseId: '1.3',
+      sourcePhaseLabel: 'Outcomes & Support',
+    })
+    expect(applied.into).toEqual([
+      // 1.1, not 1.2: OV-006 moved ref 972 into the approved pilot list and
+      // this half is the one that carries it.
+      { featureId: 'F-085', releaseId: '1.1', phaseId: 'manage-vacancies', capabilities: 1 },
+      {
+        featureId: 'F-093',
+        releaseId: '1.3',
+        phaseId: 'employer-recruitment',
+        capabilities: 2,
+      },
+    ])
+  })
+
+  it('places each half where the sequencing table already put its capabilities', () => {
+    const a = result.features.find((f) => f.id === 'F-085')!
+    const b = result.features.find((f) => f.id === 'F-093')!
+
+    expect(a).toMatchObject({
+      name: 'Record vacancy outcome',
+      releaseId: '1.1',
+      phaseId: 'manage-vacancies',
+    })
+    expect(b).toMatchObject({
+      name: 'Record applicant progression outcome',
+      releaseId: '1.3',
+      phaseId: 'employer-recruitment',
+    })
+  })
+
+  it('clears every conflict the undivided feature carried', () => {
+    for (const id of ['F-085', 'F-093']) {
+      expect(result.conflicts.release.filter((c) => c.pwcFeatureId === id)).toEqual([])
+      expect(result.conflicts.phase.filter((c) => c.pwcFeatureId === id)).toEqual([])
+    }
+  })
+
+  it('redistributes links without adding or dropping any', () => {
+    // A split moves scope between features; it never creates or loses it.
+    expect(result.summary.featureMvpLinks).toBe(raw.summary.featureMvpLinks)
+    expect(result.summary.featureCapabilityLinks).toBe(raw.summary.featureCapabilityLinks)
+    expect(result.summary.assumptions).toBe(raw.summary.assumptions)
+    expect(result.summary.pwcFeatures).toBe(raw.summary.pwcFeatures + 1)
+  })
+
+  it('divides assumptions and renumbers each half from 1', () => {
+    const a = result.features.find((f) => f.id === 'F-085')!
+    const b = result.features.find((f) => f.id === 'F-093')!
+    expect(a.assumptions.map((x) => x.position)).toEqual([1])
+    expect(b.assumptions.map((x) => x.position)).toEqual([1, 2])
+    expect(a.assumptions[0].text).toMatch(/vacancy outcome process/i)
+    expect(b.assumptions[0].text).toMatch(/application outcome process/i)
+  })
+
+  it('keeps display_order contiguous after the insertion', () => {
+    const orders = result.features.map((f) => f.displayOrder)
+    expect(orders).toEqual(Array.from({ length: orders.length }, (_, i) => i + 1))
+  })
+
+  it('still sees the F-014 electronic T&Cs conflict (PRD §7)', () => {
+    const group = result.conflicts.release.filter(
+      (c) => c.featureReleaseId === '1.1' && c.capabilityReleaseId === '1.4',
+    )
+    // 13 now, not the original 1: OV-004 moved ref 938 to 1.4 while F-001 and
+    // F-002 stayed in the pilot, which is 12 of them. The T&Cs one is the
+    // original and has to survive that intact.
+    expect(group).toHaveLength(13)
+    expect(group.filter((c) => c.ref === 938)).toHaveLength(12)
+    const tcs = group.filter((c) => c.ref === 951)
+    expect(tcs).toHaveLength(1)
+    expect(tcs[0]).toMatchObject({ pwcFeatureId: 'F-014', ref: 951 })
+    expect(tcs[0].capabilityText).toBe('Electronic T&Cs acceptance')
+  })
+
+  /**
+   * The Phase 4 filter gate asserts these. Locked here so a source change or
+   * a new override cannot move them silently.
+   */
+  it('distributes features across releases as the filter gate expects', () => {
+    const byRelease = new Map<string, number>()
+    for (const feature of result.features) {
+      byRelease.set(feature.releaseId, (byRelease.get(feature.releaseId) ?? 0) + 1)
+    }
+    expect(Object.fromEntries(byRelease)).toEqual({
+      // 21, not 20: OV-002 splits F-085 out and OV-006 puts that half in 1.1
+      // with the MVP ref it carries.
+      '1.1': 21,
+      '1.2': 8,
+      '1.3': 5,
+      // Was 1.9 until OV-003 declared it and the table's 1.4 to be one release.
+      '1.4': 15,
+    })
+  })
+
+  it('has exactly four features citing MVP ref 947', () => {
+    const citing = result.features
+      .filter((f) => f.mvpFeatures.some((m) => m.ref === 947))
+      .map((f) => f.id)
+    expect(citing).toEqual(['F-039', 'F-045', 'F-050', 'F-051'])
+  })
+
+  it('has three features carrying an Option 1B record, not two', () => {
+    // PRD §11 lists the option suffix on refs 938, 946 and 951 but omits 948,
+    // which F-011 cites as "(Option 1B)".
+    const withOption1B = result.features
+      .filter((f) => f.mvpFeatures.some((m) => m.scopeOption === '1B'))
+      .map((f) => f.id)
+    expect(withOption1B).toEqual(['F-009', 'F-010', 'F-011'])
+
+    const refs = result.mvpFeatures
+      .filter((m) => m.scopeOption === '1B')
+      .map((m) => m.ref)
+      .sort((a, b) => a - b)
+    expect(refs).toEqual([948, 951])
+  })
+
+  it('has no release 1.1 feature citing a jobseeker capability', () => {
+    const capabilityByKey = new Map(result.capabilities.map((c) => [c.key, c]))
+    const jobseekerIn11 = result.features
+      .filter((f) => f.releaseId === '1.1')
+      .filter((f) =>
+        f.capabilities.some(
+          (c) =>
+            capabilityByKey.get(`${c.text.toLowerCase()}|${c.ref}`)?.actor === 'jobseeker',
+        ),
+      )
+    expect(jobseekerIn11).toEqual([])
+  })
+
+  it('has no duplicate PwC feature ids', () => {
+    const ids = result.features.map((f) => f.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('gives every feature exactly one release and one canonical phase', () => {
+    const phaseIds = new Set(result.phases.map((p) => p.id))
+    for (const feature of result.features) {
+      expect(feature.releaseId).toBeTruthy()
+      expect(phaseIds.has(feature.phaseId)).toBe(true)
+    }
+  })
+
+  /**
+   * PRD §6 quotes "employer 46, staff 24, system 22, jobseeker 15". That is the
+   * distribution of the table's 107 *raw entries*. It sums to 107, the same as
+   * the merged distinct capability count, but it is a different set — so all
+   * three are pinned here to keep the distinction from being lost.
+   */
+  it('distributes actors across the raw table entries as PRD §6 quotes', () => {
+    const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
+    const counts: Record<string, number> = {}
+    for (const c of sequencing.capabilities) counts[c.actor] = (counts[c.actor] ?? 0) + 1
+
+    expect(sequencing.capabilities).toHaveLength(107)
+    expect(counts).toEqual({ employer: 46, staff: 24, system: 22, jobseeker: 15 })
+  })
+
+  it('drops one employer entry when the case-variant pair collapses', () => {
+    const counts: Record<string, number> = {}
+    for (const c of result.capabilities) {
+      if (c.source === 'mapping') continue // not placed by the table
+      counts[c.actor] = (counts[c.actor] ?? 0) + 1
+    }
+    // 106 table-distinct: both casings of "Filter and sort applications"
+    // (employer, 980) are one capability.
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(106)
+    expect(counts).toEqual({ employer: 45, staff: 24, system: 22, jobseeker: 15 })
+  })
+
+  it('adds the mapping-only staff capability back to reach 107 merged', () => {
+    const counts: Record<string, number> = {}
+    for (const c of result.capabilities) counts[c.actor] = (counts[c.actor] ?? 0) + 1
+
+    expect(result.capabilities).toHaveLength(107)
+    expect(counts).toEqual({ employer: 45, staff: 25, system: 22, jobseeker: 15 })
+  })
+})
+
+describe('the real documents still fail loudly when corrupted (R-11.2)', () => {
+  it('names the line number when a real mapping line is corrupted', () => {
+    const lines = fs.readFileSync(MAPPING_PATH, 'utf8').split('\n')
+    // Line 21 is a capability bullet; strip its "(actor, ref)".
+    const target = lines.findIndex((l) => /^\s+\* • .+\(staff, 938\)\s*$/.test(l))
+    expect(target).toBeGreaterThan(-1)
+    lines[target] = '  * • Manual contacts & relationships creation'
+
+    const corrupted = lines.join('\n')
+    expect(() => parseMappingDocument(corrupted)).toThrow(ParseError)
+    expect(() => parseMappingDocument(corrupted)).toThrow(
+      new RegExp(`:${target + 1} —`),
+    )
+  })
+
+  it('names the line number when a real table cell is corrupted', () => {
+    const lines = fs.readFileSync(SEQUENCING_PATH, 'utf8').split('\n')
+    // Found by content, not by index: the document may carry a preamble
+    // above the table, and the point of the test is the reported line
+    // number, not where the row happens to sit.
+    const index = lines.findIndex((l) => l.includes('(staff, 938)'))
+    expect(index).toBeGreaterThan(-1)
+    lines[index] = lines[index].replace('(staff, 938)', '')
+
+    const corrupted = lines.join('\n')
+    expect(() => parseSequencingTable(corrupted)).toThrow(ParseError)
+    expect(() => parseSequencingTable(corrupted)).toThrow(
+      new RegExp(`:${index + 1} —`),
+    )
+  })
+
+  it('fails when a phase column is renamed in the real table', () => {
+    const md = fs
+      .readFileSync(SEQUENCING_PATH, 'utf8')
+      .replace('Manage Vacancies', 'Vacancy Management')
+    expect(() => parseSequencingTable(md)).toThrow(/Unrecognised phase label/)
+  })
+
+  it('reports drift rather than passing silently when a feature is removed', () => {
+    const md = fs.readFileSync(MAPPING_PATH, 'utf8')
+    const withoutOne = md.replace(
+      /#### 🔹 PWC Feature: Invite employer \(F-002\)[\s\S]*?(?=\n#### |\n### |\n---)/,
+      '',
+    )
+    const mapping = parseMappingDocument(withoutOne)
+    const sequencing = parseSequencingTable(fs.readFileSync(SEQUENCING_PATH, 'utf8'))
+    const drift = findCountDrift(reconcile(mapping, sequencing))
+
+    expect(drift.length).toBeGreaterThan(0)
+    expect(drift.some((d) => d.key === 'pwcFeatures' && d.actual === 47)).toBe(true)
+  })
+})

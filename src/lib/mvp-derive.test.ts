@@ -30,8 +30,8 @@ describe('buildMvpCards — identity', () => {
   })
 
   it('labels an option variant apart from the bare record', () => {
-    expect(mvpCardLabel({ ref: 938, scopeOption: null })).toBe('938')
-    expect(mvpCardLabel({ ref: 938, scopeOption: '1A' })).toBe('938 · 1A')
+    expect(mvpCardLabel({ ref: 938, scopeOption: null })).toBe('SVD-938')
+    expect(mvpCardLabel({ ref: 938, scopeOption: '1A' })).toBe('SVD-938 · 1A')
   })
 })
 
@@ -68,7 +68,7 @@ describe('buildMvpCards — placement', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
       ],
     }
     const card = buildMvpCards(orphan).find((c) => c.id === 99)!
@@ -219,7 +219,7 @@ describe('projectMvpCells', () => {
       ...graph,
       mvpFeatures: [
         ...graph.mvpFeatures,
-        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', source: 'mapping' },
+        { id: 99, ref: 999, scope_option: null, title: 'Nowhere', release_id: null, phase_id: null, question: null, details: '', source: 'mapping' },
       ],
     } as ScopeGraph
     const projection = projectMvpCells(buildMvpCards(orphan))
@@ -241,5 +241,127 @@ describe('projectMvpCells', () => {
     expect(
       projection.cellIndex.get(cellKey('1.4', 'manage-vacancies'))?.map((c) => c.id),
     ).toContain(2)
+  })
+})
+
+/**
+ * A placement stated on the record itself. It outranks both derived ones,
+ * and is the only thing that can place a record owning no capability.
+ */
+describe('buildMvpCards — a stated placement', () => {
+  // Record 2 is the one the fixture's capabilities belong to, so it is the
+  // one where a statement has a derived placement to outrank.
+  const stated = (patch: { release_id?: string | null; phase_id?: string | null }) =>
+    makeScopeGraph({
+      mvpFeatures: makeScopeGraph().mvpFeatures.map((mvp) =>
+        mvp.id === 2 ? { ...mvp, ...patch } : mvp,
+      ),
+    })
+
+  it('outranks the capabilities the record owns', () => {
+    // Capability 10 puts this record in 1.1 · access-and-onboarding.
+    const graph = stated({ release_id: '1.4', phase_id: 'manage-vacancies' })
+    const card = buildMvpCards(graph).find((c) => c.id === 2)
+    expect(card?.cells).toEqual([{ releaseId: '1.4', phaseId: 'manage-vacancies' }])
+    expect(card?.placement).toBe('stated')
+  })
+
+  it('places a record nothing else can place', () => {
+    const graph = makeScopeGraph({
+      mvpFeatures: [
+        {
+          id: 9,
+          ref: 953,
+          scope_option: null,
+          title: 'Compliance view',
+          release_id: '1.4',
+          phase_id: 'manage-vacancies',
+          question: null,
+          details: '',
+          source: 'sequencing',
+        },
+      ],
+      capabilities: [],
+      featureMvpLinks: [],
+    })
+    const card = buildMvpCards(graph).find((c) => c.id === 9)
+    expect(card?.placement).toBe('stated')
+    expect(card?.cells).toHaveLength(1)
+  })
+
+  it('needs both axes — half a statement places nothing', () => {
+    // A cell is a release AND a stage; a release alone is not a position.
+    const card = buildMvpCards(stated({ release_id: '1.4' })).find((c) => c.id === 2)
+    expect(card?.placement).toBe('capability')
+    expect(card?.stated).toEqual({ releaseId: '1.4', phaseId: null })
+  })
+
+  it('carries the half-statement so the editor can show it', () => {
+    const card = buildMvpCards(stated({ phase_id: 'manage-vacancies' })).find(
+      (c) => c.id === 2,
+    )
+    expect(card?.stated).toEqual({ releaseId: null, phaseId: 'manage-vacancies' })
+  })
+
+  it('leaves the derivation untouched when nothing is stated', () => {
+    const card = buildMvpCards(makeScopeGraph()).find((c) => c.id === 2)
+    expect(card?.placement).toBe('capability')
+    expect(card?.stated).toEqual({ releaseId: null, phaseId: null })
+  })
+
+  it('files the record under the stated release for filtering', () => {
+    const graph = stated({ release_id: '1.4', phase_id: 'manage-vacancies' })
+    const card = buildMvpCards(graph).find((c) => c.id === 2)
+    expect([...(card?.releaseIds ?? [])]).toEqual(['1.4'])
+  })
+})
+
+/**
+ * A question raised against an MSD feature record. Capabilities have carried
+ * one since 006 and PwC features since 009; hanging a question about a
+ * record off one of its capabilities attributed it to the wrong thing, and
+ * left the five capability-less records with nowhere to put one.
+ */
+describe('buildMvpCards — a question on the record', () => {
+  const withQuestion = (question: string | null) =>
+    buildMvpCards(
+      makeScopeGraph({
+        mvpFeatures: makeScopeGraph().mvpFeatures.map((mvp) =>
+          mvp.id === 2 ? { ...mvp, question } : mvp,
+        ),
+      }),
+    ).find((card) => card.id === 2)
+
+  it('carries the question onto the card', () => {
+    expect(withQuestion('Is this still 1.1?')?.question).toBe('Is this still 1.1?')
+  })
+
+  it('is null when nobody has raised one', () => {
+    expect(withQuestion(null)?.question).toBeNull()
+  })
+
+  it('reaches a record that owns no capability, which has no other home', () => {
+    const orphan = buildMvpCards(
+      makeScopeGraph({
+        mvpFeatures: [
+          {
+            id: 9,
+            ref: 953,
+            scope_option: null,
+            title: 'Compliance view',
+            release_id: null,
+            phase_id: null,
+            question: 'Is this in scope at all?',
+            details: '',
+            source: 'sequencing',
+          },
+        ],
+        capabilities: [],
+        featureMvpLinks: [],
+      }),
+    ).find((card) => card.id === 9)
+
+    expect(orphan?.capabilities).toEqual([])
+    expect(orphan?.question).toBe('Is this in scope at all?')
   })
 })

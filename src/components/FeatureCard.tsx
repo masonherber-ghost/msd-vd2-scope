@@ -1,6 +1,11 @@
 import type { CSSProperties } from 'react'
 import { ConflictBadge } from '@/components/ConflictBadge'
-import { releaseTokenSuffix, type FeatureCardModel } from '@/lib/scope-derive'
+import { ALL_DETAIL, type DetailState } from '@/lib/card-detail'
+import {
+  releaseShortLabel,
+  releaseTokenSuffix,
+  type FeatureCardModel,
+} from '@/lib/scope-derive'
 import { densityBand } from '@/lib/scope-edges'
 
 const ACTOR_LABEL: Record<string, string> = {
@@ -26,6 +31,8 @@ export type FeatureCardProps = {
   releaseLabel?: string
   /** Token name for the card's leading edge. */
   accentToken?: string
+  /** Which regions of the card are showing. Defaults to all of them. */
+  detail?: DetailState
 }
 
 export function FeatureCard({
@@ -38,6 +45,7 @@ export function FeatureCard({
   hasUnreviewedConflict = true,
   releaseLabel,
   accentToken,
+  detail = ALL_DETAIL,
 }: FeatureCardProps) {
   const conflicts = feature.conflicts.release + feature.conflicts.phase
   const releaseSuffix = releaseTokenSuffix(feature.releaseId)
@@ -85,10 +93,12 @@ export function FeatureCard({
           <span className="feature-card__id">{feature.id}</span>
         )}
         <span className="feature-card__meta">
-          {releaseLabel ? (
-            <span className="feature-card__release">{releaseLabel}</span>
+          {detail.release && releaseLabel ? (
+            <span className="feature-card__release" title={releaseLabel}>
+              {releaseShortLabel(releaseLabel)}
+            </span>
           ) : null}
-          {density > 0 ? (
+          {detail.refs && density > 0 ? (
             // Shown passively so load-bearing features read as important
             // before any interaction (R-8.3). The count carries the meaning;
             // the bars are only a scanning aid.
@@ -102,7 +112,7 @@ export function FeatureCard({
               {density} link{density === 1 ? '' : 's'}
             </span>
           ) : null}
-          {feature.capabilityCount > 0 ? (
+          {detail.capabilities && feature.capabilityCount > 0 ? (
             <span className="feature-card__id">
               {feature.capabilityCount} cap{feature.capabilityCount === 1 ? '' : 's'}
             </span>
@@ -112,7 +122,7 @@ export function FeatureCard({
 
       <h3 className="feature-card__name">{feature.name}</h3>
 
-      {feature.mvpFeatures.length > 0 ? (
+      {detail.refs && feature.mvpFeatures.length > 0 ? (
         <ul className="feature-card__chips">
           {feature.mvpFeatures.map((mvp) => (
             <li
@@ -128,7 +138,7 @@ export function FeatureCard({
         </ul>
       ) : null}
 
-      {feature.actorCounts.length > 0 ? (
+      {detail.actors && feature.actorCounts.length > 0 ? (
         <ul className="feature-card__actors">
           {feature.actorCounts.map(({ actor, count }) => (
             <li key={actor} className={`feature-card__actor feature-card__actor--${actor}`}>
@@ -139,20 +149,27 @@ export function FeatureCard({
         </ul>
       ) : null}
 
-      {conflicts > 0 || feature.conflicts.unmatched > 0 || feature.overridden ? (
+      {(detail.questions && feature.question !== null) ||
+      (detail.conflicts &&
+        (conflicts > 0 || feature.conflicts.unmatched > 0 || feature.overridden)) ? (
         <div className="feature-card__badges">
-          {conflicts > 0 ? (
+          {/* First, so an open question reads before the source disagreements
+              — it is the one a person put there deliberately. */}
+          {detail.questions && feature.question !== null ? (
+            <ConflictBadge count={1} kind="question" />
+          ) : null}
+          {detail.conflicts && conflicts > 0 ? (
             <ConflictBadge
               count={conflicts}
               state={hasUnreviewedConflict ? 'unreviewed' : 'both_correct'}
             />
           ) : null}
-          {feature.conflicts.unmatched > 0 ? (
+          {detail.conflicts && feature.conflicts.unmatched > 0 ? (
             <span className="feature-card__badge feature-card__badge--unmatched">
               {feature.conflicts.unmatched} unmatched
             </span>
           ) : null}
-          {feature.overridden ? (
+          {detail.conflicts && feature.overridden ? (
             <span className="feature-card__badge feature-card__badge--overridden">
               corrected
             </span>
