@@ -28,7 +28,9 @@ import { applyFilters, isEmpty, parseFilters } from '@/lib/scope-filters'
  * about to be printed is not a place to discover you have changed the map.
  */
 export default function ScopePrint() {
-  const scope = useScope()
+  // Opened in its own tab from the map, which still holds the store: borrow
+  // it rather than read ~400 documents again.
+  const scope = useScope({ fromOpenTab: true })
   const [searchParams] = useSearchParams()
 
   const filters = useMemo(() => parseFilters(searchParams), [searchParams])

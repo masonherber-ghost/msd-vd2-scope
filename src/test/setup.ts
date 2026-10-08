@@ -6,8 +6,9 @@ afterEach(() => {
   cleanup()
 })
 
-// jsdom implements no matchMedia; Radix primitives reach for it.
-if (!window.matchMedia) {
+// jsdom implements no matchMedia; Radix primitives reach for it. (Guarded:
+// a test may opt into the node environment, which has no window at all.)
+if (typeof window !== 'undefined' && !window.matchMedia) {
   window.matchMedia = ((query: string) => ({
     matches: false,
     media: query,

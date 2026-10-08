@@ -6,7 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ScopeGraph } from '@/lib/api-client'
 
 const { state } = await vi.hoisted(async () => ({
-  state: { graph: null as ScopeGraph | null, fail: null as string | null },
+  state: {
+    graph: null as ScopeGraph | null,
+    fail: null as string | null,
+    // Which read the page used: the tab handoff, or a fresh load.
+    reads: { fromOpenTab: 0, fresh: 0 },
+  },
 }))
 
 vi.mock('@/lib/api-client', async (importOriginal) => {
@@ -16,6 +21,12 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
     apiClient: {
       scope: {
         get: async () => {
+          state.reads.fresh += 1
+          if (state.fail) throw new actual.ApiError(0, state.fail)
+          return state.graph as ScopeGraph
+        },
+        getFromOpenTab: async () => {
+          state.reads.fromOpenTab += 1
           if (state.fail) throw new actual.ApiError(0, state.fail)
           return state.graph as ScopeGraph
         },
@@ -54,10 +65,21 @@ const sheet = async () => {
 }
 
 beforeEach(() => {
+  state.reads = { fromOpenTab: 0, fresh: 0 }
   state.fail = null
   state.graph = makeScopeGraph()
   capture.mockReset()
   capture.mockResolvedValue('vd2-scope-map-by-pwc-package.pdf')
+})
+
+describe('ScopePrint — where its data comes from', () => {
+  it('borrows the store the map tab already holds, rather than reading it again', async () => {
+    // Opened in a new tab from the map: a fresh load would be ~400 billed
+    // reads for data the opener has.
+    renderPage()
+    await sheet()
+    expect(state.reads).toEqual({ fromOpenTab: 1, fresh: 0 })
+  })
 })
 
 describe('ScopePrint — the sheet', () => {

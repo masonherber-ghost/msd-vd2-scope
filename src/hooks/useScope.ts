@@ -13,10 +13,12 @@ export const scopeKeys = {
  * repeated on a timer or on window focus. Writes keep it current without a
  * read (see syncScopeAfterWrite); a reload picks up edits from another device.
  */
-export function useScope() {
+export function useScope(options: { fromOpenTab?: boolean } = {}) {
   return useQuery({
     queryKey: scopeKeys.all,
-    queryFn: apiClient.scope.get,
+    // A tab opened from the app borrows the opener's store instead of
+    // re-reading it (see scope-store.ts → loadFromOpenTab).
+    queryFn: options.fromOpenTab ? apiClient.scope.getFromOpenTab : apiClient.scope.get,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   })

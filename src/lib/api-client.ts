@@ -224,6 +224,12 @@ export const apiClient = {
     get: async (): Promise<ScopeGraph> => (await store()).load(),
 
     /**
+     * For a tab opened from the app (the print view): take the store another
+     * open tab already holds — zero reads — or load it if none answers.
+     */
+    getFromOpenTab: async (): Promise<ScopeGraph> => (await store()).loadFromOpenTab(),
+
+    /**
      * The graph after the last write, derived from the held store — zero
      * reads. Undefined until the first load. Hooks use this after a mutation
      * instead of refetching.

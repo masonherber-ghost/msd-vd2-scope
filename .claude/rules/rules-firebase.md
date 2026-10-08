@@ -51,6 +51,11 @@ scope), so the app reads the whole store **once** and derives every view.
   view renders, in the old server's row order (byte-order collation).
 - `useScope()` — one query, `staleTime: Infinity`, no refetch on focus.
   A reload picks up edits made on another device.
+- **A tab opened from the app borrows, it doesn't load.** The print view opens
+  in a new tab with an empty cache; `useScope({ fromOpenTab: true })` asks the
+  open tabs over a `BroadcastChannel` for the same user's held store (zero
+  reads) and only loads if none answers within 500 ms. Any new view that opens
+  in its own tab should do the same.
 
 ### Non-negotiable
 
