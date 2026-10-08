@@ -9,6 +9,8 @@ const { state } = await vi.hoisted(async () => ({
     calls: 0,
     fail: null as string | null,
     counts: { pwcFeatures: 48, capabilities: 107 },
+    // What the data layer holds after a write; undefined before any load.
+    held: undefined as ScopeGraph | undefined,
   },
 }))
 
@@ -23,24 +25,19 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
           if (state.fail) throw new actual.ApiError(0, state.fail)
           return { counts: { ...state.counts } } as unknown as ScopeGraph
         },
-      },
-      import: {
-        run: async () => {
-          // A re-import changes what the next graph read returns.
-          state.counts = { pwcFeatures: 49, capabilities: 107 }
-          return { status: 'ok', summary: {} as never }
-        },
+        cached: () => state.held,
       },
     },
   }
 })
 
-const { useRunImport, useScope } = await import('@/hooks/useScope')
+const { syncScopeAfterWrite, useScope } = await import('@/hooks/useScope')
 
-function makeWrapper() {
-  const queryClient = new QueryClient({
+function makeWrapper(
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  })
+  }),
+) {
   return ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   )
@@ -50,6 +47,7 @@ beforeEach(() => {
   state.calls = 0
   state.fail = null
   state.counts = { pwcFeatures: 48, capabilities: 107 }
+  state.held = undefined
 })
 
 describe('useScope', () => {
@@ -80,23 +78,45 @@ describe('useScope', () => {
   })
 })
 
-describe('useRunImport', () => {
-  it('invalidates the graph so the new counts appear', async () => {
-    const wrapper = makeWrapper()
-    const { result } = renderHook(
-      () => ({ scope: useScope(), run: useRunImport() }),
-      { wrapper },
-    )
+describe('syncScopeAfterWrite', () => {
+  it('puts the graph a write produced into the cache without a read', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { result } = renderHook(() => useScope(), { wrapper: makeWrapper(queryClient) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    // Read as a component would; the query only re-renders for what is read.
+    expect(result.current.data?.counts.pwcFeatures).toBe(48)
+    expect(state.calls).toBe(1)
 
-    await waitFor(() => expect(result.current.scope.isSuccess).toBe(true))
-    expect(result.current.scope.data?.counts.pwcFeatures).toBe(48)
+    state.held = { counts: { pwcFeatures: 49, capabilities: 107 } } as unknown as ScopeGraph
+    act(() => syncScopeAfterWrite(queryClient))
 
-    await act(async () => {
-      await result.current.run.mutateAsync()
+    await waitFor(() => expect(result.current.data?.counts.pwcFeatures).toBe(49))
+    // Every view sees the write, and the whole store was not read again.
+    expect(state.calls).toBe(1)
+  })
+
+  it('falls back to one refetch when nothing is held yet', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { result } = renderHook(() => useScope(), { wrapper: makeWrapper(queryClient) })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.counts.pwcFeatures).toBe(48)
+
+    state.counts = { pwcFeatures: 50, capabilities: 107 }
+    act(() => syncScopeAfterWrite(queryClient))
+
+    await waitFor(() => expect(result.current.data?.counts.pwcFeatures).toBe(50))
+    expect(state.calls).toBe(2)
+  })
+
+  it('does not re-read the store when the window regains focus', async () => {
+    const { result } = renderHook(() => useScope(), { wrapper: makeWrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    act(() => {
+      window.dispatchEvent(new Event('visibilitychange'))
+      window.dispatchEvent(new Event('focus'))
     })
-
-    await waitFor(() => {
-      expect(result.current.scope.data?.counts.pwcFeatures).toBe(49)
-    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(state.calls).toBe(1)
   })
 })

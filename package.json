@@ -16,7 +16,7 @@
     "reconcile": "tsx scripts/reconcile-report.ts",
     "backup-db": "tsx scripts/backup-db.ts",
     "emulators": "firebase emulators:start --import=.emulator-data --export-on-exit=.emulator-data",
-    "test:rules": "firebase emulators:exec --only firestore \"vitest run --config vitest.emulator.config.ts\""
+    "test:emulator": "firebase emulators:exec --only firestore,auth \"vitest run --config vitest.emulator.config.ts\""
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

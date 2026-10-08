@@ -6,7 +6,7 @@ import {
   type ScopeGraph,
   type UpdateFeatureBody,
 } from '@/lib/api-client'
-import { scopeKeys } from '@/hooks/useScope'
+import { scopeKeys, syncScopeAfterWrite } from '@/hooks/useScope'
 
 /** The next free F- number, offered as an overridable default. */
 export function useNextFeatureId(enabled = true) {
@@ -53,8 +53,9 @@ function useOptimisticScopeMutation<TVariables, TData>(options: {
     },
 
     onSettled: () => {
-      // One invalidate, not a fan-out.
-      void queryClient.invalidateQueries({ queryKey: scopeKeys.all })
+      // The graph the write produced — or, on failure, the unchanged truth —
+      // with no refetch.
+      syncScopeAfterWrite(queryClient)
       options.onSettledExtra?.()
     },
   })

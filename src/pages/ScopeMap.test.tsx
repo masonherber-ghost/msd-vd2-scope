@@ -49,8 +49,9 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
           if (state.fail) throw new actual.ApiError(0, state.fail)
           return state.graph as ScopeGraph
         },
+        // What the data layer holds after a write — the same graph a refetch returns.
+        cached: () => state.graph as ScopeGraph,
       },
-      import: { run: async () => ({ status: 'ok', summary: {} as never }) },
       features: {
         nextId: async () => ({ id: state.nextId }),
         create: async (body: Record<string, unknown>) => {

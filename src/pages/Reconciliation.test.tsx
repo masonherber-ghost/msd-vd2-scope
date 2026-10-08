@@ -19,7 +19,11 @@ vi.mock('@/lib/api-client', async (importOriginal) => {
   return {
     ...actual,
     apiClient: {
-      scope: { get: async () => state.graph as ScopeGraph },
+      scope: {
+        get: async () => state.graph as ScopeGraph,
+        // What the data layer holds after a write — the same graph a refetch returns.
+        cached: () => state.graph as ScopeGraph,
+      },
       conflicts: {
         resolve: async (id: number, body: unknown) => {
           if (state.writeFail) throw new actual.ApiError(409, state.writeFail)

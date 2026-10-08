@@ -178,30 +178,16 @@ export class ApiError extends Error {
   }
 }
 
-const FRIENDLY_UNREACHABLE =
-  'Cannot reach the server. Check that it is running, then try again.'
+type Store = typeof import('@/lib/scope-store')
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(path, {
-      headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
-      ...init,
-    })
-  } catch {
-    // Network-level failure: the server is down or unreachable.
-    throw new ApiError(0, FRIENDLY_UNREACHABLE)
-  }
-
-  if (!response.ok) {
-    // An unparseable body usually means nothing handled the request at all,
-    // so treat it as unreachable rather than surfacing a bare status code.
-    const body = (await response.json().catch(() => null)) as { error?: string } | null
-    throw new ApiError(response.status, body?.error ?? FRIENDLY_UNREACHABLE)
-  }
-
-  if (response.status === 204) return undefined as T
-  return (await response.json()) as T
+/**
+ * The data layer is Firestore, loaded on first use: importing this module —
+ * for its types, or in a test that mocks `apiClient` — never starts Firebase.
+ */
+let loadedStore: Store | null = null
+async function store(): Promise<Store> {
+  loadedStore ??= await import('@/lib/scope-store')
+  return loadedStore
 }
 
 export type CreateFeatureBody = {
@@ -227,107 +213,132 @@ export type DeleteFeatureResult = {
 
 export type MoveDirection = 'up' | 'down'
 
+/**
+ * Every read and write the app makes. The signatures and results are the ones
+ * the Express API had, so hooks and components never learned the backend
+ * moved; underneath, each call is Firestore via scope-store.ts.
+ */
 export const apiClient = {
-  health: () => request<{ status: string; uptime: number }>('/api/health'),
-
   scope: {
-    get: () => request<ScopeGraph>('/api/scope'),
-  },
+    /** The one read: the whole store (~400 documents), derived into the graph. */
+    get: async (): Promise<ScopeGraph> => (await store()).load(),
 
-  import: {
-    run: () =>
-      request<{ status: string; summary: ImportSummary }>('/api/import', { method: 'POST' }),
+    /**
+     * The graph after the last write, derived from the held store — zero
+     * reads. Undefined until the first load. Hooks use this after a mutation
+     * instead of refetching.
+     */
+    cached: (): ScopeGraph | undefined => loadedStore?.cached(),
   },
 
   features: {
-    nextId: () => request<{ id: string }>('/api/features/next-id'),
+    /** Derived from the held store — no read. */
+    nextId: async (): Promise<{ id: string }> => {
+      const s = await store()
+      const raw = s.heldRaw() ?? (await s.load(), s.heldRaw()!)
+      return s.firestore.features.nextId(raw)
+    },
 
-    create: (body: CreateFeatureBody) =>
-      request<PwcFeatureRow>('/api/features', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
+    create: async (body: CreateFeatureBody): Promise<PwcFeatureRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.features.create(session, body))
+    },
 
-    update: (id: string, body: UpdateFeatureBody) =>
-      request<PwcFeatureRow>(`/api/features/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
+    update: async (id: string, body: UpdateFeatureBody): Promise<PwcFeatureRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.features.update(session, id, body))
+    },
 
-    setMvpLinks: (id: string, mvpFeatureIds: number[]) =>
-      request<{ pwc_feature_id: string; mvpFeatureIds: number[] }>(
-        `/api/features/${encodeURIComponent(id)}/mvp-features`,
-        { method: 'PUT', body: JSON.stringify({ mvpFeatureIds }) },
-      ),
+    setMvpLinks: async (
+      id: string,
+      mvpFeatureIds: number[],
+    ): Promise<{ pwc_feature_id: string; mvpFeatureIds: number[] }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.features.setMvpLinks(session, id, mvpFeatureIds))
+    },
 
-    setCapabilityLinks: (id: string, capabilityIds: number[]) =>
-      request<{ pwc_feature_id: string; capabilityIds: number[] }>(
-        `/api/features/${encodeURIComponent(id)}/capabilities`,
-        { method: 'PUT', body: JSON.stringify({ capabilityIds }) },
-      ),
+    setCapabilityLinks: async (
+      id: string,
+      capabilityIds: number[],
+    ): Promise<{ pwc_feature_id: string; capabilityIds: number[] }> => {
+      const s = await store()
+      return s.write((session) =>
+        s.firestore.features.setCapabilityLinks(session, id, capabilityIds),
+      )
+    },
 
-    remove: (id: string, cascade = false) =>
-      request<DeleteFeatureResult>(
-        `/api/features/${encodeURIComponent(id)}?cascade=${cascade ? 'true' : 'false'}`,
-        { method: 'DELETE' },
-      ),
+    remove: async (id: string, cascade = false): Promise<DeleteFeatureResult> => {
+      const s = await store()
+      return s.write((session) => s.firestore.features.remove(session, id, cascade))
+    },
   },
 
   releases: {
-    create: (body: { id: string; label: string; name: string; description: string }) =>
-      request<ReleaseRow>('/api/releases', { method: 'POST', body: JSON.stringify(body) }),
-    update: (id: string, body: Partial<{ label: string; name: string; description: string }>) =>
-      request<ReleaseRow>(`/api/releases/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
-    remove: (id: string) =>
-      request<{ deleted: number }>(`/api/releases/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      }),
+    create: async (body: {
+      id: string
+      label: string
+      name: string
+      description: string
+    }): Promise<ReleaseRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.releases.create(session, body))
+    },
+    update: async (
+      id: string,
+      body: Partial<{ label: string; name: string; description: string }>,
+    ): Promise<ReleaseRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.releases.update(session, id, body))
+    },
+    remove: async (id: string): Promise<{ deleted: number }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.releases.remove(session, id))
+    },
   },
 
   phases: {
-    create: (body: {
+    create: async (body: {
       id: string
       name: string
       epic_ref: string
       epic_description: string
-    }) => request<PhaseRow>('/api/phases', { method: 'POST', body: JSON.stringify(body) }),
-    update: (
+    }): Promise<PhaseRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.phases.create(session, body))
+    },
+    update: async (
       id: string,
       body: Partial<{ name: string; epic_ref: string; epic_description: string }>,
-    ) =>
-      request<PhaseRow>(`/api/phases/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
-    move: (id: string, direction: MoveDirection) =>
-      request<{ moved: boolean; phases: PhaseRow[] }>(
-        `/api/phases/${encodeURIComponent(id)}/move`,
-        { method: 'POST', body: JSON.stringify({ direction }) },
-      ),
-    remove: (id: string) =>
-      request<{ deleted: number; phases: PhaseRow[] }>(
-        `/api/phases/${encodeURIComponent(id)}`,
-        { method: 'DELETE' },
-      ),
+    ): Promise<PhaseRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.phases.update(session, id, body))
+    },
+    move: async (
+      id: string,
+      direction: MoveDirection,
+    ): Promise<{ moved: boolean; phases: PhaseRow[] }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.phases.move(session, id, direction))
+    },
+    remove: async (id: string): Promise<{ deleted: number; phases: PhaseRow[] }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.phases.remove(session, id))
+    },
   },
 
   mvpFeatures: {
-    create: (body: {
+    create: async (body: {
       ref: number
       scope_option: '1A' | '1B' | null
       title: string
       /** A stated placement, set as the record is created. */
       release_id?: string | null
       phase_id?: string | null
-    }) =>
-      request<MvpFeatureRow>('/api/mvp-features', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    update: (
+    }): Promise<MvpFeatureRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.mvpFeatures.create(session, body))
+    },
+    update: async (
       id: number,
       body: Partial<{
         title: string
@@ -340,45 +351,51 @@ export const apiClient = {
         /** Free-text detail, as markdown. Empty clears it. */
         details: string
       }>,
-    ) =>
-      request<MvpFeatureRow>(`/api/mvp-features/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
+    ): Promise<MvpFeatureRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.mvpFeatures.update(session, id, body))
+    },
     /**
      * Re-assigns the record by moving the capabilities it owns. Either axis
      * alone is a valid move.
      */
-    setPlacement: (id: number, body: { release_id?: string; phase_id?: string }) =>
-      request<{ mvp_feature_id: number; moved: number; capabilityIds: number[] }>(
-        `/api/mvp-features/${id}/placement`,
-        { method: 'PUT', body: JSON.stringify(body) },
-      ),
+    setPlacement: async (
+      id: number,
+      body: { release_id?: string; phase_id?: string },
+    ): Promise<{ mvp_feature_id: number; moved: number; capabilityIds: number[] }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.mvpFeatures.setPlacement(session, id, body))
+    },
 
     /** Replaces the capabilities this record owns with exactly this set. */
-    setCapabilities: (id: number, capabilityIds: number[]) =>
-      request<{ mvp_feature_id: number; capabilityIds: number[] }>(
-        `/api/mvp-features/${id}/capabilities`,
-        { method: 'PUT', body: JSON.stringify({ capabilityIds }) },
-      ),
+    setCapabilities: async (
+      id: number,
+      capabilityIds: number[],
+    ): Promise<{ mvp_feature_id: number; capabilityIds: number[] }> => {
+      const s = await store()
+      return s.write((session) =>
+        s.firestore.mvpFeatures.setCapabilities(session, id, capabilityIds),
+      )
+    },
 
-    remove: (id: number) =>
-      request<{ deleted: number }>(`/api/mvp-features/${id}`, { method: 'DELETE' }),
+    remove: async (id: number): Promise<{ deleted: number }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.mvpFeatures.remove(session, id))
+    },
   },
 
   capabilities: {
-    create: (body: {
+    create: async (body: {
       mvp_ref: number
       text: string
       actor: CapabilityRow['actor']
       release_id: string
       phase_id: string
-    }) =>
-      request<CapabilityRow>('/api/capabilities', {
-        method: 'POST',
-        body: JSON.stringify(body),
-      }),
-    update: (
+    }): Promise<CapabilityRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.capabilities.create(session, body))
+    },
+    update: async (
       id: number,
       body: Partial<{
         text: string
@@ -388,27 +405,30 @@ export const apiClient = {
         /** Null clears the question. */
         question: string | null
       }>,
-    ) =>
-      request<CapabilityRow>(`/api/capabilities/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
+    ): Promise<CapabilityRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.capabilities.update(session, id, body))
+    },
     /** Cascading also removes the citations pointing at it (R-9.5). */
-    remove: (id: number, cascade = false) =>
-      request<{ deleted: number; cascaded: { features: number } }>(
-        `/api/capabilities/${id}?cascade=${cascade ? 'true' : 'false'}`,
-        { method: 'DELETE' },
-      ),
+    remove: async (
+      id: number,
+      cascade = false,
+    ): Promise<{ deleted: number; cascaded: { features: number } }> => {
+      const s = await store()
+      return s.write((session) => s.firestore.capabilities.remove(session, id, cascade))
+    },
   },
 
   conflicts: {
-    resolve: (
+    resolve: async (
       id: number,
       body: { resolution_state: string; resolution_note: string | null },
-    ) =>
-      request<FeatureCapabilityLinkRow>(`/api/conflicts/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
+    ): Promise<FeatureCapabilityLinkRow> => {
+      const s = await store()
+      return s.write((session) => s.firestore.conflicts.resolve(session, id, body))
+    },
   },
+
+  /** Forget the held store — on sign-out, so another account starts clean. */
+  reset: (): void => loadedStore?.reset(),
 }

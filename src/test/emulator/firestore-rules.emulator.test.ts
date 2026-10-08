@@ -12,7 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 /**
  * The rules are the only security boundary, so each case here is owner
  * allowed / other UID denied / unauthenticated denied. Runs against the
- * emulator only: `npm run test:rules`.
+ * emulator only: `npm run test:emulator`.
  */
 const RULES_PATH = path.resolve(import.meta.dirname, '../../../firestore.rules')
 const rules = fs.readFileSync(RULES_PATH, 'utf8')

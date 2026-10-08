@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { apiClient } from '@/lib/api-client'
 import { auth, googleProvider } from '@/lib/firebase'
 
 export type User = { id: string; name: string; email: string | null }
@@ -24,10 +26,19 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const lastUid = useRef<string | null>(null)
 
   useEffect(
     () =>
       onAuthStateChanged(auth, (firebaseUser) => {
+        // A different account (or none) must never see the last one's data.
+        const uid = firebaseUser?.uid ?? null
+        if (lastUid.current !== null && lastUid.current !== uid) {
+          apiClient.reset()
+          queryClient.clear()
+        }
+        lastUid.current = uid
         setUser(
           firebaseUser
             ? {
@@ -39,7 +50,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         )
         setIsLoading(false)
       }),
-    [],
+    [queryClient],
   )
 
   const value = useMemo<AuthContextValue>(

@@ -31,6 +31,7 @@
     "admin/**/*.ts",
     "src/lib/validators.ts",
     "src/lib/conflict-rules.ts",
-    "src/lib/scope-decisions.ts"
+    "src/lib/scope-decisions.ts",
+    "src/vite-env.d.ts"
   ]
 }
